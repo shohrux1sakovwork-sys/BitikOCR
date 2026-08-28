@@ -3,5 +3,28 @@ name = "bitikocr"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+authors = [
+    { name = "shohrux1sakov", email = "shohrux1sakovwork@gmail.com" }
+]
+requires-python = ">=3.11"
 dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "bitikocr"
+module-root = ""
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "isort>=9.0.1",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.5",
+]
+
+[project.scripts]
+bitikocr = "bitikocr.cli:main"

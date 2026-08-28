@@ -9,59 +9,44 @@
 
 1. [Project Structure](#1-project-structure)
 2. [Module Responsibilities](#2-module-responsibilities)
-3. [Dependency Flow](#3-dependency-flow)
-4. [Design Principles](#4-design-principles)
-5. [Key Decisions](#5-key-decisions)
-6. [Adding New Code](#6-adding-new-code)
+3. [Design Principles](#3-design-principles)
+4. [Key Decisions](#4-key-decisions)
+5. [Adding New Code](#5-adding-new-code)
 
 ---
 
 ## 1. Project Structure
 
-<!-- UPDATE THIS to match your actual project layout -->
-
 ```
 .
 ├── CODING_STYLE.md          # Code style rules (must follow)
-├── CONTRIBUTING.md          # How to contribute
-├── ARCHITECTURE.md          # This file
-├── AGENTS.md                # Auto-loaded rules for AI agents
-├── Makefile                 # style, checks, lint, test commands
+├── CLAUDE.md                # Auto-loaded rules for Claude AI
+├── GEMINI.md                # Auto-loaded rules for Gemini AI
+├── ARCHITECHTURE.md         # This file
 ├── pyproject.toml           # Project config, dependencies, tool settings
 ├── uv.lock                  # Locked dependency versions (committed)
-├── src/
-│   └── <project>/
-│       ├── __init__.py
-│       ├── main.py           # Application entry point
-│       ├── config.py         # Configuration loading
-├── tests/
-│   ├── conftest.py           # Shared pytest fixtures
-│   ├── test_auth.py
-│   └── test_loader.py
-└── docs/
-    └── conf.py               # Sphinx configuration
+├── README.md                # Project documentation
+└── bitikocr/                # Main package directory
+    ├── __init__.py          # Package initialization
+    └── py.typed             # Type hinting marker
 ```
 
 ---
 
 ## 2. Module Responsibilities
 
-<!-- UPDATE THIS to describe your actual modules -->
-
 | Module        | Responsibility                                     | Depends on           |
 |---------------|----------------------------------------------------|-----------------------|
-| `main`        | Application entry point, CLI setup                 | `config`, `services`  |
+| `cli`         | Application entry point, CLI setup                 | `config`, `core`      |
 | `config`      | Load and validate configuration from env/files     | (none)                |
-| `models/`     | Data classes, schemas, type definitions             | (none)                |
-| `services/`   | Core business logic                                | `models`, `db`        |
-| `api/`        | HTTP routes, request/response handling             | `services`, `models`  |
-| `db/`         | Database access, queries, repository pattern       | `models`              |
+| `models/`     | Data classes, schemas, type definitions            | (none)                |
+| `core/`       | Core OCR business logic and image processing       | `models`, `utils`     |
 | `utils/`      | Pure helper functions, no business logic           | (none)                |
 
 
 ---
 
-## 4. Design Principles
+## 3. Design Principles
 
 These principles guide how we structure code in this project:
 
@@ -73,30 +58,27 @@ Each module has **one job**. API routes don't contain business logic. Services d
 - Dependencies are passed explicitly (constructor injection or function arguments).
 - Configuration is loaded once and passed down — not read from env vars deep in the code.
 
-### 5. Configuration at the Edges
-Configuration is loaded once at startup (in `config.py` or `main.py`) and passed into services/modules that need it. No module reads environment variables on its own.
+### 3. Configuration at the Edges
+Configuration is loaded once at startup (in `config.py` or `cli.py`) and passed into services/modules that need it. No module reads environment variables on its own.
 
 ---
 
-## 5. Key Decisions
-
-<!-- UPDATE THIS with your project's actual decisions -->
-
-Document important architectural decisions here so future contributors (and AI agents) understand **why** things are the way they are.
+## 4. Key Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Package manager | `uv` | Fast, deterministic lockfile, replaces pip+virtualenv |
 | Formatter | `black` | No config debates, one canonical style |
-| Linter | `ruff` | Replaces flake8+isort checks, 10x faster |
+| Import Sorter | `isort` | Groups and sorts imports (profile=black) |
+| Linter | `ruff` / `flake8` | Linting standard |
 | Type checker | `mypy` | Catches type errors before runtime |
 | Test framework | `pytest` | Industry standard, better than unittest |
-| Docstring format | reST / Sphinx | Auto-generates API docs |
-
-<!-- Add rows for framework choices, DB choices, deployment strategy, etc. -->
+| Docstring format | Google-style | Clear, readable format for APIs |
 
 ---
 
+
+## 5. Adding New Code
 
 ### Checklist for new modules
 
