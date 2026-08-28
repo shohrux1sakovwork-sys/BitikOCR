@@ -1,0 +1,268 @@
+"""Tests for the document generators and the generator registry."""
+
+from __future__ import annotations
+
+import itertools
+import json
+from typing import Any
+
+import pytest
+
+from bitikocr.config import SyntheticConfig
+from bitikocr.models.annotation import DocumentAnnotation
+from bitikocr.synthetic.generators import (
+    ArizaGenerator,
+    DeathCertificateGenerator,
+    available_document_types,
+    create_generator,
+)
+
+
+def assert_boxes_are_inside_the_page(annotation: DocumentAnnotation) -> None:
+    """Every recorded box must lie within the page it was drawn on."""
+    width, height = annotation.size
+    for line in annotation.lines:
+        assert line.bbox is not None, f"{line.block} has no box"
+        assert line.bbox.left >= 0 and line.bbox.top >= 0
+        assert line.bbox.right <= width and line.bbox.bottom <= height
+
+
+# -- registry --------------------------------------------------------------
+
+
+def test_every_document_type_is_registered() -> None:
+    assert available_document_types() == ("ariza", "death_certificate")
+
+
+def test_a_generator_is_built_from_its_name(config: SyntheticConfig) -> None:
+    assert isinstance(create_generator("ariza", config), ArizaGenerator)
+
+
+def test_an_unknown_document_type_is_rejected(
+    config: SyntheticConfig,
+) -> None:
+    with pytest.raises(KeyError, match="Unknown document type"):
+        create_generator("passport", config)
+
+
+# -- ariza -----------------------------------------------------------------
+
+
+def test_an_ariza_renders_at_the_requested_size(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    document = ariza_generator.generate(ariza_fields, seed=11)
+    assert document.image.size == ariza_generator.page_size
+    assert document.annotation.size == ariza_generator.page_size
+
+
+def test_an_ariza_is_reproducible_from_its_seed(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    first = ariza_generator.generate(ariza_fields, seed=11)
+    second = ariza_generator.generate(ariza_fields, seed=11)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_an_ariza_records_the_seed_it_used(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    assert ariza_generator.generate(ariza_fields).seed is not None
+
+
+def test_an_ariza_transcribes_every_field_it_was_given(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    annotation = ariza_generator.generate(ariza_fields, seed=11).annotation
+    written = {block.kind for block in annotation.blocks if block.text}
+    assert {"recipient", "applicant", "body", "title"} <= written
+
+
+def test_an_ariza_keeps_every_box_on_the_page(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    assert_boxes_are_inside_the_page(
+        ariza_generator.generate(ariza_fields, seed=11).annotation
+    )
+
+
+def test_a_style_override_reaches_the_rendered_page(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    document = ariza_generator.generate(
+        ariza_fields, seed=11, style_overrides={"pen": "soft"}
+    )
+    assert document.annotation.metadata["style"]["pen"] == "soft"
+
+
+def test_an_unknown_style_override_is_rejected(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    with pytest.raises(ValueError, match="Unknown style fields"):
+        ariza_generator.generate(ariza_fields, style_overrides={"nope": 1})
+
+
+def test_a_long_body_is_shrunk_to_fit_the_page(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    crowded = {**ariza_fields, "body": ariza_fields["body"] * 6}
+    roomy = ariza_generator.generate(ariza_fields, seed=11)
+    tight = ariza_generator.generate(crowded, seed=11)
+
+    assert (
+        tight.annotation.metadata["style"]["font_size"]
+        < roomy.annotation.metadata["style"]["font_size"]
+    )
+    assert_boxes_are_inside_the_page(tight.annotation)
+
+
+# -- death certificate -----------------------------------------------------
+
+
+def test_a_certificate_fills_every_given_field(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    filled = {block.kind for block in annotation.blocks if block.text}
+    assert "surname" in filled
+    assert "registrar_name" in filled
+    assert "serial_number" in filled
+
+
+def test_a_certificate_records_one_block_per_field(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    kinds = [block.kind for block in annotation.blocks]
+    assert len(kinds) == len(set(kinds)), "a field was recorded twice"
+
+
+def test_a_certificate_stamps_and_signs(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert {"stamp", "signature"} <= kinds
+
+
+def test_a_certificate_keeps_every_box_on_the_page(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    assert_boxes_are_inside_the_page(
+        certificate_generator.generate(certificate_fields, seed=5).annotation
+    )
+
+
+def test_a_partly_filled_certificate_only_reports_what_was_written(
+    certificate_generator: DeathCertificateGenerator,
+) -> None:
+    annotation = certificate_generator.generate(
+        {"surname": "Раҳимова", "age_at_death": "71"}, seed=5
+    ).annotation
+    assert annotation.metadata["fields"] == {
+        "surname": "Раҳимова",
+        "age_at_death": "71",
+    }
+    assert annotation.text == "Раҳимова\n71"
+
+
+def test_the_annotation_serialises_to_json(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    payload = json.loads(json.dumps(annotation.to_dict(), ensure_ascii=False))
+    assert payload["document_type"] == "death_certificate"
+    assert payload["size"] == list(annotation.size)
+    assert payload["blocks"][0]["type"] == annotation.blocks[0].kind
+
+
+def test_every_written_value_lands_on_its_printed_rule(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    """Ink must sit on the rule the layout measured, not near it.
+
+    The layout notes that handwriting rises above the line and may spill a
+    little past its right end, so the tolerances are one-sided.
+    """
+    template = certificate_generator.template
+    for seed in range(6):
+        annotation = certificate_generator.generate(
+            certificate_fields, seed=seed
+        ).annotation
+        for line in annotation.lines:
+            try:
+                geometry = template.field(line.block)
+            except KeyError:
+                continue
+            segment = geometry.segments[0]
+            assert line.bbox is not None
+            where = f"{line.block}={line.text!r} (seed {seed})"
+            # Sits on the rule: never far above, never dropped below it.
+            assert -12 <= line.bbox.bottom - segment.baseline_y <= 40, where
+            # Starts at the rule's left end, and barely overruns its right.
+            assert line.bbox.left >= segment.x_start - 5, where
+            assert line.bbox.right <= segment.x_end + 25, where
+
+
+def test_lines_of_a_double_ruled_field_do_not_collide(
+    certificate_generator: DeathCertificateGenerator,
+) -> None:
+    """The two 'cause of death' rules are 20px apart; the hand must compress."""
+    long_cause = (
+        "Miya qon aylanishining o'tkir buzilishi va yurak ishemik "
+        "kasalligi asoratlari"
+    )
+    annotation = certificate_generator.generate(
+        {"cause_of_death": long_cause}, seed=3
+    ).annotation
+    boxes = [
+        line.bbox for line in annotation.lines if line.block == "cause_of_death"
+    ]
+    for upper, lower in itertools.pairwise(boxes):
+        assert upper is not None and lower is not None
+        assert upper.bottom <= lower.bottom, "lines must run top-down"
+
+
+def test_the_template_name_is_recorded(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    assert annotation.metadata["template"] == "death_certificate_bilingual"
+
+
+def test_a_template_can_be_chosen_by_name(config: SyntheticConfig) -> None:
+    generator = create_generator(
+        "death_certificate", config, template="death_certificate_bilingual"
+    )
+    assert isinstance(generator, DeathCertificateGenerator)
+    assert generator.template.name == "death_certificate_bilingual"
+
+
+def test_an_unknown_template_is_reported(config: SyntheticConfig) -> None:
+    with pytest.raises(FileNotFoundError, match="Layout 'nope' not found"):
+        create_generator("death_certificate", config, template="nope")
+
+
+def test_a_template_is_rejected_for_a_free_layout_document(
+    config: SyntheticConfig,
+) -> None:
+    with pytest.raises(ValueError, match="does not use form templates"):
+        create_generator("ariza", config, template="anything")
