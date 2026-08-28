@@ -1,7 +1,7 @@
 [project]
 name = "bitikocr"
 version = "0.1.0"
-description = "Add your description here"
+description = "Handwritten text recognition for Uzbek documents"
 readme = "README.md"
 authors = [
     { name = "shohrux1sakov", email = "shohrux1sakovwork@gmail.com" }
@@ -28,3 +28,42 @@ dev = [
 
 [project.scripts]
 bitikocr = "bitikocr.cli:main"
+
+[project.optional-dependencies]
+data = [
+    "fonttools>=4.63.0",
+    "numpy>=2.4.6",
+    "pillow>=12.3.0",
+]
+
+[tool.black]
+line-length = 80
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 80
+known_first_party = ["bitikocr"]
+
+[tool.ruff]
+line-length = 80
+target-version = "py311"
+
+[tool.ruff.lint]
+# E501 is left to black; F403/F405 allow the re-export style used in
+# __init__.py files.
+ignore = ["E501", "F403", "F405"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+# No python_version pin: numpy's bundled stubs need 3.12+ syntax, and the
+# minimum supported version is already enforced by ruff's target-version.
+ignore_missing_imports = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+packages = ["bitikocr"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
