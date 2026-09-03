@@ -216,17 +216,22 @@ def _run_list_templates(
         template = FormTemplate.load(config.layout(name))
         width, height = template.native_size
         print(f"{template.name}  ({width}x{height}, {template.background})")
-        print(f"  fields: {', '.join(template.field_names)}")
+        print(f"  fields:   {', '.join(template.field_names)}")
+        if template.printed:
+            print(f"  printed:  {', '.join(template.printed_names)}")
         marks = [
             label
             for label, area in (
                 ("seal", template.seal),
-                ("serial", template.serial),
                 ("signature", template.signature),
             )
             if area is not None
         ]
-        print(f"  marks:  {', '.join(marks) or 'none'}")
+        if template.keep_out:
+            marks.append(
+                "keep-out: " + ", ".join(a.name for a in template.keep_out)
+            )
+        print(f"  marks:    {', '.join(marks) or 'none'}")
     return 0
 
 

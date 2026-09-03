@@ -11,9 +11,7 @@ from bitikocr.synthetic.fonts import FontLibrary
 from bitikocr.synthetic.generators import (
     ArizaGenerator,
     DeathCertificateGenerator,
-)
-from bitikocr.synthetic.generators.death_certificate import (
-    DeathCertificateOptions,
+    FormOptions,
 )
 from bitikocr.synthetic.sample_data import sample_fields_for
 from bitikocr.synthetic.style import HandwritingStyle, sample_style
@@ -65,5 +63,5 @@ def certificate_generator(
     changing any of the layout logic under test.
     """
     return DeathCertificateGenerator(
-        config, options=DeathCertificateOptions(scale=1.0, augment=False)
+        config, options=FormOptions(scale=1.0, augment=False)
     )

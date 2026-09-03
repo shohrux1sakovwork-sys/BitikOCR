@@ -169,6 +169,7 @@ class Page:
         size: int,
         color: Color | None = None,
         block: str = "signature",
+        max_width: int | None = None,
     ) -> BoundingBox | None:
         """Draw a signature scribble and record it as a block.
 
@@ -178,6 +179,7 @@ class Page:
             size: Nominal handwriting size the scribble is scaled against.
             color: Ink colour. Defaults to the page style's ink.
             block: Name recorded for the scribble.
+            max_width: Total footprint the scribble must stay within.
 
         Returns:
             The box around the scribble, or None if nothing was drawn.
@@ -190,6 +192,7 @@ class Page:
             color=self.style.ink if color is None else color,
             rng=self.rng,
             pen=self.style.pen,
+            max_width=max_width,
         )
         self.add_block(block, "", box)
         return box

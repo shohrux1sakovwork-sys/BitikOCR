@@ -59,3 +59,10 @@ def test_the_fonts_directory_can_come_from_the_environment(
 def test_an_unknown_document_type_is_rejected_by_the_parser() -> None:
     with pytest.raises(SystemExit):
         main(["synth", "generate", "passport"])
+
+
+def test_listing_templates(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["synth", "list-templates"]) == 0
+    printed = capsys.readouterr().out
+    assert "death_certificate_bilingual" in printed
+    assert "printed:  serial_number" in printed

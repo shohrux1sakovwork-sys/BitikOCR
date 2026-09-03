@@ -23,9 +23,15 @@ Layout JSON schema::
       ]
     }
 
-``text_type`` decides what a field *is*; see :data:`TEXT_TYPE_ROLES`. Fields
-whose id ends in ``_line1``, ``_line2``, ... are one logical field written
-across several printed lines, and are merged under their shared base name.
+Measuring tools spell the same facts differently, so both dialects are
+accepted: a box as ``bbox_xyxy: [x1, y1, x2, y2]`` or ``bbox: {x1, y1, x2,
+y2}``, and a rule as ``underline_y`` (preferred, the printed line itself) or
+``baseline_y``.
+
+``text_type`` is free text describing the entry, and decides what it *is* —
+see :data:`ROLE_KEYWORDS`. Entries whose id ends in ``_line1``, ``_line2``,
+... are one logical field written across several printed lines, and are
+merged under their shared base name.
 """
 
 from __future__ import annotations
@@ -39,21 +45,28 @@ from typing import Any
 from bitikocr.models.geometry import BoundingBox
 
 __all__ = [
-    "TEXT_TYPE_ROLES",
+    "MARK_ROLES",
+    "ROLE_KEYWORDS",
     "FieldGeometry",
     "FormTemplate",
     "LineSegment",
     "MarkArea",
 ]
 
-#: ``text_type`` prefix mapped to the role the entry plays on the form.
-#: Anything unmatched is a handwritten text field.
-TEXT_TYPE_ROLES = {
-    "round_stamp": "seal",
-    "printed_digits": "serial",
-    "signature": "signature",
-    "digits": "numeric_field",
-}
+#: Role a layout entry plays, matched against its ``text_type`` in this
+#: order. The first role whose keywords appear wins, so "digits_7
+#: (typographic)" is printed rather than handwritten. Anything unmatched is a
+#: handwritten text field.
+ROLE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("keep_out", ("qr", "barcode", "photo")),
+    ("seal", ("stamp", "seal")),
+    ("signature", ("signature",)),
+    ("printed", ("printed_digits", "typographic", "typewriter", "series")),
+    ("numeric_field", ("digit",)),
+)
+
+#: Roles that reserve a region rather than describing a written field.
+MARK_ROLES = frozenset({"keep_out", "seal", "signature", "printed"})
 
 _LINE_SUFFIX = re.compile(r"^(?P<base>.+)_line(?P<index>\d+)$")
 
@@ -138,8 +151,11 @@ class FormTemplate:
             height)`` in pixels.
         fields: Every handwritten field, in reading order.
         seal: Where the round office seal is stamped, if the form has one.
-        serial: Where the printed serial number goes, if the form has one.
+        printed: Areas holding machine-printed text — serial numbers, form
+            series — each named after the field that fills it.
         signature: Where the registrar signs, if the form has one.
+        keep_out: Regions already occupied by the blank form, such as a
+            printed QR code. Nothing may be drawn over them.
     """
 
     name: str
@@ -147,13 +163,19 @@ class FormTemplate:
     native_size: tuple[int, int]
     fields: tuple[FieldGeometry, ...]
     seal: MarkArea | None = None
-    serial: MarkArea | None = None
+    printed: tuple[MarkArea, ...] = ()
     signature: MarkArea | None = None
+    keep_out: tuple[MarkArea, ...] = ()
 
     @property
     def field_names(self) -> tuple[str, ...]:
         """Every handwritten field name, in reading order."""
         return tuple(field.name for field in self.fields)
+
+    @property
+    def printed_names(self) -> tuple[str, ...]:
+        """Every machine-printed area's name, in layout order."""
+        return tuple(area.name for area in self.printed)
 
     def field(self, name: str) -> FieldGeometry:
         """Return one field's geometry.
@@ -220,7 +242,7 @@ class FormTemplate:
 
         segments: dict[str, list[tuple[int, LineSegment]]] = {}
         numeric: set[str] = set()
-        marks: dict[str, MarkArea] = {}
+        marks: dict[str, list[MarkArea]] = {}
 
         for entry in entries:
             _read_entry(entry, segments, numeric, marks)
@@ -243,15 +265,21 @@ class FormTemplate:
             background=background,
             native_size=(width, height),
             fields=fields,
-            seal=marks.get("seal"),
-            serial=marks.get("serial"),
-            signature=marks.get("signature"),
+            seal=_only(marks.get("seal")),
+            printed=tuple(marks.get("printed", ())),
+            signature=_only(marks.get("signature")),
+            keep_out=tuple(marks.get("keep_out", ())),
         )
 
 
 def _by_index(item: tuple[int, LineSegment]) -> int:
     """Sort key putting ``_line1`` before ``_line2``."""
     return item[0]
+
+
+def _only(areas: list[MarkArea] | None) -> MarkArea | None:
+    """Return the single area for a role a form can only have one of."""
+    return areas[0] if areas else None
 
 
 def _role_of(text_type: str) -> str:
@@ -261,19 +289,66 @@ def _role_of(text_type: str) -> str:
         text_type: The layout's free-form type description.
 
     Returns:
-        One of the roles in :data:`TEXT_TYPE_ROLES`, or ``"text_field"``.
+        One of the roles in :data:`ROLE_KEYWORDS`, or ``"text_field"``.
     """
-    for prefix, role in TEXT_TYPE_ROLES.items():
-        if text_type.startswith(prefix):
+    lowered = text_type.lower()
+    for role, keywords in ROLE_KEYWORDS:
+        if any(keyword in lowered for keyword in keywords):
             return role
     return "text_field"
+
+
+def _read_bbox(entry: dict[str, Any]) -> BoundingBox:
+    """Read an entry's box, in either layout dialect.
+
+    Args:
+        entry: One item of the layout's ``fields`` list.
+
+    Returns:
+        The box in template pixels.
+
+    Raises:
+        ValueError: If the entry carries no readable box.
+    """
+    corners = entry.get("bbox_xyxy")
+    if corners is None:
+        box = entry.get("bbox")
+        if isinstance(box, dict):
+            corners = [box.get(key) for key in ("x1", "y1", "x2", "y2")]
+
+    try:
+        return BoundingBox.from_iterable(corners)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            f"Layout entry needs 'bbox_xyxy' or 'bbox': {entry}"
+        ) from error
+
+
+def _read_rule(entry: dict[str, Any]) -> int | None:
+    """Read the printed rule an entry is written on, in either dialect.
+
+    ``underline_y`` is the printed line itself and wins when both are given;
+    ``baseline_y`` sits a few pixels above it and is the only rule some
+    layouts record.
+
+    Args:
+        entry: One item of the layout's ``fields`` list.
+
+    Returns:
+        The rule's y in template pixels, or None when the entry has none.
+    """
+    for key in ("underline_y", "baseline_y"):
+        value = entry.get(key)
+        if value is not None:
+            return int(value)
+    return None
 
 
 def _read_entry(
     entry: dict[str, Any],
     segments: dict[str, list[tuple[int, LineSegment]]],
     numeric: set[str],
-    marks: dict[str, MarkArea],
+    marks: dict[str, list[MarkArea]],
 ) -> None:
     """Fold one layout entry into the template being built.
 
@@ -281,28 +356,23 @@ def _read_entry(
         entry: One item of the layout's ``fields`` list.
         segments: Field name mapped to its ``(line index, segment)`` pairs.
         numeric: Names of the fields whose values are digits.
-        marks: Role mapped to the region reserved for it.
+        marks: Role mapped to the regions reserved for it.
 
     Raises:
         ValueError: If the entry is missing an id or a bounding box.
     """
     try:
         entry_id = str(entry["id"])
-        left, top, right, bottom = entry["bbox_xyxy"]
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError(
-            f"Layout entry needs 'id' and 'bbox_xyxy': {entry}"
-        ) from error
+    except KeyError as error:
+        raise ValueError(f"Layout entry needs an 'id': {entry}") from error
 
-    baseline = entry.get("baseline_y")
+    bbox = _read_bbox(entry)
+    baseline = _read_rule(entry)
     role = _role_of(str(entry.get("text_type", "")))
-    bbox = BoundingBox.from_iterable([left, top, right, bottom])
 
-    if role in ("seal", "serial", "signature"):
-        marks[role] = MarkArea(
-            name=entry_id,
-            bbox=bbox,
-            baseline_y=None if baseline is None else int(baseline),
+    if role in MARK_ROLES:
+        marks.setdefault(role, []).append(
+            MarkArea(name=entry_id, bbox=bbox, baseline_y=baseline)
         )
         return
 

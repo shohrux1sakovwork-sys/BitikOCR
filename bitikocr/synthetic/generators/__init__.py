@@ -2,6 +2,10 @@
 
 Adding a document type means adding a module here and one entry in
 :data:`GENERATOR_TYPES`. Nothing else in the project needs to change.
+
+Documents that fill a pre-printed form share :class:`FormGenerator` and
+differ only in which measured layout they fill, so a new certificate is
+usually a layout asset plus a four-line subclass.
 """
 
 from __future__ import annotations
@@ -17,16 +21,17 @@ from bitikocr.synthetic.generators.base import (
 )
 from bitikocr.synthetic.generators.death_certificate import (
     DeathCertificateGenerator,
-    DeathCertificateOptions,
 )
+from bitikocr.synthetic.generators.form import FormGenerator, FormOptions
 
 __all__ = [
     "GENERATOR_TYPES",
     "ArizaGenerator",
     "DeathCertificateGenerator",
-    "DeathCertificateOptions",
     "DocumentGenerator",
     "FieldValues",
+    "FormGenerator",
+    "FormOptions",
     "SyntheticDocument",
     "available_document_types",
     "create_generator",

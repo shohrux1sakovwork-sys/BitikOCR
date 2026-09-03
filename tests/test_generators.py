@@ -13,6 +13,7 @@ from bitikocr.models.annotation import DocumentAnnotation
 from bitikocr.synthetic.generators import (
     ArizaGenerator,
     DeathCertificateGenerator,
+    FormGenerator,
     available_document_types,
     create_generator,
 )
@@ -25,6 +26,37 @@ def assert_boxes_are_inside_the_page(annotation: DocumentAnnotation) -> None:
         assert line.bbox is not None, f"{line.block} has no box"
         assert line.bbox.left >= 0 and line.bbox.top >= 0
         assert line.bbox.right <= width and line.bbox.bottom <= height
+
+
+def assert_values_sit_on_their_rules(
+    generator: FormGenerator, fields: dict[str, Any], seeds: range = range(6)
+) -> None:
+    """Every line's ink must sit on the rule its own segment measured.
+
+    The layouts note that handwriting rises above the line and may spill a
+    little past its right end, so the tolerances are one-sided.
+    """
+    template = generator.template
+    for seed in seeds:
+        annotation = generator.generate(fields, seed=seed).annotation
+
+        by_block: dict[str, list[Any]] = {}
+        for line in annotation.lines:
+            by_block.setdefault(line.block, []).append(line)
+
+        for block, lines in by_block.items():
+            try:
+                geometry = template.field(block)
+            except KeyError:
+                continue
+            for line, segment in zip(lines, geometry.segments):
+                assert line.bbox is not None
+                where = f"{block}={line.text!r} (seed {seed})"
+                # Sits on the rule: not far above it, never dropped below.
+                assert -12 <= line.bbox.bottom - segment.baseline_y <= 40, where
+                # Starts at the rule's left end, barely overruns its right.
+                assert line.bbox.left >= segment.x_start - 5, where
+                assert line.bbox.right <= segment.x_end + 25, where
 
 
 # -- registry --------------------------------------------------------------
@@ -194,29 +226,7 @@ def test_every_written_value_lands_on_its_printed_rule(
     certificate_generator: DeathCertificateGenerator,
     certificate_fields: dict[str, Any],
 ) -> None:
-    """Ink must sit on the rule the layout measured, not near it.
-
-    The layout notes that handwriting rises above the line and may spill a
-    little past its right end, so the tolerances are one-sided.
-    """
-    template = certificate_generator.template
-    for seed in range(6):
-        annotation = certificate_generator.generate(
-            certificate_fields, seed=seed
-        ).annotation
-        for line in annotation.lines:
-            try:
-                geometry = template.field(line.block)
-            except KeyError:
-                continue
-            segment = geometry.segments[0]
-            assert line.bbox is not None
-            where = f"{line.block}={line.text!r} (seed {seed})"
-            # Sits on the rule: never far above, never dropped below it.
-            assert -12 <= line.bbox.bottom - segment.baseline_y <= 40, where
-            # Starts at the rule's left end, and barely overruns its right.
-            assert line.bbox.left >= segment.x_start - 5, where
-            assert line.bbox.right <= segment.x_end + 25, where
+    assert_values_sit_on_their_rules(certificate_generator, certificate_fields)
 
 
 def test_lines_of_a_double_ruled_field_do_not_collide(

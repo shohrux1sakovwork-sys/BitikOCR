@@ -165,8 +165,8 @@ def test_the_shipped_layout_has_a_seal_a_serial_and_a_signature(
     bilingual: FormTemplate,
 ) -> None:
     assert bilingual.seal is not None
-    assert bilingual.serial is not None
     assert bilingual.signature is not None
+    assert bilingual.printed_names == ("serial_number",)
 
 
 def test_the_two_double_ruled_fields_carry_two_segments(
@@ -195,3 +195,156 @@ def test_the_shipped_layout_is_valid_json(config: SyntheticConfig) -> None:
         config.layout("death_certificate_bilingual").read_text(encoding="utf-8")
     )
     assert payload["coordinate_system"].startswith("pixels")
+
+
+# -- the second layout dialect ---------------------------------------------
+
+OBJECT_DIALECT_LAYOUT: dict[str, Any] = {
+    "image": "toy.png",
+    "width": 100,
+    "height": 200,
+    "fields": [
+        {
+            "id": "name",
+            "underline_y": 50,
+            "baseline_y": 46,
+            "bbox": {"x1": 10, "y1": 20, "x2": 90, "y2": 48},
+            "text_type": "surname_uppercase_latin",
+        },
+        {
+            "id": "year",
+            "underline_y": 80,
+            "bbox": {"x1": 10, "y1": 50, "x2": 40, "y2": 78},
+            "text_type": "year_4digit",
+        },
+        {
+            "id": "no_rule",
+            "baseline_y": 120,
+            "bbox": {"x1": 10, "y1": 95, "x2": 90, "y2": 118},
+            "text_type": "initials_surname",
+        },
+    ],
+}
+
+
+def test_a_box_may_be_an_object_instead_of_an_array() -> None:
+    template = FormTemplate.from_layout(OBJECT_DIALECT_LAYOUT, "toy")
+    segment = template.field("name").segments[0]
+    assert (segment.x_start, segment.x_end) == (10, 90)
+
+
+def test_the_printed_rule_wins_over_the_text_baseline() -> None:
+    """``underline_y`` is the rule itself; ``baseline_y`` sits above it."""
+    template = FormTemplate.from_layout(OBJECT_DIALECT_LAYOUT, "toy")
+    assert template.field("name").segments[0].baseline_y == 50
+
+
+def test_a_field_with_only_a_text_baseline_still_loads() -> None:
+    template = FormTemplate.from_layout(OBJECT_DIALECT_LAYOUT, "toy")
+    assert template.field("no_rule").segments[0].baseline_y == 120
+
+
+def test_the_layout_name_falls_back_to_the_file_stem() -> None:
+    template = FormTemplate.from_layout(OBJECT_DIALECT_LAYOUT, "toy")
+    assert template.name == "toy"
+
+
+# -- role classification ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text_type", "expected"),
+    [
+        ("digits_4", "numeric"),
+        ("year_4digit", "numeric"),
+        ("day_2digit", "numeric"),
+        ("uzbek_latin_word", "text"),
+        ("month_name_uzbek", "text"),
+        ("record_no (e.g. 1-2108-20-T-003 pattern)", "text"),
+    ],
+)
+def test_a_field_is_numeric_only_when_its_type_says_digits(
+    text_type: str, expected: str
+) -> None:
+    payload = {
+        **MINIMAL_LAYOUT,
+        "fields": [
+            {
+                "id": "f",
+                "baseline_y": 10,
+                "bbox_xyxy": [0, 0, 50, 12],
+                "text_type": text_type,
+            }
+        ],
+    }
+    template = FormTemplate.from_layout(payload)
+    assert template.field("f").is_numeric is (expected == "numeric")
+
+
+@pytest.mark.parametrize(
+    "text_type",
+    [
+        "printed_digits_7 (typewriter/serif, NOT handwritten)",
+        "digits_7 (typographic, red/black)",
+        "series (roman numeral + 2 letters, e.g. III-XX)",
+    ],
+)
+def test_typeset_values_are_printed_not_handwritten(text_type: str) -> None:
+    """A digit count in the type must not outrank 'typographic'."""
+    payload = {
+        **MINIMAL_LAYOUT,
+        "fields": [
+            MINIMAL_LAYOUT["fields"][0],
+            {
+                "id": "printed",
+                "bbox_xyxy": [0, 0, 50, 12],
+                "text_type": text_type,
+            },
+        ],
+    }
+    template = FormTemplate.from_layout(payload)
+    assert template.printed_names == ("printed",)
+    assert "printed" not in template.field_names
+
+
+@pytest.mark.parametrize(
+    ("text_type", "attribute"),
+    [
+        ("round_stamp (ink seal)", "seal"),
+        ("stamp", "seal"),
+        ("signature (scribble) + optional surname", "signature"),
+    ],
+)
+def test_marks_are_recognised_from_their_type(
+    text_type: str, attribute: str
+) -> None:
+    payload = {
+        **MINIMAL_LAYOUT,
+        "fields": [
+            MINIMAL_LAYOUT["fields"][0],
+            {
+                "id": "mark",
+                "bbox_xyxy": [0, 0, 50, 50],
+                "text_type": text_type,
+            },
+        ],
+    }
+    template = FormTemplate.from_layout(payload)
+    assert getattr(template, attribute) is not None
+
+
+def test_a_qr_region_becomes_a_keep_out_zone() -> None:
+    payload = {
+        **MINIMAL_LAYOUT,
+        "fields": [
+            MINIMAL_LAYOUT["fields"][0],
+            {
+                "id": "qr_code",
+                "bbox_xyxy": [0, 0, 50, 50],
+                "text_type": "qr",
+            },
+        ],
+    }
+    template = FormTemplate.from_layout(payload)
+    assert [area.name for area in template.keep_out] == ["qr_code"]
+    assert "qr_code" not in template.field_names

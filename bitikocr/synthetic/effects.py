@@ -18,9 +18,12 @@ from bitikocr.models.geometry import BoundingBox
 from bitikocr.synthetic.style import Color, PenKind
 from bitikocr.utils.image_ops import alpha_bounding_box
 
-__all__ = ["draw_round_stamp", "draw_scribble"]
+__all__ = ["SCRIBBLE_WIDTH_RANGE", "draw_round_stamp", "draw_scribble"]
 
 _SCRIBBLE_MARGIN = 20
+
+#: A scribble spans this many times its nominal size, before clamping.
+SCRIBBLE_WIDTH_RANGE = (2.5, 4.5)
 
 
 def draw_scribble(
@@ -31,6 +34,7 @@ def draw_scribble(
     color: Color,
     rng: random.Random,
     pen: PenKind,
+    max_width: int | None = None,
 ) -> BoundingBox | None:
     """Draw a signature-like scribble onto a page.
 
@@ -45,11 +49,16 @@ def draw_scribble(
         color: Ink colour as RGB.
         rng: Random source for the curve's shape.
         pen: Which pen signed; anything but ``"hard"`` gets a softer edge.
+        max_width: Total footprint the scribble must stay within, in pixels.
+            Signature areas butt up against printed marks, so a signature
+            that ran long would land on them.
 
     Returns:
         The box around the drawn ink, or None if nothing was drawn.
     """
-    width = int(size * rng.uniform(2.5, 4.5))
+    width = int(size * rng.uniform(*SCRIBBLE_WIDTH_RANGE))
+    if max_width is not None:
+        width = max(1, min(width, max_width - 2 * _SCRIBBLE_MARGIN))
     height = int(size * rng.uniform(1.0, 1.8))
     layer = Image.new(
         "L", (width + 2 * _SCRIBBLE_MARGIN, height + 2 * _SCRIBBLE_MARGIN), 0
