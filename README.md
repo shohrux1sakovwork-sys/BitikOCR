@@ -22,6 +22,10 @@ uv run bitikocr synth generate ariza -n 100 -o data/synthetic/ariza
 ```
 
 ```bash
+uv run bitikocr synth generate birth_certificate -n 100 --boxes
+```
+
+```bash
 uv run bitikocr synth generate death_certificate -n 100 --boxes
 ```
 
@@ -107,9 +111,12 @@ Use `style_overrides` to pin any writer parameter, for example
 
 ## Form templates
 
-Documents that fill a pre-printed form — the death certificate today, more
-later — take their geometry from a **layout JSON**, not from Python. Each
-layout is the measured position of every printed underline on one blank
+Documents that fill a pre-printed form — the birth and death certificates
+today, more later — take their geometry from a **layout JSON**, not from
+Python. They also share one generator: a certificate is a template plus a
+four-line subclass, never a new rendering path.
+
+Each layout is the measured position of every printed underline on one blank
 form:
 
 ```json
@@ -126,19 +133,34 @@ form:
 }
 ```
 
-`text_type` decides what each entry is:
+`text_type` is free text; the first role whose keywords it mentions wins:
 
-| `text_type` starts with | Becomes                                        |
-|-------------------------|------------------------------------------------|
-| `digits`                | a handwritten field, written in a digit hand   |
-| `round_stamp`           | the office seal's area                         |
-| `printed_digits`        | the machine-printed serial number's area       |
-| `signature`             | where the registrar signs                      |
-| anything else           | a handwritten text field                       |
+| `text_type` mentions                       | Becomes                          |
+|--------------------------------------------|----------------------------------|
+| `qr`, `barcode`, `photo`                    | a keep-out zone — never drawn on |
+| `stamp`, `seal`                             | the office seal's area           |
+| `signature`                                 | where the registrar signs        |
+| `printed_digits`, `typographic`, `series`   | machine-printed text             |
+| `digit`                                     | a field written in a digit hand  |
+| anything else                               | a handwritten text field         |
+
+Order matters, so `digits_7 (typographic, red/black)` is typeset rather than
+handwritten. A form may have several printed areas — the birth certificate
+sets a series beside its number — each filled from the field of the same
+name.
+
+Both spellings of a box are accepted, `bbox_xyxy: [x1, y1, x2, y2]` and
+`bbox: {x1, y1, x2, y2}`, and both spellings of a rule, `underline_y` (the
+printed line itself, preferred) and `baseline_y`.
 
 Entries whose id ends in `_line1`, `_line2`, ... are one logical field
 written across several printed rules, merged under the shared base name
 (`cause_of_death_line1` + `cause_of_death_line2` → `cause_of_death`).
+
+Whether the registrar's name is written in the signature area or has a line
+of its own is read from the geometry: an area with a rule through it is a
+name line that also gets signed; an open zone with no rule is signed only,
+and the form gives the name a field elsewhere.
 
 **To add a form variant**, drop its scan in
 `bitikocr/synthetic/assets/backgrounds/` and its measured layout in
@@ -150,6 +172,11 @@ uv run bitikocr synth generate death_certificate --template <name> -n 20 --boxes
 
 No code changes are needed. The layout's `width`/`height` must match the
 background scan exactly, since every coordinate is scaled from them.
+
+**To add a whole new form** — a marriage certificate, a passport page — add
+its layout and a subclass naming the document type and its default
+template; see `bitikocr/synthetic/generators/birth_certificate.py`, which is
+twenty lines including the docstring.
 
 ## Assets
 

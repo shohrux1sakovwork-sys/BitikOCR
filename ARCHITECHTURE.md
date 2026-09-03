@@ -50,7 +50,9 @@
 │       ├── dataset.py           # Batch generation and writing to disk
 │       ├── generators/          # One module per document type
 │       │   ├── base.py          # DocumentGenerator contract
+│       │   ├── form.py          # FormGenerator: filling any printed form
 │       │   ├── ariza.py
+│       │   ├── birth_certificate.py
 │       │   └── death_certificate.py
 │       └── assets/              # Shipped with the package
 │           ├── fonts/           # Handwriting fonts
@@ -127,17 +129,31 @@ of truth rather than being retyped into code, and a second variant of an
 existing form — the single-page death certificate next to the two-page
 bilingual one — is a new JSON rather than a new class.
 
-`DeathCertificateGenerator` therefore knows *how* a clerk fills a form, and
-the template knows *where* the rules are. Adding a variant:
+`FormGenerator` therefore knows *how* a clerk fills a form — which hand
+writes digits, how a value shrinks to fit, where the seal is pressed — and
+the template knows *where* everything goes. Every certificate is that one
+generator with a different template, so `BirthCertificateGenerator` and
+`DeathCertificateGenerator` are four lines each: a document type name and a
+default layout.
+
+Adding a variant of an existing form:
 
 1. Add the blank scan to `assets/backgrounds/`.
 2. Add its measured layout to `assets/layouts/<name>.json`.
 3. `bitikocr synth generate death_certificate --template <name>`.
 
+Adding a new form is the same plus a `FormGenerator` subclass naming it.
+
 A generator opts into templates by overriding
 `DocumentGenerator.with_template`; the base refuses one, so passing a
 template to a free-layout document like the ariza is an error rather than a
 silent no-op.
+
+Layouts come from whatever tool measured the scan, so the loader accepts
+more than one spelling of the same fact — see the README for the dialects.
+Roles are inferred from each entry's free-text `text_type`, which is what
+lets a layout describe a seal, a signature zone, machine-printed text or a
+printed QR code that must never be drawn over.
 
 ### Adding a document type
 
