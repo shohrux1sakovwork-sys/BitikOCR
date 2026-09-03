@@ -19,6 +19,9 @@ from bitikocr.synthetic.generators.base import (
     FieldValues,
     SyntheticDocument,
 )
+from bitikocr.synthetic.generators.birth_certificate import (
+    BirthCertificateGenerator,
+)
 from bitikocr.synthetic.generators.death_certificate import (
     DeathCertificateGenerator,
 )
@@ -27,6 +30,7 @@ from bitikocr.synthetic.generators.form import FormGenerator, FormOptions
 __all__ = [
     "GENERATOR_TYPES",
     "ArizaGenerator",
+    "BirthCertificateGenerator",
     "DeathCertificateGenerator",
     "DocumentGenerator",
     "FieldValues",
@@ -39,6 +43,7 @@ __all__ = [
 
 GENERATOR_TYPES: dict[str, type[DocumentGenerator]] = {
     ArizaGenerator.name: ArizaGenerator,
+    BirthCertificateGenerator.name: BirthCertificateGenerator,
     DeathCertificateGenerator.name: DeathCertificateGenerator,
 }
 

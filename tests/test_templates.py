@@ -348,3 +348,64 @@ def test_a_qr_region_becomes_a_keep_out_zone() -> None:
     template = FormTemplate.from_layout(payload)
     assert [area.name for area in template.keep_out] == ["qr_code"]
     assert "qr_code" not in template.field_names
+
+
+# -- the shipped birth certificate layout ----------------------------------
+
+
+@pytest.fixture()
+def birth(config: SyntheticConfig) -> FormTemplate:
+    """The measured layout of the two-page bilingual birth certificate."""
+    return FormTemplate.load(config.layout("birth_certificate_bilingual"))
+
+
+def test_the_birth_layout_matches_its_background(
+    birth: FormTemplate, config: SyntheticConfig
+) -> None:
+    from PIL import Image
+
+    with Image.open(config.background(birth.background)) as background:
+        assert background.size == birth.native_size
+
+
+def test_the_birth_layout_covers_child_parents_and_registration(
+    birth: FormTemplate,
+) -> None:
+    names = set(birth.field_names)
+    assert {"child_surname", "child_given_name", "child_birth_date"} <= names
+    assert {"father_surname", "mother_surname"} <= names
+    assert {"registry_office", "registry_head_name"} <= names
+
+
+def test_the_birth_layout_merges_the_two_office_rules(
+    birth: FormTemplate,
+) -> None:
+    assert len(birth.field("registry_office").segments) == 2
+    assert "registry_office_line1" not in birth.field_names
+
+
+def test_the_birth_layout_has_two_printed_areas(birth: FormTemplate) -> None:
+    assert set(birth.printed_names) == {"form_number", "form_series"}
+
+
+def test_the_birth_layout_reserves_the_printed_qr_code(
+    birth: FormTemplate,
+) -> None:
+    assert [area.name for area in birth.keep_out] == ["qr_code"]
+
+
+def test_the_birth_signature_zone_has_no_printed_rule(
+    birth: FormTemplate,
+) -> None:
+    """It is an open zone, so the head's name has a field of its own."""
+    assert birth.signature is not None
+    assert birth.signature.baseline_y is None
+    assert "registry_head_name" in birth.field_names
+
+
+def test_every_birth_field_stays_inside_the_form(birth: FormTemplate) -> None:
+    width, height = birth.native_size
+    for field in birth.fields:
+        for segment in field.segments:
+            assert 0 <= segment.x_start < segment.x_end <= width, field.name
+            assert 0 < segment.baseline_y < height, field.name

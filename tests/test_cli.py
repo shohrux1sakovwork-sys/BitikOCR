@@ -12,7 +12,11 @@ from bitikocr.config import ENV_FONTS_DIR
 
 def test_listing_document_types(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["synth", "list-types"]) == 0
-    assert capsys.readouterr().out.split() == ["ariza", "death_certificate"]
+    assert capsys.readouterr().out.split() == [
+        "ariza",
+        "birth_certificate",
+        "death_certificate",
+    ]
 
 
 def test_listing_fonts(capsys: pytest.CaptureFixture[str]) -> None:
@@ -64,5 +68,6 @@ def test_an_unknown_document_type_is_rejected_by_the_parser() -> None:
 def test_listing_templates(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["synth", "list-templates"]) == 0
     printed = capsys.readouterr().out
+    assert "birth_certificate_bilingual" in printed
     assert "death_certificate_bilingual" in printed
-    assert "printed:  serial_number" in printed
+    assert "keep-out: qr_code" in printed

@@ -12,6 +12,7 @@ from bitikocr.config import SyntheticConfig
 from bitikocr.models.annotation import DocumentAnnotation
 from bitikocr.synthetic.generators import (
     ArizaGenerator,
+    BirthCertificateGenerator,
     DeathCertificateGenerator,
     FormGenerator,
     available_document_types,
@@ -63,7 +64,11 @@ def assert_values_sit_on_their_rules(
 
 
 def test_every_document_type_is_registered() -> None:
-    assert available_document_types() == ("ariza", "death_certificate")
+    assert available_document_types() == (
+        "ariza",
+        "birth_certificate",
+        "death_certificate",
+    )
 
 
 def test_a_generator_is_built_from_its_name(config: SyntheticConfig) -> None:
@@ -276,3 +281,117 @@ def test_a_template_is_rejected_for_a_free_layout_document(
 ) -> None:
     with pytest.raises(ValueError, match="does not use form templates"):
         create_generator("ariza", config, template="anything")
+
+
+# -- birth certificate -----------------------------------------------------
+
+
+def test_a_birth_certificate_fills_child_parents_and_office(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    filled = {block.kind for block in annotation.blocks if block.text}
+    assert {"child_surname", "child_given_name"} <= filled
+    assert {"father_surname", "mother_surname"} <= filled
+    assert {"registry_office", "registry_head_name"} <= filled
+
+
+def test_a_birth_certificate_prints_both_series_and_number(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """This form typesets a series beside the number, not one serial."""
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    printed = {
+        block.kind: block.text
+        for block in annotation.blocks
+        if block.kind in ("form_series", "form_number")
+    }
+    assert printed == {
+        "form_series": birth_fields["form_series"],
+        "form_number": birth_fields["form_number"],
+    }
+
+
+def test_a_birth_certificate_stamps_and_signs(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert {"stamp", "signature"} <= kinds
+
+
+def test_the_head_of_office_is_a_field_not_a_signature_caption(
+    birth_generator: BirthCertificateGenerator,
+) -> None:
+    """The birth form gives the name its own rule, unlike the death form."""
+    assert not birth_generator.registrar_writes_on_signature
+    assert "registrar_name" not in birth_generator.field_names
+    assert "registry_head_name" in birth_generator.field_names
+
+
+def test_a_birth_certificate_is_reproducible_from_its_seed(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    first = birth_generator.generate(birth_fields, seed=7)
+    second = birth_generator.generate(birth_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_a_birth_certificate_keeps_every_box_on_the_page(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    assert_boxes_are_inside_the_page(
+        birth_generator.generate(birth_fields, seed=5).annotation
+    )
+
+
+def test_every_birth_value_lands_on_its_printed_rule(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    assert_values_sit_on_their_rules(birth_generator, birth_fields)
+
+
+def test_nothing_is_drawn_over_the_printed_qr_code(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """The blank form already carries a QR; ink there would ruin both."""
+    template = birth_generator.template
+    assert template.keep_out, "expected the layout to reserve the QR region"
+
+    for seed in range(8):
+        annotation = birth_generator.generate(
+            birth_fields, seed=seed
+        ).annotation
+        for area in template.keep_out:
+            for block in annotation.blocks:
+                if block.bbox is None:
+                    continue
+                overlaps = (
+                    block.bbox.left < area.bbox.right
+                    and area.bbox.left < block.bbox.right
+                    and block.bbox.top < area.bbox.bottom
+                    and area.bbox.top < block.bbox.bottom
+                )
+                assert (
+                    not overlaps
+                ), f"{block.kind} overlaps {area.name} at seed {seed}"
+
+
+def test_both_certificates_share_one_generator(
+    config: SyntheticConfig,
+) -> None:
+    """Certificates differ by template, not by rendering code."""
+    birth = create_generator("birth_certificate", config)
+    death = create_generator("death_certificate", config)
+    assert isinstance(birth, FormGenerator)
+    assert isinstance(death, FormGenerator)
+    assert type(birth).generate is type(death).generate
+    assert birth.template.name != death.template.name

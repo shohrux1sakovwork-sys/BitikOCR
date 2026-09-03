@@ -10,6 +10,7 @@ from bitikocr.config import SyntheticConfig
 from bitikocr.synthetic.fonts import FontLibrary
 from bitikocr.synthetic.generators import (
     ArizaGenerator,
+    BirthCertificateGenerator,
     DeathCertificateGenerator,
     FormOptions,
 )
@@ -63,5 +64,19 @@ def certificate_generator(
     changing any of the layout logic under test.
     """
     return DeathCertificateGenerator(
+        config, options=FormOptions(scale=1.0, augment=False)
+    )
+
+
+@pytest.fixture(scope="session")
+def birth_fields() -> dict[str, object]:
+    """One built-in birth certificate field set."""
+    return dict(sample_fields_for("birth_certificate")[0])
+
+
+@pytest.fixture(scope="session")
+def birth_generator(config: SyntheticConfig) -> BirthCertificateGenerator:
+    """A birth certificate generator rendered small and unaugmented."""
+    return BirthCertificateGenerator(
         config, options=FormOptions(scale=1.0, augment=False)
     )

@@ -28,6 +28,7 @@ from bitikocr.synthetic.dataset import (
 from bitikocr.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.synthetic.generators import (
     ArizaGenerator,
+    BirthCertificateGenerator,
     DeathCertificateGenerator,
     DocumentGenerator,
     FormGenerator,
@@ -44,6 +45,7 @@ from bitikocr.synthetic.templates import FieldGeometry, FormTemplate, MarkArea
 
 __all__ = [
     "ArizaGenerator",
+    "BirthCertificateGenerator",
     "DatasetSummary",
     "DeathCertificateGenerator",
     "DocumentGenerator",
