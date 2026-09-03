@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import statistics
 from typing import Any
 
 import pytest
@@ -395,3 +396,142 @@ def test_both_certificates_share_one_generator(
     assert isinstance(death, FormGenerator)
     assert type(birth).generate is type(death).generate
     assert birth.template.name != death.template.name
+
+
+# -- placement inside a form's cells ----------------------------------------
+
+
+def measure_off_centre(
+    generator: FormGenerator, fields: dict[str, Any], seeds: range = range(10)
+) -> list[float]:
+    """Return how far each value sits from the middle of its cell.
+
+    The result is normalised against the slack around the value: 0.0 is
+    dead centre and ±1.0 is flush against one end. Only single-line fields
+    with real room to move are measured.
+    """
+    template = generator.template
+    offsets: list[float] = []
+    for seed in seeds:
+        annotation = generator.generate(fields, seed=seed).annotation
+        for line in annotation.lines:
+            try:
+                geometry = template.field(line.block)
+            except KeyError:
+                continue
+            if len(geometry.segments) != 1 or line.bbox is None:
+                continue
+            segment = geometry.segments[0]
+            slack = segment.width - line.bbox.width
+            if slack < 60:
+                continue
+            cell_centre = (segment.x_start + segment.x_end) / 2
+            ink_centre = (line.bbox.left + line.bbox.right) / 2
+            offsets.append((ink_centre - cell_centre) / (slack / 2))
+    return offsets
+
+
+@pytest.mark.parametrize(
+    "generator_fixture", ["birth_generator", "certificate_generator"]
+)
+def test_values_sit_around_the_middle_of_their_cell(
+    generator_fixture: str,
+    request: pytest.FixtureRequest,
+    birth_fields: dict[str, Any],
+    certificate_fields: dict[str, Any],
+) -> None:
+    """A clerk aims for the middle of the space, not its left edge."""
+    generator = request.getfixturevalue(generator_fixture)
+    fields = (
+        birth_fields
+        if generator_fixture == "birth_generator"
+        else certificate_fields
+    )
+    offsets = measure_off_centre(generator, fields)
+
+    assert offsets, "expected fields with room to move"
+    assert abs(statistics.mean(offsets)) < 0.2, "values drift off centre"
+    assert (
+        max(abs(offset) for offset in offsets) < 0.8
+    ), "a value was written flush against one end of its cell"
+
+
+def test_values_are_not_centred_to_the_pixel(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """Perfect centring reads as typeset; a hand never lands twice alike."""
+    offsets = measure_off_centre(birth_generator, birth_fields)
+    assert statistics.pstdev(offsets) > 0.05
+
+
+# -- the office seal --------------------------------------------------------
+
+
+def seal_centres(
+    generator: FormGenerator, fields: dict[str, Any], seeds: range = range(20)
+) -> list[tuple[float, float]]:
+    """Return where the seal's ink landed on each generated page."""
+    centres: list[tuple[float, float]] = []
+    for seed in seeds:
+        annotation = generator.generate(fields, seed=seed).annotation
+        box = next(
+            block.bbox for block in annotation.blocks if block.kind == "stamp"
+        )
+        assert box is not None
+        centres.append(((box.left + box.right) / 2, (box.top + box.bottom) / 2))
+    return centres
+
+
+def test_the_seal_is_pressed_off_centre_every_time(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """A hand-pressed seal never lands in the same place twice."""
+    centres = seal_centres(birth_generator, birth_fields)
+    assert len({round(x) for x, _ in centres}) > 5
+    assert len({round(y) for _, y in centres}) > 5
+
+
+def test_the_seal_leans_left_of_its_printed_circle(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    centres = seal_centres(birth_generator, birth_fields)
+    area = birth_generator.template.seal
+    assert area is not None
+    assert statistics.mean(x for x, _ in centres) < area.centre[0]
+
+
+def test_the_seal_stays_on_the_page_wherever_it_lands(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    width, height = birth_generator.template.native_size
+    for seed in range(20):
+        annotation = birth_generator.generate(
+            birth_fields, seed=seed
+        ).annotation
+        box = next(
+            block.bbox for block in annotation.blocks if block.kind == "stamp"
+        )
+        assert box is not None
+        assert 0 <= box.left and box.right <= width, seed
+        assert 0 <= box.top and box.bottom <= height, seed
+
+
+def test_the_seal_box_measures_its_ink_not_its_canvas(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """The stamp layer is padded for its curved lettering; the box is not."""
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    box = next(
+        block.bbox for block in annotation.blocks if block.kind == "stamp"
+    )
+    area = birth_generator.template.seal
+    assert box is not None and area is not None
+
+    canvas = area.radius * 2 * 1.35 * 2.6  # widest radius, padded layer
+    assert box.width < canvas
+    assert box.width > area.radius  # but it did draw a seal

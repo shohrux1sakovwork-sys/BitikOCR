@@ -157,6 +157,12 @@ Entries whose id ends in `_line1`, `_line2`, ... are one logical field
 written across several printed rules, merged under the shared base name
 (`cause_of_death_line1` + `cause_of_death_line2` → `cause_of_death`).
 
+Values are written around the middle of the cell the layout gives them,
+nudged either way within their slack, and the office seal is pressed a
+little left of its printed circle with enough scatter to catch the lines
+above or below it. Both are read from the measured area, so they scale with
+whatever form is being filled.
+
 Whether the registrar's name is written in the signature area or has a line
 of its own is read from the geometry: an area with a rule through it is a
 name line that also gets signed; an open zone with no rule is signed only,

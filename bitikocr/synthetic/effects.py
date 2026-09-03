@@ -122,7 +122,7 @@ def draw_round_stamp(
     color: Color,
     font_path: Path,
     rng: random.Random,
-) -> BoundingBox:
+) -> BoundingBox | None:
     """Draw a round office seal: two rings, curved text and a centred caption.
 
     Args:
@@ -136,7 +136,10 @@ def draw_round_stamp(
         rng: Random source for the tilt and the patchy ink.
 
     Returns:
-        The box the stamp occupies.
+        The box around the stamp's ink, or None if nothing was drawn. The
+        ink is measured rather than assumed: the layer is padded well beyond
+        the ring to leave room for the curved lettering, so its canvas would
+        overstate what the seal covers.
     """
     size = int(radius * 2.6)
     layer = Image.new("L", (size, size), 0)
@@ -170,7 +173,7 @@ def draw_round_stamp(
 
     left, top = centre[0] - middle, centre[1] - middle
     page.alpha_composite(stamp, (left, top))
-    return BoundingBox(left, top, left + size, top + size)
+    return alpha_bounding_box(stamp, (left, top))
 
 
 def _draw_ring_text(

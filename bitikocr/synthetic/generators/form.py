@@ -67,10 +67,15 @@ _SEAL_COLORS: tuple[Color, ...] = (
     (60, 30, 130),
 )
 
-# The seal is pressed by hand: it lands slightly off-centre and its size
-# varies a little between offices, but it always fits its printed area.
+# The seal is pressed by hand onto a page that is already written on. It
+# lands off-centre — usually a little left of the printed circle, and high or
+# low enough to catch the lines above or below it — and its size varies a
+# little between offices. Offsets are fractions of the seal's printed area,
+# so they scale with whatever form is being filled.
 _SEAL_RADIUS_JITTER = (0.92, 1.06)
-_SEAL_OFFSET_JITTER = 20
+_SEAL_LEFT_BIAS = 0.08
+_SEAL_JITTER_X = 0.10
+_SEAL_JITTER_Y = 0.15
 
 # Machine-printed text sits just inside the left edge of its area, following
 # whatever label the form prints there.
@@ -91,6 +96,11 @@ _MAX_FIT_PASSES = 40
 # Share of the vertical gap between two printed rules that the handwriting
 # may occupy. Below 1.0 the lines stay clear of each other.
 _MULTILINE_GAP_RATIO = 0.95
+
+# How far off centre a value may sit in its cell, as a share of the slack
+# around it. 0.0 would centre every value exactly; 0.5 would let one sit
+# flush against either end.
+_CENTRE_JITTER = 0.15
 
 
 @dataclass(frozen=True)
@@ -262,8 +272,6 @@ class FormGenerator(DocumentGenerator):
             scale_y=scale_y,
             font_size=font_size,
             rng=rng,
-            # This clerk's alignment habit: mostly left, sometimes centred.
-            is_centred=rng.random() < 0.35,
         )
         for name, text in values.items():
             geometry = template.field(name)
@@ -466,10 +474,15 @@ class FormGenerator(DocumentGenerator):
         )
 
         native_x, native_y = area.centre
-        offset = _SEAL_OFFSET_JITTER
+        offset_x = area.bbox.width * (
+            -_SEAL_LEFT_BIAS + rng.uniform(-_SEAL_JITTER_X, _SEAL_JITTER_X)
+        )
+        offset_y = area.bbox.height * rng.uniform(
+            -_SEAL_JITTER_Y, _SEAL_JITTER_Y
+        )
         centre = (
-            int((native_x + rng.uniform(-offset, offset)) * scale_x),
-            int((native_y + rng.uniform(-offset, offset)) * scale_y),
+            int((native_x + offset_x) * scale_x),
+            int((native_y + offset_y) * scale_y),
         )
         radius = int(area.radius * rng.uniform(*_SEAL_RADIUS_JITTER) * scale_x)
 
@@ -546,7 +559,6 @@ class _FieldWriter:
         scale_y: Native-to-page vertical scale factor.
         font_size: The clerk's nominal handwriting size.
         rng: Random source for placement inside a segment.
-        is_centred: Whether this clerk centres values on their line.
     """
 
     page: Page
@@ -554,7 +566,6 @@ class _FieldWriter:
     scale_y: float
     font_size: int
     rng: random.Random
-    is_centred: bool
 
     def write(self, geometry: FieldGeometry, text: str, hand: Hand) -> None:
         """Write one field, wrapping and shrinking it to fit its segments.
@@ -632,14 +643,15 @@ class _FieldWriter:
         x_start: int,
         x_end: int,
     ) -> None:
-        """Place one line inside a span, following this clerk's alignment."""
+        """Place one line in the middle of its span, give or take.
+
+        A clerk aims for the middle of the space a form gives them rather
+        than crowding its left end, but never hits it exactly, so the value
+        is centred and then nudged either way within its slack.
+        """
         left = self.to_page_x(x_start)
         free = max(0.0, (self.to_page_x(x_end) - left) - hand.measure(line))
-        share = (
-            self.rng.uniform(0.35, 0.65)
-            if self.is_centred
-            else self.rng.uniform(0.0, 0.25)
-        )
+        share = 0.5 + self.rng.uniform(-_CENTRE_JITTER, _CENTRE_JITTER)
         # Clerks write on the rule or just above it, never below.
         top = self.to_page_y(baseline_y) - int(
             self.font_size * self.rng.uniform(0.05, 0.25)
