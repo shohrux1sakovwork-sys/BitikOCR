@@ -1,6 +1,6 @@
 """The Uzbek death certificate — ``O'lim haqida guvohnoma``.
 
-All the filling logic lives in :mod:`bitikocr.synthetic.generators.form`;
+All the filling logic lives in :mod:`bitikocr.data.synthetic.generators.form`;
 this module only names the document type and the form variant it fills by
 default. Older single-page variants are added as layouts, not as code.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from bitikocr.synthetic.generators.form import FormGenerator
+from bitikocr.data.synthetic.generators.form import FormGenerator
 
 __all__ = ["DEFAULT_TEMPLATE", "DeathCertificateGenerator"]
 

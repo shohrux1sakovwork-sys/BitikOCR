@@ -1,4 +1,4 @@
-"""Tests for bitikocr.synthetic.style."""
+"""Tests for bitikocr.data.synthetic.style."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import random
 
 import pytest
 
-from bitikocr.synthetic.fonts import FontLibrary
-from bitikocr.synthetic.style import HandwritingStyle, sample_style
+from bitikocr.data.synthetic.fonts import FontLibrary
+from bitikocr.data.synthetic.style import HandwritingStyle, sample_style
 
 
 def test_the_same_seed_samples_the_same_style(library: FontLibrary) -> None:

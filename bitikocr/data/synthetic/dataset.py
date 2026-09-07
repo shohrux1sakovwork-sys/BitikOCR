@@ -44,22 +44,22 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from bitikocr.models.annotation import DocumentAnnotation
-from bitikocr.synthetic.augment import (
+from bitikocr.data.synthetic.augment import (
     AugmentationProfile,
     AugmentationReport,
     augment_page,
 )
-from bitikocr.synthetic.export import (
+from bitikocr.data.synthetic.export import (
     build_facts_record,
     build_transcription_record,
     document_id,
 )
-from bitikocr.synthetic.generators.base import (
+from bitikocr.data.synthetic.generators.base import (
     DocumentGenerator,
     SyntheticDocument,
 )
-from bitikocr.synthetic.records import DocumentRecord
+from bitikocr.data.synthetic.records import DocumentRecord
+from bitikocr.models.annotation import DocumentAnnotation
 
 __all__ = [
     "DEFAULT_ID_PREFIX",

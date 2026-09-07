@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic.augment import AugmentationProfile
-from bitikocr.synthetic.dataset import (
+from bitikocr.data.synthetic.augment import AugmentationProfile
+from bitikocr.data.synthetic.dataset import (
     DEFAULT_ID_PREFIX,
     DatasetLayout,
     DatasetSummary,
@@ -25,19 +25,19 @@ from bitikocr.synthetic.dataset import (
     render_records,
     write_records,
 )
-from bitikocr.synthetic.fonts import FontInfo, FontLibrary
-from bitikocr.synthetic.generators import (
+from bitikocr.data.synthetic.fonts import FontInfo, FontLibrary
+from bitikocr.data.synthetic.generators import (
     DEFAULT_INK_STRENGTH,
     available_document_types,
     create_generator,
 )
-from bitikocr.synthetic.records import (
+from bitikocr.data.synthetic.records import (
     DEFAULT_LATIN_SHARE,
     DocumentRecord,
     sample_records,
 )
-from bitikocr.synthetic.scripts import SCRIPTS
-from bitikocr.synthetic.templates import FormTemplate
+from bitikocr.data.synthetic.scripts import SCRIPTS
+from bitikocr.data.synthetic.templates import FormTemplate
 
 __all__ = ["main"]
 
@@ -131,10 +131,7 @@ def _add_output_argument(parser: argparse.ArgumentParser) -> None:
         "--output-dir",
         type=Path,
         default=None,
-        help=(
-            "dataset directory "
-            "(default: <data dir>/<origin>/<document type>)"
-        ),
+        help="dataset directory (default: <output dir>/<document type>)",
     )
 
 

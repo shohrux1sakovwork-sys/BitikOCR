@@ -16,6 +16,10 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "bitikocr"
 module-root = ""
+# Fonts, blank scans and layouts ship with the package; the documents
+# generated from them do not.
+source-exclude = ["data/synthetic/output"]
+wheel-exclude = ["data/synthetic/output"]
 
 [dependency-groups]
 dev = [

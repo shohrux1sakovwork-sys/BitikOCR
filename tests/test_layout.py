@@ -1,13 +1,13 @@
-"""Tests for bitikocr.synthetic.layout and the handwriting renderer."""
+"""Tests for bitikocr.data.synthetic.layout and the handwriting renderer."""
 
 from __future__ import annotations
 
 import random
 
-from bitikocr.synthetic.fonts import FontLibrary
-from bitikocr.synthetic.hand import Hand
-from bitikocr.synthetic.layout import Page, wrap_text
-from bitikocr.synthetic.style import HandwritingStyle
+from bitikocr.data.synthetic.fonts import FontLibrary
+from bitikocr.data.synthetic.hand import Hand
+from bitikocr.data.synthetic.layout import Page, wrap_text
+from bitikocr.data.synthetic.style import HandwritingStyle
 
 TEXT = "Ҳақиқий ўзбек ёзуви ғалаба қилди ва яна давом этди"
 

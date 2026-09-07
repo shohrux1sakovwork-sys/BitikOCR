@@ -15,14 +15,14 @@ import random
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-from bitikocr.synthetic.fonts import (
+from bitikocr.data.synthetic.fonts import (
     FALLBACK_BASE,
     SUBSTITUTE,
     FontInfo,
     open_font,
     pixel_size_for,
 )
-from bitikocr.synthetic.style import Color, HandwritingStyle
+from bitikocr.data.synthetic.style import Color, HandwritingStyle
 
 __all__ = ["Hand"]
 

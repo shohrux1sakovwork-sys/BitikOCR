@@ -9,6 +9,21 @@ from typing import Any
 import pytest
 
 from bitikocr.config import SyntheticConfig
+from bitikocr.data.synthetic.augment import AugmentationReport
+from bitikocr.data.synthetic.export import (
+    build_facts_record,
+    build_transcription_record,
+)
+from bitikocr.data.synthetic.facts import (
+    FACT_CATEGORIES,
+    FIELD_FACTS,
+    build_facts,
+)
+from bitikocr.data.synthetic.generators import create_generator
+from bitikocr.data.synthetic.records import (
+    available_record_types,
+    sample_record,
+)
 from bitikocr.models.geometry import BoundingBox
 from bitikocr.models.schema import (
     AnnotationInfo,
@@ -20,18 +35,6 @@ from bitikocr.models.schema import (
     SourceInfo,
     TranscriptionRecord,
 )
-from bitikocr.synthetic.augment import AugmentationReport
-from bitikocr.synthetic.export import (
-    build_facts_record,
-    build_transcription_record,
-)
-from bitikocr.synthetic.facts import (
-    FACT_CATEGORIES,
-    FIELD_FACTS,
-    build_facts,
-)
-from bitikocr.synthetic.generators import create_generator
-from bitikocr.synthetic.records import available_record_types, sample_record
 
 
 @pytest.fixture(params=available_record_types())
@@ -301,7 +304,7 @@ def test_an_unmapped_document_type_is_rejected() -> None:
 
 def test_an_unknown_category_is_refused_at_import_time() -> None:
     """The vocabulary is versioned, so a typo must not slip into a corpus."""
-    from bitikocr.synthetic.facts import _fact
+    from bitikocr.data.synthetic.facts import _fact
 
     with pytest.raises(ValueError, match="Unknown fact category"):
         _fact("not_a_category")

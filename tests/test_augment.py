@@ -1,4 +1,4 @@
-"""Tests for bitikocr.synthetic.augment."""
+"""Tests for bitikocr.data.synthetic.augment."""
 
 from __future__ import annotations
 
@@ -7,17 +7,17 @@ import random
 import pytest
 from PIL import Image
 
+from bitikocr.data.synthetic.augment import (
+    AugmentationProfile,
+    augment_page,
+    rotate_page,
+)
 from bitikocr.models.annotation import (
     BlockAnnotation,
     DocumentAnnotation,
     LineAnnotation,
 )
 from bitikocr.models.geometry import BoundingBox
-from bitikocr.synthetic.augment import (
-    AugmentationProfile,
-    augment_page,
-    rotate_page,
-)
 
 
 @pytest.fixture()

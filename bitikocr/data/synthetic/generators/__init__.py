@@ -13,20 +13,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic.generators.ariza import ArizaGenerator
-from bitikocr.synthetic.generators.base import (
+from bitikocr.data.synthetic.generators.ariza import ArizaGenerator
+from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
     SyntheticDocument,
 )
-from bitikocr.synthetic.generators.birth_certificate import (
+from bitikocr.data.synthetic.generators.birth_certificate import (
     BirthCertificateGenerator,
 )
-from bitikocr.synthetic.generators.death_certificate import (
+from bitikocr.data.synthetic.generators.death_certificate import (
     DeathCertificateGenerator,
 )
-from bitikocr.synthetic.generators.form import FormGenerator, FormOptions
+from bitikocr.data.synthetic.generators.form import FormGenerator, FormOptions
 
 __all__ = [
     "DEFAULT_INK_STRENGTH",

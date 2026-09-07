@@ -3,7 +3,7 @@
 This module knows *how* a clerk fills a form: which hand writes the digits,
 how a value is shrunk to fit its line, where the seal is pressed and how the
 registrar signs. It does not know *where* any of it goes — that comes from a
-measured :class:`~bitikocr.synthetic.templates.FormTemplate`.
+measured :class:`~bitikocr.data.synthetic.templates.FormTemplate`.
 
 Every certificate the registry issues is therefore the same generator with a
 different template. A new form, or a second variant of an existing one — a
@@ -24,19 +24,26 @@ from typing import Any, ClassVar
 from PIL import Image, ImageDraw
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.models.geometry import BoundingBox
-from bitikocr.synthetic.effects import draw_round_stamp
-from bitikocr.synthetic.generators.base import (
+from bitikocr.data.synthetic.effects import draw_round_stamp
+from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
     SyntheticDocument,
 )
-from bitikocr.synthetic.hand import Hand
-from bitikocr.synthetic.layout import Page, wrap_text
-from bitikocr.synthetic.style import Color, HandwritingStyle
-from bitikocr.synthetic.system_fonts import find_monospace_font, find_print_font
-from bitikocr.synthetic.templates import FieldGeometry, FormTemplate, MarkArea
+from bitikocr.data.synthetic.hand import Hand
+from bitikocr.data.synthetic.layout import Page, wrap_text
+from bitikocr.data.synthetic.style import Color, HandwritingStyle
+from bitikocr.data.synthetic.system_fonts import (
+    find_monospace_font,
+    find_print_font,
+)
+from bitikocr.data.synthetic.templates import (
+    FieldGeometry,
+    FormTemplate,
+    MarkArea,
+)
+from bitikocr.models.geometry import BoundingBox
 
 __all__ = [
     "REGISTRAR_NAME_FIELD",

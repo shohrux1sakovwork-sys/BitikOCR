@@ -16,8 +16,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from bitikocr.synthetic import corpus
-from bitikocr.synthetic.scripts import Script, in_script
+from bitikocr.data.synthetic import corpus
+from bitikocr.data.synthetic.scripts import Script, in_script
 
 __all__ = [
     "DEFAULT_LATIN_SHARE",

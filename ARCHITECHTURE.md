@@ -39,40 +39,41 @@
 │   │   └── schema.py            # The corpus interchange schema
 │   ├── utils/                   # Pure helpers, no business logic
 │   │   └── image_ops.py         # Alpha boxes, photometric augmentation
-│   └── synthetic/               # Synthetic training-data generation
-│       ├── fonts.py             # Font discovery, coverage, metrics
-│       ├── style.py             # HandwritingStyle and its sampler
-│       ├── hand.py              # The handwriting renderer
-│       ├── effects.py           # Signature scribbles, round office seals
-│       ├── layout.py            # Page canvas + ground-truth collection
-│       ├── templates.py         # Measured geometry of pre-printed forms
-│       ├── system_fonts.py      # Printed fonts for stamps and serial numbers
-│       ├── scripts.py           # Latin/Cyrillic and the transliteration
-│       ├── corpus.py            # Uzbek vocabulary records are drawn from
-│       ├── records.py           # Sampling a document's field values
-│       ├── facts.py             # Field values to structured facts
-│       ├── export.py            # Internals to the corpus schema
-│       ├── augment.py           # Spoiling a clean page like a scan
-│       ├── dataset.py           # Records to disk, and rendering them
-│       ├── README.md           # Developer's guide to this module
-│       ├── generators/          # One module per document type
-│       │   ├── base.py          # DocumentGenerator contract
-│       │   ├── form.py          # FormGenerator: filling any printed form
-│       │   ├── ariza.py
-│       │   ├── birth_certificate.py
-│       │   └── death_certificate.py
-│       └── assets/              # Shipped with the package
-│           ├── fonts/           # Handwriting fonts
-│           ├── backgrounds/     # Blank form scans
-│           └── layouts/         # Measured field geometry, one JSON per form
-├── tests/                       # pytest suite, one module per source module
-└── data/                        # The corpus, gitignored
-    └── synthetic/<type>/        # facts, images, annotations, index
+│   └── data/                    # Everything to do with the corpus
+│       └── synthetic/           # Synthetic training-data generation
+│           ├── README.md        # Developer's guide to this module
+│           ├── fonts.py         # Font discovery, coverage, metrics
+│           ├── style.py         # HandwritingStyle and its sampler
+│           ├── hand.py          # The handwriting renderer
+│           ├── effects.py       # Signature scribbles, round office seals
+│           ├── layout.py        # Page canvas + ground-truth collection
+│           ├── templates.py     # Measured geometry of pre-printed forms
+│           ├── system_fonts.py  # Printed fonts for stamps and serials
+│           ├── scripts.py       # Latin/Cyrillic and the transliteration
+│           ├── corpus.py        # Uzbek vocabulary records are drawn from
+│           ├── records.py       # Sampling a document's field values
+│           ├── facts.py         # Field values to structured facts
+│           ├── export.py        # Internals to the corpus schema
+│           ├── augment.py       # Spoiling a clean page like a scan
+│           ├── dataset.py       # Records to disk, and rendering them
+│           ├── generators/      # One module per document type
+│           │   ├── base.py      # DocumentGenerator contract
+│           │   ├── form.py      # FormGenerator: filling any printed form
+│           │   ├── ariza.py
+│           │   ├── birth_certificate.py
+│           │   └── death_certificate.py
+│           ├── assets/          # Shipped with the package
+│           │   ├── fonts/       # Handwriting fonts
+│           │   ├── backgrounds/ # Blank form scans
+│           │   └── layouts/     # Measured field geometry, one per form
+│           └── output/          # Generated documents; gitignored
+└── tests/                       # pytest suite, one module per source module
 ```
 
-`data/` is the corpus root and its first level names how the pages were
-produced, matching `source.origin` in the schema: `synthetic/` today,
-`real/` and `augmented/` beside it later.
+Generated documents go to `bitikocr/data/synthetic/output/<type>/`, inside
+the generator that makes them, and are gitignored and excluded from the
+wheel. `bitikocr/data/` is where the corpus lives as a whole: real scans and
+the pipelines that prepare them belong beside `synthetic/` as they arrive.
 
 ---
 
@@ -80,21 +81,21 @@ produced, matching `source.origin` in the schema: `synthetic/` today,
 
 | Module          | Responsibility                                          | Depends on                  |
 |-----------------|---------------------------------------------------------|-----------------------------|
-| `cli`           | Application entry point, CLI setup                      | `config`, `synthetic`       |
+| `cli`           | Application entry point, CLI setup                      | `config`, `data`            |
 | `config`        | Load and validate configuration from env/files          | (none)                      |
 | `models/`       | Data classes, schemas, type definitions                 | (none)                      |
 | `utils/`        | Pure helper functions, no business logic                | `models`                    |
-| `synthetic/`    | Synthetic handwritten-document generation               | `config`, `models`, `utils` |
+| `data/synthetic/` | Synthetic handwritten-document generation             | `config`, `models`, `utils` |
 
 The dependency flow is one-way. Nothing in `models/` or `utils/` may import
-from `synthetic/`, and nothing below `cli` may read the environment.
+from `data/`, and nothing below `cli` may read the environment.
 
 ---
 
 ## 3. The Synthetic Data Module
 
-`bitikocr/synthetic/` produces training pages together with their ground
-truth. It is layered so each piece has exactly one job:
+`bitikocr/data/synthetic/` produces training pages together with their
+ground truth. It is layered so each piece has exactly one job:
 
 | Layer            | Knows about                                  | Does not know about        |
 |------------------|----------------------------------------------|----------------------------|
@@ -214,7 +215,8 @@ printed QR code that must never be drawn over.
 
 ### Adding a document type
 
-1. Add `bitikocr/synthetic/generators/<type>.py` with a `DocumentGenerator`
+1. Add `bitikocr/data/synthetic/generators/<type>.py` with a
+   `DocumentGenerator`
    subclass that defines `name`, `field_names` and `reading_order`.
 2. Register it in `GENERATOR_TYPES` in `generators/__init__.py`.
 3. Add a record sampler to `records.py` and register it in

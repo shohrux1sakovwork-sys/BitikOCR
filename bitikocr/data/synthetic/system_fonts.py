@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PIL import ImageFont
 
-from bitikocr.synthetic.fonts import FontLibrary
+from bitikocr.data.synthetic.fonts import FontLibrary
 
 __all__ = ["PrintFont", "find_monospace_font", "find_print_font"]
 

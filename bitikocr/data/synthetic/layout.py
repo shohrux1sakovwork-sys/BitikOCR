@@ -13,15 +13,15 @@ from typing import Any
 
 from PIL import Image
 
+from bitikocr.data.synthetic.effects import draw_scribble
+from bitikocr.data.synthetic.hand import Hand
+from bitikocr.data.synthetic.style import Color, HandwritingStyle
 from bitikocr.models.annotation import (
     BlockAnnotation,
     DocumentAnnotation,
     LineAnnotation,
 )
 from bitikocr.models.geometry import BoundingBox
-from bitikocr.synthetic.effects import draw_scribble
-from bitikocr.synthetic.hand import Hand
-from bitikocr.synthetic.style import Color, HandwritingStyle
 from bitikocr.utils.image_ops import alpha_bounding_box
 
 __all__ = ["Page", "wrap_text"]

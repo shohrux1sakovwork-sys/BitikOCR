@@ -1,10 +1,10 @@
-"""Tests for bitikocr.synthetic.scripts."""
+"""Tests for bitikocr.data.synthetic.scripts."""
 
 from __future__ import annotations
 
 import pytest
 
-from bitikocr.synthetic.scripts import in_script, to_cyrillic
+from bitikocr.data.synthetic.scripts import in_script, to_cyrillic
 
 # Latin spelling mapped to the Cyrillic a registry clerk would write.
 KNOWN_PAIRS = [

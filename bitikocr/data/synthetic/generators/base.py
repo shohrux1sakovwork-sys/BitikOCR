@@ -17,9 +17,9 @@ from typing import Any, ClassVar
 from PIL import Image
 
 from bitikocr.config import SyntheticConfig
+from bitikocr.data.synthetic.fonts import FontInfo, FontLibrary
+from bitikocr.data.synthetic.style import HandwritingStyle, sample_style
 from bitikocr.models.annotation import DocumentAnnotation
-from bitikocr.synthetic.fonts import FontInfo, FontLibrary
-from bitikocr.synthetic.style import HandwritingStyle, sample_style
 
 __all__ = [
     "DEFAULT_INK_STRENGTH",
@@ -64,7 +64,7 @@ class DocumentGenerator(ABC):
         font_path: Force every page to use this handwriting font instead of
             sampling one. Useful for per-font visual comparison.
         ink_strength: How heavily the pen writes; see
-            :attr:`~bitikocr.synthetic.style.HandwritingStyle.ink_strength`.
+            :attr:`~bitikocr.data.synthetic.style.HandwritingStyle.ink_strength`.
 
     Raises:
         FileNotFoundError: If the configured fonts directory holds no font.

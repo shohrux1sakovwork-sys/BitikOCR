@@ -14,7 +14,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from bitikocr.synthetic.scripts import Bilingual, Script, in_script
+from bitikocr.data.synthetic.scripts import Bilingual, Script, in_script
 
 __all__ = [
     "DISTRICTS",

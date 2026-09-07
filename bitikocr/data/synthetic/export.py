@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import cast
 
 from bitikocr import __version__
+from bitikocr.data.synthetic.augment import AugmentationReport
+from bitikocr.data.synthetic.facts import build_facts
+from bitikocr.data.synthetic.generators.base import DocumentGenerator
+from bitikocr.data.synthetic.records import DocumentRecord
 from bitikocr.models.annotation import DocumentAnnotation
 from bitikocr.models.schema import (
     AnnotationInfo,
@@ -32,10 +36,6 @@ from bitikocr.models.schema import (
     TextMode,
     TranscriptionRecord,
 )
-from bitikocr.synthetic.augment import AugmentationReport
-from bitikocr.synthetic.facts import build_facts
-from bitikocr.synthetic.generators.base import DocumentGenerator
-from bitikocr.synthetic.records import DocumentRecord
 
 __all__ = ["build_facts_record", "build_transcription_record"]
 

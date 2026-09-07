@@ -7,15 +7,15 @@ import random
 import pytest
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic.fonts import FontLibrary
-from bitikocr.synthetic.generators import (
+from bitikocr.data.synthetic.fonts import FontLibrary
+from bitikocr.data.synthetic.generators import (
     ArizaGenerator,
     BirthCertificateGenerator,
     DeathCertificateGenerator,
     FormOptions,
 )
-from bitikocr.synthetic.records import sample_record
-from bitikocr.synthetic.style import HandwritingStyle, sample_style
+from bitikocr.data.synthetic.records import sample_record
+from bitikocr.data.synthetic.style import HandwritingStyle, sample_style
 
 
 @pytest.fixture(scope="session")

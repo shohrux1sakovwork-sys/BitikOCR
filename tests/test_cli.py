@@ -8,7 +8,7 @@ import pytest
 
 from bitikocr.cli import main
 from bitikocr.config import ENV_FONTS_DIR
-from bitikocr.synthetic.dataset import DatasetLayout, read_records
+from bitikocr.data.synthetic.dataset import DatasetLayout, read_records
 
 
 def test_listing_document_types(capsys: pytest.CaptureFixture[str]) -> None:

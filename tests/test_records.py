@@ -1,4 +1,4 @@
-"""Tests for bitikocr.synthetic.records and the corpus behind them."""
+"""Tests for bitikocr.data.synthetic.records and the corpus behind them."""
 
 from __future__ import annotations
 
@@ -7,16 +7,16 @@ import random
 import pytest
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic import corpus
-from bitikocr.synthetic.fonts import FontLibrary
-from bitikocr.synthetic.generators import create_generator
-from bitikocr.synthetic.records import (
+from bitikocr.data.synthetic import corpus
+from bitikocr.data.synthetic.fonts import FontLibrary
+from bitikocr.data.synthetic.generators import create_generator
+from bitikocr.data.synthetic.records import (
     DocumentRecord,
     available_record_types,
     sample_record,
     sample_records,
 )
-from bitikocr.synthetic.scripts import SCRIPTS
+from bitikocr.data.synthetic.scripts import SCRIPTS
 
 CYRILLIC = set("абвгдеёжзийклмнопрстуфхцчшщъыьэюяўқғҳ")
 LATIN = set("abcdefghijklmnopqrstuvwxyz")

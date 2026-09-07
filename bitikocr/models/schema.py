@@ -288,7 +288,7 @@ class Fact:
 
     Args:
         category: What kind of value it is; see
-            :data:`~bitikocr.synthetic.facts.FACT_CATEGORIES`.
+            :data:`~bitikocr.data.synthetic.facts.FACT_CATEGORIES`.
         value: The value, normalised where there is a normal form.
         evidence_text: The surface form as it appears on the page, so a
             wrong fact can be traced back to the transcription.

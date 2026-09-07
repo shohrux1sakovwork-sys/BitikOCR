@@ -13,15 +13,15 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic.generators.base import (
+from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
     SyntheticDocument,
 )
-from bitikocr.synthetic.hand import Hand
-from bitikocr.synthetic.layout import Page, wrap_text
-from bitikocr.synthetic.style import (
+from bitikocr.data.synthetic.hand import Hand
+from bitikocr.data.synthetic.layout import Page, wrap_text
+from bitikocr.data.synthetic.style import (
     INK_PALETTE,
     PENCIL_COLOR,
     HandwritingStyle,

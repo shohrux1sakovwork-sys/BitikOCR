@@ -1,4 +1,4 @@
-"""Tests for bitikocr.synthetic.fonts."""
+"""Tests for bitikocr.data.synthetic.fonts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from bitikocr.synthetic.fonts import (
+from bitikocr.data.synthetic.fonts import (
     FALLBACK_BASE,
     FontInfo,
     FontLibrary,

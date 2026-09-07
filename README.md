@@ -28,11 +28,11 @@ uv run bitikocr synth generate birth_certificate -n 30 --boxes
 **Or separately** — sample the text first, look at it or edit it, then draw:
 
 ```bash
-uv run bitikocr synth facts death_certificate -n 30 -o data/synthetic/death
+uv run bitikocr synth facts death_certificate -n 30
 ```
 
 ```bash
-uv run bitikocr synth render data/synthetic/death --boxes
+uv run bitikocr synth render bitikocr/data/synthetic/output/death_certificate --boxes
 ```
 
 Splitting them means a batch can be re-rendered with different fonts or
@@ -44,7 +44,7 @@ Useful flags:
 | Flag                | Stage  | Meaning                                            |
 |---------------------|--------|----------------------------------------------------|
 | `-n, --count`       | facts  | How many documents.                                 |
-| `-o, --output-dir`  | facts  | Dataset directory (default `data/synthetic/<type>`).|
+| `-o, --output-dir`  | facts  | Where to write it (default beside the generator).   |
 | `--script`          | facts  | Force `latin` or `cyrillic` (default: both).        |
 | `--latin-share`     | facts  | Share written in Latin when neither is forced.      |
 | `--seed`            | facts  | Make the whole run reproducible.                    |
@@ -76,7 +76,7 @@ uv run bitikocr synth list-templates
 A dataset directory holds both stages:
 
 ```
-data/synthetic/birth_certificate/
+bitikocr/data/synthetic/output/birth_certificate/
   facts/doc_000002.json        the structured values on the page
   images/doc_000002.png        the rendered page
   annotations/doc_000002.json  the transcription record
@@ -171,7 +171,7 @@ page, so a wrong fact can be traced back to the transcription. `fuzzy` is
 never true for synthetic pages: the page was written from the fact.
 
 The category vocabulary and the field-to-category mapping live in
-`bitikocr/synthetic/facts.py`, versioned by `CATEGORY_SET_VERSION`. Correct
+`bitikocr/data/synthetic/facts.py`, versioned by `CATEGORY_SET_VERSION`. Correct
 a wrong category there in one line.
 
 Before a render, `facts/` instead holds the generator's own record — the
@@ -250,7 +250,7 @@ the whole thing off; higher values than the default `1.0` push it further.
 
 ```python
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic import create_generator
+from bitikocr.data.synthetic import create_generator
 
 generator = create_generator("ariza", SyntheticConfig.from_env())
 document = generator.generate(
@@ -269,18 +269,18 @@ print(document.annotation.text)
 Use `style_overrides` to pin any writer parameter, for example
 `generator.generate(fields, style_overrides={"pen": "soft", "slant": 0.3})`.
 
-The corpus root is `data/`, and `synthetic` names how the pages were made —
-it matches `source.origin` in the schema, so real scans and augmented copies
-get their own trees beside it:
+Generated documents live inside the generator that makes them, under
+`bitikocr/data/synthetic/output/`. That path is anchored to the package
+rather than to the working directory, so a run writes to the same place
+wherever it is started from. Point it elsewhere with `-o` or
+`BITIKOCR_OUTPUT_DIR`.
 
-```
-data/
-  synthetic/<document type>/
-  real/<document type>/        later
-  augmented/<document type>/   later
-```
+They are gitignored and excluded from the wheel: the fonts, blank scans and
+layouts ship with the package, the pages generated from them do not.
 
-Point it elsewhere with `BITIKOCR_DATA_DIR`.
+Nothing is lost by keeping them there — every record carries
+`source.origin`, which is `synthetic` for these, so a corpus that later
+mixes in real scans can still tell them apart.
 
 ## Form templates
 
@@ -342,8 +342,8 @@ name line that also gets signed; an open zone with no rule is signed only,
 and the form gives the name a field elsewhere.
 
 **To add a form variant**, drop its scan in
-`bitikocr/synthetic/assets/backgrounds/` and its measured layout in
-`bitikocr/synthetic/assets/layouts/<name>.json`, then:
+`bitikocr/data/synthetic/assets/backgrounds/` and its measured layout in
+`bitikocr/data/synthetic/assets/layouts/<name>.json`, then:
 
 ```bash
 uv run bitikocr synth generate death_certificate --template <name> -n 20 --boxes
@@ -354,15 +354,15 @@ background scan exactly, since every coordinate is scaled from them.
 
 **To add a whole new form** — a marriage certificate, a passport page — add
 its layout and a subclass naming the document type and its default
-template; see `bitikocr/synthetic/generators/birth_certificate.py`, which is
+template; see `bitikocr/data/synthetic/generators/birth_certificate.py`, which is
 twenty lines including the docstring.
 
 ## Assets
 
 Handwriting fonts, blank form scans and their layouts ship inside the
-package, under `bitikocr/synthetic/assets/`. Point the pipeline at your own
+package, under `bitikocr/data/synthetic/assets/`. Point the pipeline at your own
 with `--fonts-dir`, or with the `BITIKOCR_FONTS_DIR`,
-`BITIKOCR_BACKGROUNDS_DIR`, `BITIKOCR_LAYOUTS_DIR` and `BITIKOCR_DATA_DIR`
+`BITIKOCR_BACKGROUNDS_DIR`, `BITIKOCR_LAYOUTS_DIR` and `BITIKOCR_OUTPUT_DIR`
 environment variables.
 
 Only a font that can render every character of a page is used, so adding a
@@ -370,7 +370,7 @@ Latin-only font will not break Cyrillic documents.
 
 ## Going further
 
-[`bitikocr/synthetic/README.md`](bitikocr/synthetic/README.md) is the
+[`bitikocr/data/synthetic/README.md`](bitikocr/data/synthetic/README.md) is the
 developer's guide to the generator: what every module owns, how to add a
 font, a form variant or a whole document type, and the gotchas worth knowing
 before changing anything.

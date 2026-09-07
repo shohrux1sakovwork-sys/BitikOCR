@@ -11,8 +11,7 @@ from typing import Any
 import pytest
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.models.annotation import DocumentAnnotation
-from bitikocr.synthetic.generators import (
+from bitikocr.data.synthetic.generators import (
     ArizaGenerator,
     BirthCertificateGenerator,
     DeathCertificateGenerator,
@@ -20,7 +19,8 @@ from bitikocr.synthetic.generators import (
     available_document_types,
     create_generator,
 )
-from bitikocr.synthetic.records import sample_record
+from bitikocr.data.synthetic.records import sample_record
+from bitikocr.models.annotation import DocumentAnnotation
 
 
 def assert_boxes_are_inside_the_page(annotation: DocumentAnnotation) -> None:

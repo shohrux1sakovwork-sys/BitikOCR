@@ -1,4 +1,4 @@
-"""Tests for bitikocr.synthetic.templates."""
+"""Tests for bitikocr.data.synthetic.templates."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic.templates import FormTemplate
+from bitikocr.data.synthetic.templates import FormTemplate
 
 MINIMAL_LAYOUT: dict[str, Any] = {
     "template_name": "toy",

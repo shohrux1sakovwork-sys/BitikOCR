@@ -13,7 +13,7 @@ import random
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-from bitikocr.synthetic.fonts import FontInfo, FontLibrary
+from bitikocr.data.synthetic.fonts import FontInfo, FontLibrary
 
 __all__ = [
     "INK_PALETTE",

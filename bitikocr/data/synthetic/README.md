@@ -17,7 +17,7 @@ Generate thirty birth certificates with box overlays to look at:
 uv run bitikocr synth generate birth_certificate -n 30 --boxes
 ```
 
-They land in `data/synthetic/birth_certificate/`. To see what is available:
+They land in `output/birth_certificate/`, beside this file. To see what is available:
 
 ```bash
 uv run bitikocr synth list-types
@@ -36,8 +36,8 @@ sample records  ->  facts/*.json  ->  render  ->  images + annotations + facts
 ```
 
 ```bash
-uv run bitikocr synth facts death_certificate -n 30 -o data/synthetic/death
-uv run bitikocr synth render data/synthetic/death --boxes
+uv run bitikocr synth facts death_certificate -n 30
+uv run bitikocr synth render bitikocr/data/synthetic/output/death_certificate
 ```
 
 Splitting them means the text can be read, corrected or replaced before the
@@ -54,7 +54,7 @@ changes what gets drawn.
 ## What lands on disk
 
 ```
-data/synthetic/birth_certificate/
+bitikocr/data/synthetic/output/birth_certificate/
   facts/doc_000002.json        structured values on the page
   images/doc_000002.png        the rendered page
   annotations/doc_000002.json  the transcription record
@@ -65,9 +65,14 @@ data/synthetic/birth_certificate/
 Every file for one document shares its id, so a training pipeline pairs
 them by name. `--id-prefix` namespaces a set if several will be merged.
 
-`data/` is the corpus root and `synthetic` is the origin, matching
-`source.origin` in the schema — real scans and augmented copies get their
-own trees beside it.
+`output/` sits inside this module, and the path is anchored to the package
+rather than to the working directory, so a run writes to the same place
+wherever it is started from. It is gitignored and excluded from the wheel.
+Override it with `-o` or `BITIKOCR_OUTPUT_DIR`.
+
+Which way a page was produced is recorded in the records themselves, as
+`source.origin`, so a corpus that later mixes in real scans can still tell
+them apart.
 
 Both JSON records follow the schema in `bitikocr/models/schema.py`, which is
 the typed definition and the place to look first. Boxes there are
@@ -253,9 +258,9 @@ signed; an open zone with no rule is signed only.
 ```python
 import random
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic import create_generator, sample_records
-from bitikocr.synthetic.dataset import render_records
-from bitikocr.synthetic.augment import AugmentationProfile
+from bitikocr.data.synthetic import create_generator, sample_records
+from bitikocr.data.synthetic.dataset import render_records
+from bitikocr.data.synthetic.augment import AugmentationProfile
 
 config = SyntheticConfig.from_env()
 records = sample_records("ariza", 10, random.Random(1), script="cyrillic")

@@ -1,4 +1,4 @@
-"""Tests for bitikocr.synthetic.dataset."""
+"""Tests for bitikocr.data.synthetic.dataset."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from bitikocr.synthetic.augment import AugmentationProfile
-from bitikocr.synthetic.dataset import (
+from bitikocr.data.synthetic.augment import AugmentationProfile
+from bitikocr.data.synthetic.dataset import (
     DatasetLayout,
     read_records,
     render_records,
     write_records,
 )
-from bitikocr.synthetic.generators import ArizaGenerator
-from bitikocr.synthetic.records import DocumentRecord, sample_records
+from bitikocr.data.synthetic.generators import ArizaGenerator
+from bitikocr.data.synthetic.records import DocumentRecord, sample_records
 
 
 @pytest.fixture()
