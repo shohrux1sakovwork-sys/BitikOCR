@@ -9,6 +9,10 @@ The module is layered so each piece has one job:
 * :mod:`~bitikocr.synthetic.layout` — placing ink and collecting ground truth.
 * :mod:`~bitikocr.synthetic.templates` — measured geometry of printed forms.
 * :mod:`~bitikocr.synthetic.generators` — one module per document type.
+* :mod:`~bitikocr.synthetic.scripts` — the Latin and Cyrillic alphabets.
+* :mod:`~bitikocr.synthetic.corpus` — the Uzbek vocabulary records draw on.
+* :mod:`~bitikocr.synthetic.records` — sampling a document's field values.
+* :mod:`~bitikocr.synthetic.augment` — spoiling a clean page like a scan.
 * :mod:`~bitikocr.synthetic.dataset` — writing batches of samples to disk.
 
 Typical use::
@@ -18,12 +22,15 @@ Typical use::
     document = generator.generate(fields, seed=42)
 """
 
+from bitikocr.synthetic.augment import AugmentationProfile, augment_page
 from bitikocr.synthetic.dataset import (
+    DatasetLayout,
     DatasetSummary,
     SampleFiles,
     draw_annotations,
-    generate_dataset,
-    write_sample,
+    read_records,
+    render_records,
+    write_records,
 )
 from bitikocr.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.synthetic.generators import (
@@ -39,16 +46,24 @@ from bitikocr.synthetic.generators import (
 )
 from bitikocr.synthetic.hand import Hand
 from bitikocr.synthetic.layout import Page, wrap_text
-from bitikocr.synthetic.sample_data import sample_fields_for
+from bitikocr.synthetic.records import (
+    DocumentRecord,
+    sample_record,
+    sample_records,
+)
+from bitikocr.synthetic.scripts import Script, to_cyrillic
 from bitikocr.synthetic.style import HandwritingStyle, sample_style
 from bitikocr.synthetic.templates import FieldGeometry, FormTemplate, MarkArea
 
 __all__ = [
     "ArizaGenerator",
+    "AugmentationProfile",
     "BirthCertificateGenerator",
+    "DatasetLayout",
     "DatasetSummary",
     "DeathCertificateGenerator",
     "DocumentGenerator",
+    "DocumentRecord",
     "FieldGeometry",
     "FontInfo",
     "FontLibrary",
@@ -60,13 +75,18 @@ __all__ = [
     "MarkArea",
     "Page",
     "SampleFiles",
+    "Script",
     "SyntheticDocument",
+    "augment_page",
     "available_document_types",
     "create_generator",
     "draw_annotations",
-    "generate_dataset",
-    "sample_fields_for",
+    "read_records",
+    "render_records",
+    "sample_record",
+    "sample_records",
     "sample_style",
+    "to_cyrillic",
     "wrap_text",
-    "write_sample",
+    "write_records",
 ]

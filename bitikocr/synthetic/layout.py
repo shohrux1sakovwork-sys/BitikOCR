@@ -7,6 +7,7 @@ things go; the page draws them and records what it drew.
 
 from __future__ import annotations
 
+import logging
 import random
 from typing import Any
 
@@ -24,6 +25,8 @@ from bitikocr.synthetic.style import Color, HandwritingStyle
 from bitikocr.utils.image_ops import alpha_bounding_box
 
 __all__ = ["Page", "wrap_text"]
+
+logger = logging.getLogger(__name__)
 
 
 def wrap_text(
@@ -153,7 +156,7 @@ class Page:
             position = (left - pen_offset, y - hand.baseline)
             self.image.alpha_composite(rendered, position)
 
-            box = alpha_bounding_box(rendered, position)
+            box = self._clip(alpha_bounding_box(rendered, position), block)
             self.lines.append(LineAnnotation(block=block, text=line, bbox=box))
             boxes.append(box)
             y += self.line_step(hand)
@@ -194,8 +197,39 @@ class Page:
             pen=self.style.pen,
             max_width=max_width,
         )
+        box = self._clip(box, block)
         self.add_block(block, "", box)
         return box
+
+    def _clip(self, box: BoundingBox | None, block: str) -> BoundingBox | None:
+        """Trim a box to the page, since ink beyond it is never drawn.
+
+        A box reaching past the canvas would claim ink the page does not
+        carry. That is always a layout bug, so it is logged rather than
+        quietly trimmed away.
+
+        Args:
+            box: The measured box, or None when nothing was drawn.
+            block: Name of the block being recorded, for the log.
+
+        Returns:
+            The box within the page, or None if none of it landed on it.
+        """
+        if box is None:
+            return None
+
+        clipped = BoundingBox(
+            left=max(0, box.left),
+            top=max(0, box.top),
+            right=min(self.width, box.right),
+            bottom=min(self.height, box.bottom),
+        )
+        if clipped.right <= clipped.left or clipped.bottom <= clipped.top:
+            logger.warning("%s was drawn entirely off the page", block)
+            return None
+        if clipped != box:
+            logger.warning("%s was drawn partly off the page", block)
+        return clipped
 
     # -- annotation bookkeeping --------------------------------------------
 

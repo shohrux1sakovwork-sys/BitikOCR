@@ -36,7 +36,6 @@ from bitikocr.synthetic.layout import Page, wrap_text
 from bitikocr.synthetic.style import Color, HandwritingStyle
 from bitikocr.synthetic.system_fonts import find_monospace_font, find_print_font
 from bitikocr.synthetic.templates import FieldGeometry, FormTemplate, MarkArea
-from bitikocr.utils.image_ops import light_augment
 
 __all__ = [
     "REGISTRAR_NAME_FIELD",
@@ -112,13 +111,11 @@ class FormOptions:
             list-templates``. None uses the generator's default variant.
         scale: Multiplies the background resolution. 2.0 turns a 1419x1108
             scan into 2838x2216.
-        augment: Whether to apply photometric augmentation to the result.
         draw_seal: Whether the office seal is stamped on the page.
     """
 
     template: str | None = None
     scale: float = 2.0
-    augment: bool = True
     draw_seal: bool = True
 
 
@@ -302,10 +299,6 @@ class FormGenerator(DocumentGenerator):
 
         self._check_keep_out(page, template, scale_x, scale_y)
 
-        image = page.render()
-        if options.augment:
-            image = light_augment(image, rng, strength=1.0)
-
         recorded = dict(values)
         if registrar_name:
             recorded[REGISTRAR_NAME_FIELD] = registrar_name
@@ -324,7 +317,7 @@ class FormGenerator(DocumentGenerator):
                 "scale": options.scale,
             },
         )
-        return SyntheticDocument(image=image, annotation=annotation)
+        return SyntheticDocument(image=page.render(), annotation=annotation)
 
     # -- style -------------------------------------------------------------
 

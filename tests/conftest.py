@@ -14,7 +14,7 @@ from bitikocr.synthetic.generators import (
     DeathCertificateGenerator,
     FormOptions,
 )
-from bitikocr.synthetic.sample_data import sample_fields_for
+from bitikocr.synthetic.records import sample_record
 from bitikocr.synthetic.style import HandwritingStyle, sample_style
 
 
@@ -38,14 +38,14 @@ def style(library: FontLibrary) -> HandwritingStyle:
 
 @pytest.fixture(scope="session")
 def ariza_fields() -> dict[str, object]:
-    """One built-in ariza field set."""
-    return dict(sample_fields_for("ariza")[0])
+    """One sampled ariza record's fields."""
+    return sample_record("ariza", random.Random(11), "cyrillic").fields
 
 
 @pytest.fixture(scope="session")
 def certificate_fields() -> dict[str, object]:
-    """One built-in death certificate field set."""
-    return dict(sample_fields_for("death_certificate")[0])
+    """One sampled death certificate record's fields."""
+    return sample_record("death_certificate", random.Random(12), "latin").fields
 
 
 @pytest.fixture(scope="session")
@@ -63,20 +63,16 @@ def certificate_generator(
     Dropping the scale and the augmentation keeps the suite fast without
     changing any of the layout logic under test.
     """
-    return DeathCertificateGenerator(
-        config, options=FormOptions(scale=1.0, augment=False)
-    )
+    return DeathCertificateGenerator(config, options=FormOptions(scale=1.0))
 
 
 @pytest.fixture(scope="session")
 def birth_fields() -> dict[str, object]:
-    """One built-in birth certificate field set."""
-    return dict(sample_fields_for("birth_certificate")[0])
+    """One sampled birth certificate record's fields."""
+    return sample_record("birth_certificate", random.Random(13), "latin").fields
 
 
 @pytest.fixture(scope="session")
 def birth_generator(config: SyntheticConfig) -> BirthCertificateGenerator:
     """A birth certificate generator rendered small and unaugmented."""
-    return BirthCertificateGenerator(
-        config, options=FormOptions(scale=1.0, augment=False)
-    )
+    return BirthCertificateGenerator(config, options=FormOptions(scale=1.0))

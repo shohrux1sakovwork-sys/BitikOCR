@@ -9,18 +9,28 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import logging
+import random
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.synthetic.dataset import generate_dataset
-from bitikocr.synthetic.fonts import FontLibrary
+from bitikocr.synthetic.augment import AugmentationProfile
+from bitikocr.synthetic.dataset import (
+    DatasetLayout,
+    DatasetSummary,
+    read_records,
+    render_records,
+    write_records,
+)
+from bitikocr.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.synthetic.generators import (
     available_document_types,
     create_generator,
 )
-from bitikocr.synthetic.sample_data import sample_fields_for
+from bitikocr.synthetic.records import sample_records
+from bitikocr.synthetic.scripts import SCRIPTS
 from bitikocr.synthetic.templates import FormTemplate
 
 __all__ = ["main"]
@@ -47,71 +57,132 @@ def build_parser() -> argparse.ArgumentParser:
         help="log every generated sample",
     )
     commands = parser.add_subparsers(dest="command", required=True)
-
     synth = commands.add_parser(
         "synth", help="generate synthetic training data"
     ).add_subparsers(dest="synth_command", required=True)
 
-    generate = synth.add_parser(
-        "generate", help="render a batch of synthetic documents"
-    )
-    generate.add_argument(
+    _add_metadata_command(synth)
+    _add_render_command(synth)
+    _add_generate_command(synth)
+    _add_listing_commands(synth)
+    return parser
+
+
+def _add_document_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add the arguments that name what to generate."""
+    parser.add_argument(
         "document_type",
         choices=available_document_types(),
-        help="which document to render",
+        help="which document to generate",
     )
-    generate.add_argument(
+    parser.add_argument(
         "-n",
         "--count",
         type=int,
-        default=5,
-        help="how many samples to generate (default: %(default)s)",
+        default=30,
+        help="how many documents (default: %(default)s)",
     )
-    generate.add_argument(
-        "-o",
-        "--output-dir",
-        type=Path,
+    parser.add_argument(
+        "--script",
+        choices=SCRIPTS,
         default=None,
-        help="where to write samples (default: <output dir>/<document type>)",
+        help="write every document in one alphabet (default: both)",
     )
-    generate.add_argument(
+    parser.add_argument(
         "--seed",
         type=int,
         default=None,
         help="make the whole run reproducible",
     )
-    generate.add_argument(
+
+
+def _add_output_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the dataset directory argument."""
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="dataset directory (default: <output dir>/<document type>)",
+    )
+
+
+def _add_render_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add the arguments that control how pages are drawn."""
+    parser.add_argument(
         "--template",
         default=None,
         help="form variant to fill, for document types that use one",
     )
-    generate.add_argument(
+    parser.add_argument(
         "--font",
         type=Path,
         default=None,
         help="force one handwriting font instead of sampling",
     )
-    generate.add_argument(
+    parser.add_argument(
         "--fonts-dir",
         type=Path,
         default=None,
         help="handwriting fonts to sample from",
     )
-    generate.add_argument(
+    parser.add_argument(
+        "--augment",
+        type=float,
+        default=1.0,
+        metavar="STRENGTH",
+        help="how hard to spoil each page, 0 to disable (default: %(default)s)",
+    )
+    parser.add_argument(
         "--boxes",
         action="store_true",
-        help="also write a _boxes.png overlay per sample",
+        help="also write a box overlay per page, under previews/",
     )
+
+
+def _add_metadata_command(synth: argparse._SubParsersAction[Any]) -> None:
+    """Register ``synth metadata``."""
+    metadata = synth.add_parser(
+        "metadata",
+        help="sample the field values a batch will carry, without rendering",
+    )
+    _add_document_arguments(metadata)
+    _add_output_argument(metadata)
+    metadata.set_defaults(handler=_run_metadata)
+
+
+def _add_render_command(synth: argparse._SubParsersAction[Any]) -> None:
+    """Register ``synth render``."""
+    render = synth.add_parser(
+        "render", help="draw the pages for an existing metadata file"
+    )
+    render.add_argument(
+        "output_dir",
+        type=Path,
+        help="dataset directory holding metadata.jsonl",
+    )
+    _add_render_arguments(render)
+    render.set_defaults(handler=_run_render)
+
+
+def _add_generate_command(synth: argparse._SubParsersAction[Any]) -> None:
+    """Register ``synth generate``, which does both stages at once."""
+    generate = synth.add_parser(
+        "generate", help="sample records and render them in one go"
+    )
+    _add_document_arguments(generate)
+    _add_output_argument(generate)
+    _add_render_arguments(generate)
     generate.set_defaults(handler=_run_generate)
 
+
+def _add_listing_commands(synth: argparse._SubParsersAction[Any]) -> None:
+    """Register the commands that only report what is available."""
     list_fonts = synth.add_parser(
         "list-fonts", help="show the handwriting fonts that will be sampled"
     )
     list_fonts.add_argument(
-        "--fonts-dir",
-        type=Path,
-        default=None,
-        help="handwriting fonts to inspect",
+        "--fonts-dir", type=Path, default=None, help="fonts to inspect"
     )
     list_fonts.set_defaults(handler=_run_list_fonts)
 
@@ -124,8 +195,6 @@ def build_parser() -> argparse.ArgumentParser:
         "list-templates", help="show the form variants that can be filled"
     )
     list_templates.set_defaults(handler=_run_list_templates)
-
-    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -160,38 +229,120 @@ def _config_from_args(args: argparse.Namespace) -> SyntheticConfig:
     return config
 
 
-def _run_generate(args: argparse.Namespace, config: SyntheticConfig) -> int:
-    """Render a batch of documents and report where they went."""
-    generator = create_generator(
-        args.document_type, config, args.font, args.template
-    )
-    output_dir = args.output_dir or config.output_dir / args.document_type
+def _dataset_dir(args: argparse.Namespace, config: SyntheticConfig) -> Path:
+    """Resolve where a dataset lives."""
+    return args.output_dir or config.output_dir / args.document_type
 
-    summary = generate_dataset(
-        generator=generator,
-        field_sets=list(sample_fields_for(args.document_type)),
-        count=args.count,
-        output_dir=output_dir,
-        seed=args.seed,
-        draw_boxes=args.boxes,
+
+def _augmentation(args: argparse.Namespace) -> AugmentationProfile | None:
+    """Build the augmentation profile the flags ask for."""
+    if args.augment <= 0:
+        return None
+    return dataclasses.replace(
+        AugmentationProfile(), strength=float(args.augment)
     )
-    print(f"Wrote {len(summary)} samples to {summary.output_dir.resolve()}")
+
+
+# -- commands --------------------------------------------------------------
+
+
+def _run_metadata(args: argparse.Namespace, config: SyntheticConfig) -> int:
+    """Sample records and write them, rendering nothing."""
+    records = sample_records(
+        args.document_type,
+        args.count,
+        random.Random(args.seed),
+        args.script,
+    )
+    layout = DatasetLayout(_dataset_dir(args, config))
+    write_records(records, layout.metadata)
+    print(f"Wrote {len(records)} records to {layout.metadata.resolve()}")
     return 0
 
 
+def _run_render(args: argparse.Namespace, config: SyntheticConfig) -> int:
+    """Render an existing metadata file."""
+    layout = DatasetLayout(args.output_dir)
+    records = read_records(layout.metadata)
+    if not records:
+        raise ValueError(f"{layout.metadata} holds no records")
+
+    document_type = records[0].document_type
+    generator = create_generator(
+        document_type, config, args.font, args.template
+    )
+    summary = render_records(
+        generator=generator,
+        records=records,
+        output_dir=layout.root,
+        augmentation=_augmentation(args),
+        draw_boxes=args.boxes,
+    )
+    _report(summary)
+    return 0
+
+
+def _run_generate(args: argparse.Namespace, config: SyntheticConfig) -> int:
+    """Sample records and render them in one go."""
+    records = sample_records(
+        args.document_type,
+        args.count,
+        random.Random(args.seed),
+        args.script,
+    )
+    layout = DatasetLayout(_dataset_dir(args, config))
+    write_records(records, layout.metadata)
+
+    generator = create_generator(
+        args.document_type, config, args.font, args.template
+    )
+    summary = render_records(
+        generator=generator,
+        records=records,
+        output_dir=layout.root,
+        augmentation=_augmentation(args),
+        draw_boxes=args.boxes,
+    )
+    _report(summary)
+    return 0
+
+
+def _report(summary: DatasetSummary) -> None:
+    """Print what a render produced."""
+    layout = summary.layout
+    print(f"Wrote {len(summary)} pages to {layout.root.resolve()}")
+    print(f"  metadata: {layout.metadata.name}")
+    print(f"  index:    {layout.index.name}")
+    if summary.skipped:
+        print(f"  skipped:  {len(summary.skipped)} record(s)")
+
+
 def _run_list_fonts(args: argparse.Namespace, config: SyntheticConfig) -> int:
-    """Print each available handwriting font and its measured proportions."""
+    """Print each available handwriting font and what it can write."""
     del args  # The fonts directory already reached us through the config.
     library = FontLibrary.from_directory(config.fonts_dir)
     print(f"{len(library)} font(s) in {config.fonts_dir}")
     for font in library:
+        scripts = ", ".join(_font_scripts(font)) or "none"
         print(
-            f"  {font.name:<32} glyphs={len(font.codepoints):<6}"
+            f"  {font.name:<20} glyphs={len(font.codepoints):<5}"
+            f" scripts={scripts:<17}"
             f" x-height={font.xheight_ratio:.2f}"
             f" width={font.width_ratio:.2f}"
-            f" stroke={font.stroke_ratio:.2f}"
         )
     return 0
+
+
+def _font_scripts(font: FontInfo) -> list[str]:
+    """Return which alphabets a font covers."""
+    covers = []
+    if font.can_render("abcdefghijklmnopqrstuvwxyz"):
+        covers.append("latin")
+    if font.can_render("абвгдеёжзийклмнопрстуфхцчшщъыьэюя"):
+        covers.append("cyrillic")
+    if font.can_render("0123456789"):
+        covers.append("digits")
+    return covers
 
 
 def _run_list_types(args: argparse.Namespace, config: SyntheticConfig) -> int:

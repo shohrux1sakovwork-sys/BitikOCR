@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
 import statistics
 from typing import Any
 
@@ -19,6 +20,7 @@ from bitikocr.synthetic.generators import (
     available_document_types,
     create_generator,
 )
+from bitikocr.synthetic.records import sample_record
 
 
 def assert_boxes_are_inside_the_page(annotation: DocumentAnnotation) -> None:
@@ -535,3 +537,25 @@ def test_the_seal_box_measures_its_ink_not_its_canvas(
     canvas = area.radius * 2 * 1.35 * 2.6  # widest radius, padded layer
     assert box.width < canvas
     assert box.width > area.radius  # but it did draw a seal
+
+
+def test_a_crowded_ariza_keeps_its_signature_block_on_the_page(
+    ariza_generator: ArizaGenerator,
+) -> None:
+    """A full page must not push the footer past the paper.
+
+    Ink drawn off the edge is clipped, so a box for it would promise a
+    transcription the image does not show.
+    """
+    for seed in range(40):
+        fields = sample_record("ariza", random.Random(seed), "cyrillic").fields
+        crowded = {
+            **fields,
+            "body": str(fields["body"]) * 4,
+            "phone": "998901234567",
+        }
+        annotation = ariza_generator.generate(crowded, seed=seed).annotation
+
+        written = {block.kind for block in annotation.blocks if block.bbox}
+        assert "phone" in written, f"the phone fell off the page at seed {seed}"
+        assert_boxes_are_inside_the_page(annotation)

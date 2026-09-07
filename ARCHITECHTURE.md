@@ -46,8 +46,11 @@
 │       ├── layout.py            # Page canvas + ground-truth collection
 │       ├── templates.py         # Measured geometry of pre-printed forms
 │       ├── system_fonts.py      # Printed fonts for stamps and serial numbers
-│       ├── sample_data.py       # Built-in field values for demos and tests
-│       ├── dataset.py           # Batch generation and writing to disk
+│       ├── scripts.py           # Latin/Cyrillic and the transliteration
+│       ├── corpus.py            # Uzbek vocabulary records are drawn from
+│       ├── records.py           # Sampling a document's field values
+│       ├── augment.py           # Spoiling a clean page like a scan
+│       ├── dataset.py           # Records to disk, and rendering them
 │       ├── generators/          # One module per document type
 │       │   ├── base.py          # DocumentGenerator contract
 │       │   ├── form.py          # FormGenerator: filling any printed form
@@ -91,7 +94,11 @@ truth. It is layered so each piece has exactly one job:
 | `effects`        | Signatures and office seals                  | Documents, text            |
 | `layout`         | Placing ink and recording what was placed    | Which document is being made |
 | `templates`      | Measured geometry of one blank form          | Rendering, handwriting     |
-| `generators/`    | Where things go on one kind of document      | How ink is drawn           |
+| `scripts`        | The two alphabets and how to convert         | Documents, rendering       |
+| `corpus`         | Uzbek names, places, months, causes          | Documents, rendering       |
+| `records`        | What one document *says*                     | How it is drawn            |
+| `generators/`    | Where things go on one kind of document      | What it says, how it ages  |
+| `augment`        | Spoiling a finished page                     | What the page says         |
 | `dataset`        | Batches, file names, on-disk format          | Layout, rendering          |
 
 ### The contract
@@ -106,12 +113,32 @@ generate(fields, seed=None, style_overrides=None) -> SyntheticDocument
 image with a `DocumentAnnotation`. Because the interface is uniform, the CLI
 and the dataset builder never special-case a document type.
 
+### Two stages
+
+Content and rendering are separate steps, joined only by a record:
+
+```
+sample_records()  ->  metadata.jsonl  ->  render_records()  ->  images + labels
+```
+
+A `DocumentRecord` is what a document *says* — field values in one alphabet,
+plus the seed that will draw it. Nothing about fonts, ink or paper. That
+split is what lets a batch's text be reviewed or hand-edited before the slow
+step runs, and lets the same text be re-rendered with different fonts or
+heavier augmentation.
+
+Augmentation is likewise a step after rendering, not a generator option: a
+generator produces a clean page, and `augment` decides how much of a scan it
+should look like. A photometric step leaves the boxes alone; the one
+geometric step, a scan skew, transforms them with the ink.
+
 ### Reproducibility
 
-Every page is a pure function of its seed. The seed is recorded in the
-annotation and in the output file name, so any sample can be regenerated
-exactly. Nothing in the pipeline calls the global `random` module: a
-`random.Random` is created from the seed and threaded through explicitly.
+Every page is a pure function of its record's seed, augmentation included.
+The seed is recorded in the annotation and in the output file name, so any
+sample can be regenerated exactly. Nothing in the pipeline calls the global
+`random` module: a `random.Random` is created from the seed and threaded
+through explicitly.
 
 ### Ground truth
 
@@ -160,7 +187,8 @@ printed QR code that must never be drawn over.
 1. Add `bitikocr/synthetic/generators/<type>.py` with a `DocumentGenerator`
    subclass that defines `name`, `field_names` and `reading_order`.
 2. Register it in `GENERATOR_TYPES` in `generators/__init__.py`.
-3. Add its field values to `sample_data.py`.
+3. Add a record sampler to `records.py` and register it in
+   `RECORD_SAMPLERS`, widening `corpus.py` if it needs new vocabulary.
 4. Add a test module under `tests/`.
 
 Nothing else changes: the CLI, the registry and the dataset builder pick the

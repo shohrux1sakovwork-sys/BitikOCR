@@ -36,6 +36,10 @@ DEFAULT_TITLE = "Ариза"
 # The layout is re-measured at ever smaller sizes until it fits this share of
 # the page, or until the handwriting would become unreadably small.
 _TARGET_FILL = 0.86
+
+# Nothing is written closer than this many nominal sizes to the foot of the
+# page: a clerk runs out of paper before they run out of margin.
+_FOOT_MARGIN = 2.0
 _MIN_FONT_SIZE = 34
 _SHRINK_FACTOR = 0.92
 
@@ -163,6 +167,7 @@ class ArizaGenerator(DocumentGenerator):
             rng=rng,
             style=style,
             width=width,
+            height=height,
             y=y,
         )
 
@@ -366,11 +371,19 @@ class ArizaGenerator(DocumentGenerator):
         rng: random.Random,
         style: HandwritingStyle,
         width: int,
+        height: int,
         y: int,
     ) -> int:
-        """Write the signature scribble, the signer's name, the date and phone."""
+        """Write the signature scribble, the signer's name, the date and phone.
+
+        Everything here follows the body, so on a full page it can run out of
+        room. Each baseline is therefore held above the foot of the page:
+        ink drawn past the edge is clipped, which would leave a
+        transcription the image does not show.
+        """
         font_size = style.font_size
-        y += int(font_size * rng.uniform(0.6, 2.0))
+        last_baseline = height - int(font_size * _FOOT_MARGIN)
+        y = min(y + int(font_size * rng.uniform(0.6, 2.0)), last_baseline)
 
         # A phone number always takes the left side, pushing the signature right.
         signs_right = True if phone else rng.random() < 0.55
@@ -396,7 +409,7 @@ class ArizaGenerator(DocumentGenerator):
                 [str(signature_name)],
                 hand,
                 int(width * spread),
-                y + int(font_size * rng.uniform(0, 0.5)),
+                min(y + int(font_size * rng.uniform(0, 0.5)), last_baseline),
             )
 
         if date:
@@ -405,14 +418,17 @@ class ArizaGenerator(DocumentGenerator):
                 [str(date)],
                 hand,
                 int(width * rng.uniform(0.55, 0.78)),
-                y + int(font_size * rng.uniform(1.7, 2.3)),
+                min(y + int(font_size * rng.uniform(1.7, 2.3)), last_baseline),
             )
 
         if phone:
-            phone_y = (
-                y + int(font_size * 1.5)
-                if signature_name
-                else y + int(font_size * rng.uniform(0, 0.5))
+            phone_y = min(
+                (
+                    y + int(font_size * 1.5)
+                    if signature_name
+                    else y + int(font_size * rng.uniform(0, 0.5))
+                ),
+                last_baseline,
             )
             y = page.put_lines(
                 "phone",

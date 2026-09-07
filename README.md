@@ -17,30 +17,42 @@ The `data` extra pulls in Pillow, NumPy and fontTools, which are needed to
 
 ## Generating synthetic data
 
+Generation is two stages, and they can be run together or apart.
+
+**Both at once:**
+
 ```bash
-uv run bitikocr synth generate ariza -n 100 -o data/synthetic/ariza
+uv run bitikocr synth generate birth_certificate -n 30 --boxes
+```
+
+**Or separately** — sample the text first, look at it or edit it, then draw:
+
+```bash
+uv run bitikocr synth metadata death_certificate -n 30 -o data/death
 ```
 
 ```bash
-uv run bitikocr synth generate birth_certificate -n 100 --boxes
+uv run bitikocr synth render data/death --boxes
 ```
 
-```bash
-uv run bitikocr synth generate death_certificate -n 100 --boxes
-```
+Splitting them means a batch can be re-rendered with different fonts or
+heavier augmentation without resampling the text, and the text can be
+reviewed before the slow step runs.
 
 Useful flags:
 
-| Flag                | Meaning                                                      |
-|---------------------|--------------------------------------------------------------|
-| `-n, --count`       | How many pages to render.                                     |
-| `-o, --output-dir`  | Where to write them (default `output/<document type>`).       |
-| `--seed`            | Make the whole run reproducible.                              |
-| `--template`        | Which form variant to fill (form documents only).             |
-| `--font`            | Force one handwriting font instead of sampling.               |
-| `--fonts-dir`       | Use your own handwriting fonts.                               |
-| `--boxes`           | Also write a `_boxes.png` overlay to eyeball the annotations. |
-| `-v, --verbose`     | Log every generated sample.                                   |
+| Flag                | Stage    | Meaning                                          |
+|---------------------|----------|--------------------------------------------------|
+| `-n, --count`       | metadata | How many documents.                               |
+| `-o, --output-dir`  | metadata | Dataset directory (default `output/<type>`).      |
+| `--script`          | metadata | Force `latin` or `cyrillic` (default: both).      |
+| `--seed`            | metadata | Make the whole run reproducible.                  |
+| `--template`        | render   | Which form variant to fill.                       |
+| `--font`            | render   | Force one handwriting font instead of sampling.   |
+| `--fonts-dir`       | render   | Use your own handwriting fonts.                   |
+| `--augment`         | render   | How hard to spoil each page; `0` disables it.     |
+| `--boxes`           | render   | Also write a box overlay per page.                |
+| `-v, --verbose`     | both     | Log every generated sample.                       |
 
 To see what is available:
 
@@ -58,17 +70,32 @@ uv run bitikocr synth list-templates
 
 ## Output format
 
-Each sample is written as `<stem>.png` next to `<stem>.json`, where the stem
-carries the document type, the index and the seed:
+A dataset directory holds both stages:
 
 ```
-ariza_0000_seed647892279.png
-ariza_0000_seed647892279.json
+output/birth_certificate/
+  metadata.jsonl      one record per line: the field values, before drawing
+  index.jsonl         one line per page, for a data loader
+  images/<stem>.png
+  labels/<stem>.json  the ground truth
+  previews/<stem>.png box overlays, only with --boxes
 ```
 
-The JSON holds the full page transcription, one entry per logical block, one
-entry per rendered line, and each with the tight bounding box around the ink
-that was actually drawn:
+`metadata.jsonl` is stage one — the text a page will carry, with the seed
+that renders it:
+
+```json
+{"document_type": "birth_certificate", "script": "cyrillic", "seed": 1799,
+ "fields": {"child_surname": "Ҳакимова", "child_given_name": "Азиза Дониёр қизи", "...": "..."}}
+```
+
+`index.jsonl` is what a training loop reads: image and label paths relative
+to the dataset root, plus the page transcription, the font it was written
+in and the alphabet it used.
+
+Each label holds the full page transcription, one entry per logical block,
+one entry per rendered line, and each with the tight bounding box around the
+ink that was actually drawn:
 
 ```json
 {
@@ -77,14 +104,42 @@ that was actually drawn:
   "lines":  [{ "block": "recipient", "text": "...", "bbox": [905, 190, 1620, 262] }],
   "size": [1654, 2339],
   "document_type": "ariza",
+  "script": "cyrillic",
   "seed": 647892279,
-  "font": "Caveat-VariableFont_wght.ttf",
+  "font": "CyrilicHand07.otf",
   "style": { "pen": "hard", "slant": 0.21, "...": "..." },
   "fields": { "recipient": "...", "body": "..." }
 }
 ```
 
-Regenerating a page from its seed reproduces it byte for byte.
+Regenerating a page from its record reproduces it byte for byte, including
+the augmentation: the seed rides on the record.
+
+## Text and alphabets
+
+Uzbek is written in both Latin and Cyrillic, and an archive holds both, so
+records are sampled in either unless `--script` forces one. The vocabulary
+lives in `corpus.py` in Latin and is transliterated on demand; widen those
+lists to widen the data.
+
+Records are internally consistent — a death is registered after it happened,
+a family shares a surname, an age matches the year — because inconsistent
+text teaches a recogniser nothing but does make the data look wrong to a
+reviewer.
+
+A font is only used for text it can actually write, so the Cyrillic-only
+hands never receive Latin records and vice versa. `synth list-fonts` shows
+which alphabets each font covers.
+
+## Augmentation
+
+Rendered pages are clean. `--augment` spoils them the way a scanner and time
+would: paper tint, uneven lighting, edge vignetting, dust specks, defocus,
+sensor grain, JPEG artefacts and a slight scan skew.
+
+The skew moves the ink, so it moves the bounding boxes with it — every other
+step is photometric and leaves the ground truth alone. `--augment 0` turns
+the whole thing off; higher values than the default `1.0` push it further.
 
 ## Using it from Python
 
