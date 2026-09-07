@@ -116,7 +116,8 @@ Inside `generators/`:
 
 The module's own tests are in `tests/`, beside the code they cover, so
 everything the generator is and everything that proves it works sits in one
-directory. Run just those with:
+directory. Every layer of the project is arranged this way. Run just these
+with:
 
 ```bash
 uv run pytest bitikocr/data/synthetic/tests

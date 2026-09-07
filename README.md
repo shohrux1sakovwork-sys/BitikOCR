@@ -381,5 +381,7 @@ before changing anything.
 make checks
 ```
 
-Runs isort, black, ruff, mypy and pytest. See [CODING_STYLE.md](CODING_STYLE.md)
+Runs isort, black, ruff, mypy and pytest. Tests live beside the code they
+cover — `bitikocr/tests/`, `bitikocr/models/tests/` and
+`bitikocr/data/synthetic/tests/` — so collecting the package finds them all. See [CODING_STYLE.md](CODING_STYLE.md)
 for the rules and [ARCHITECHTURE.md](ARCHITECHTURE.md) for where new code goes.

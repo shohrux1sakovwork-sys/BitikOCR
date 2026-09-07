@@ -8,15 +8,15 @@ install:
 	uv sync --extra data
 
 style:
-	uv run isort bitikocr tests
-	uv run black bitikocr tests
+	uv run isort bitikocr
+	uv run black bitikocr
 
 style-check:
-	uv run isort --check-only bitikocr tests
-	uv run black --check bitikocr tests
+	uv run isort --check-only bitikocr
+	uv run black --check bitikocr
 
 lint-check:
-	uv run ruff check bitikocr tests
+	uv run ruff check bitikocr
 
 type-check:
 	uv run mypy

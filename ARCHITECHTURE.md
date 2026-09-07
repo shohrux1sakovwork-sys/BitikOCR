@@ -33,10 +33,12 @@
 │   ├── py.typed                 # Type hinting marker
 │   ├── cli.py                   # Application entry point
 │   ├── config.py                # The only module that reads the environment
+│   ├── tests/                   # Suite for the CLI and configuration
 │   ├── models/                  # Data classes and schemas
 │   │   ├── geometry.py          # BoundingBox
 │   │   ├── annotation.py        # Line / Block / Document annotations
-│   │   └── schema.py            # The corpus interchange schema
+│   │   ├── schema.py            # The corpus interchange schema
+│   │   └── tests/               # Suite for the above
 │   └── data/                    # Everything to do with the corpus
 │       └── synthetic/           # Synthetic training-data generation
 │           ├── README.md        # Developer's guide to this module
@@ -67,7 +69,6 @@
 │           │   └── layouts/     # Measured field geometry, one per form
 │           ├── tests/           # The generator's own suite
 │           └── output/          # Generated documents; gitignored
-└── tests/                       # Suite for the shared layers
 ```
 
 Generated documents go to `bitikocr/data/synthetic/output/<type>/`, inside
@@ -271,15 +272,21 @@ Configuration is loaded once at startup (in `config.py` or `cli.py`) and passed 
 
 ### Where tests go
 
-Tests live with the layer they cover:
+Tests live beside the code they cover, one suite per layer:
 
-- `bitikocr/data/synthetic/tests/` — the generator. It is a self-contained
-  subsystem, and its suite is the bulk of the project's tests, so it stays
-  out of the shared directory.
-- `tests/` — the shared layers: the models, the schema, the CLI.
+| Suite | Covers |
+|---|---|
+| `bitikocr/tests/` | The CLI and the configuration it loads |
+| `bitikocr/models/tests/` | The data classes and the corpus schema |
+| `bitikocr/data/synthetic/tests/` | The generator |
 
-Both are collected by `pytest` and type-checked by `mypy`; see the
-`testpaths` and `files` settings in `pyproject.toml`.
+There is no top-level `tests/`. One rule with no exception means a new
+layer brings its own suite without anyone having to decide where it goes —
+when the recogniser lands, `bitikocr/ocr/tests/` follows from the rule
+rather than from a discussion.
+
+Collecting the package finds every suite, so `pytest` and `mypy` are both
+pointed at `bitikocr` alone. No suite ships in the wheel.
 
 ### Checklist for new modules
 
