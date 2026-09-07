@@ -97,7 +97,7 @@ def test_pixel_size_compensates_for_small_x_heights(
     assert pixel_size_for(squashed, 60) > 60
 
 
-def test_scanning_a_directory_without_fonts_fails(tmp_path) -> None:
+def test_scanning_a_directory_without_fonts_fails(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="No usable fonts"):
         FontLibrary.from_directory(tmp_path)
 

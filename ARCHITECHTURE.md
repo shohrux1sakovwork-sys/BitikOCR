@@ -37,8 +37,6 @@
 │   │   ├── geometry.py          # BoundingBox
 │   │   ├── annotation.py        # Line / Block / Document annotations
 │   │   └── schema.py            # The corpus interchange schema
-│   ├── utils/                   # Pure helpers, no business logic
-│   │   └── image_ops.py         # Alpha boxes, photometric augmentation
 │   └── data/                    # Everything to do with the corpus
 │       └── synthetic/           # Synthetic training-data generation
 │           ├── README.md        # Developer's guide to this module
@@ -55,6 +53,7 @@
 │           ├── facts.py         # Field values to structured facts
 │           ├── export.py        # Internals to the corpus schema
 │           ├── augment.py       # Spoiling a clean page like a scan
+│           ├── ink.py           # Measuring the ink a layer carries
 │           ├── dataset.py       # Records to disk, and rendering them
 │           ├── generators/      # One module per document type
 │           │   ├── base.py      # DocumentGenerator contract
@@ -66,8 +65,9 @@
 │           │   ├── fonts/       # Handwriting fonts
 │           │   ├── backgrounds/ # Blank form scans
 │           │   └── layouts/     # Measured field geometry, one per form
+│           ├── tests/           # The generator's own suite
 │           └── output/          # Generated documents; gitignored
-└── tests/                       # pytest suite, one module per source module
+└── tests/                       # Suite for the shared layers
 ```
 
 Generated documents go to `bitikocr/data/synthetic/output/<type>/`, inside
@@ -84,11 +84,15 @@ the pipelines that prepare them belong beside `synthetic/` as they arrive.
 | `cli`           | Application entry point, CLI setup                      | `config`, `data`            |
 | `config`        | Load and validate configuration from env/files          | (none)                      |
 | `models/`       | Data classes, schemas, type definitions                 | (none)                      |
-| `utils/`        | Pure helper functions, no business logic                | `models`                    |
-| `data/synthetic/` | Synthetic handwritten-document generation             | `config`, `models`, `utils` |
+| `data/synthetic/` | Synthetic handwritten-document generation             | `config`, `models`          |
 
-The dependency flow is one-way. Nothing in `models/` or `utils/` may import
-from `data/`, and nothing below `cli` may read the environment.
+The dependency flow is one-way. Nothing in `models/` may import from
+`data/`, and nothing below `cli` may read the environment.
+
+There is no `utils/`. It held one live helper used only by the generator,
+which now sits beside it in `data/synthetic/ink.py`. A package for shared
+helpers is worth adding when something is genuinely shared; kept alive on
+speculation it collects whatever has no other home.
 
 ---
 
@@ -265,12 +269,24 @@ Configuration is loaded once at startup (in `config.py` or `cli.py`) and passed 
 
 ## 6. Adding New Code
 
+### Where tests go
+
+Tests live with the layer they cover:
+
+- `bitikocr/data/synthetic/tests/` — the generator. It is a self-contained
+  subsystem, and its suite is the bulk of the project's tests, so it stays
+  out of the shared directory.
+- `tests/` — the shared layers: the models, the schema, the CLI.
+
+Both are collected by `pytest` and type-checked by `mypy`; see the
+`testpaths` and `files` settings in `pyproject.toml`.
+
 ### Checklist for new modules
 
 - [ ] File is in the correct directory per the table above
 - [ ] File and module names use `snake_case`
 - [ ] Module has a docstring at the top explaining its purpose
 - [ ] All public functions/classes have type annotations and docstrings
-- [ ] Corresponding test file created in `tests/`
+- [ ] Corresponding test file beside the layer it covers
 - [ ] No circular imports (follow the dependency flow)
 - [ ] `make checks` passes

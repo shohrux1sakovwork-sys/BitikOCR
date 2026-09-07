@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 
+import numpy as np
 import pytest
 from PIL import Image
 
@@ -149,12 +150,8 @@ def test_a_rotated_box_still_contains_its_ink() -> None:
     moved = turned.lines[0].bbox
     assert moved is not None
 
-    dark = [
-        (x, y)
-        for x in range(rotated.width)
-        for y in range(rotated.height)
-        if sum(rotated.getpixel((x, y))) < 200
-    ]
+    pixels = np.asarray(rotated).sum(axis=2)
+    dark = [(int(x), int(y)) for y, x in zip(*np.nonzero(pixels < 200))]
     assert dark, "expected the mark to survive the rotation"
     for x, y in dark:
         assert moved.left <= x <= moved.right, (x, y)
@@ -168,4 +165,4 @@ def test_rotation_fills_the_corners_with_the_page_colour() -> None:
         text="", blocks=[], lines=[], size=(200, 200)
     )
     rotated, _ = rotate_page(image, annotation, 5.0)
-    assert sum(rotated.getpixel((1, 1))) > 300
+    assert np.asarray(rotated)[1, 1].sum() > 300

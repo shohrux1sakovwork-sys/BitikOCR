@@ -97,6 +97,7 @@ it.
 | `effects.py` | Signature scribbles and round office seals | Documents, text |
 | `system_fonts.py` | Printed fonts for stamps and serial numbers | Handwriting |
 | `templates.py` | The measured geometry of one blank form | Rendering, handwriting |
+| `ink.py` | Measuring the ink a rendered layer carries | Documents, pages |
 | `layout.py` | Placing ink and recording what was placed | Which document is being made |
 | `generators/` | Where things go on one kind of document | What it says, how it ages |
 | `augment.py` | Spoiling a finished page like a scan | What the page says |
@@ -112,6 +113,14 @@ Inside `generators/`:
 | `ariza.py` | A handwritten application letter on blank paper |
 | `birth_certificate.py` | Four lines: a name and a default template |
 | `death_certificate.py` | Likewise |
+
+The module's own tests are in `tests/`, beside the code they cover, so
+everything the generator is and everything that proves it works sits in one
+directory. Run just those with:
+
+```bash
+uv run pytest bitikocr/data/synthetic/tests
+```
 
 Assets in `assets/`:
 
@@ -303,5 +312,5 @@ generator.generate(fields, seed=1, style_overrides={"pen": "soft", "slant": 0.3}
   generator always produces a clean page.
 - **Only the scan skew moves the ground truth.** Every other augmentation
   step is photometric and leaves boxes alone.
-- **Run `make checks` before committing.** The suite covers transliteration,
-  record consistency, box validity and the schema.
+- **Run `make checks` before committing.** It covers both suites —
+  transliteration, record consistency, box validity and the schema.

@@ -15,6 +15,7 @@ from PIL import Image
 
 from bitikocr.data.synthetic.effects import draw_scribble
 from bitikocr.data.synthetic.hand import Hand
+from bitikocr.data.synthetic.ink import alpha_bounding_box
 from bitikocr.data.synthetic.style import Color, HandwritingStyle
 from bitikocr.models.annotation import (
     BlockAnnotation,
@@ -22,7 +23,6 @@ from bitikocr.models.annotation import (
     LineAnnotation,
 )
 from bitikocr.models.geometry import BoundingBox
-from bitikocr.utils.image_ops import alpha_bounding_box
 
 __all__ = ["Page", "wrap_text"]
 

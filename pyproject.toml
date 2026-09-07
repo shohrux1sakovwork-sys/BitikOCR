@@ -19,7 +19,7 @@ module-root = ""
 # Fonts, blank scans and layouts ship with the package; the documents
 # generated from them do not.
 source-exclude = ["data/synthetic/output"]
-wheel-exclude = ["data/synthetic/output"]
+wheel-exclude = ["data/synthetic/output", "data/synthetic/tests"]
 
 [dependency-groups]
 dev = [
@@ -67,7 +67,10 @@ ignore = ["E501", "F403", "F405"]
 ignore_missing_imports = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
-packages = ["bitikocr"]
+# Both suites are checked: the generator's tests sit inside the package, so
+# leaving the shared ones out would type-check one and not the other.
+files = ["bitikocr", "tests"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# The generator's tests live beside it; the rest cover the shared layers.
+testpaths = ["tests", "bitikocr/data/synthetic/tests"]

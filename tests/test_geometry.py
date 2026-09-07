@@ -40,3 +40,9 @@ def test_union_ignores_missing_boxes() -> None:
 
 def test_union_of_nothing_is_none() -> None:
     assert BoundingBox.union([None, None]) is None
+
+
+def test_a_box_converts_between_both_spellings() -> None:
+    box = BoundingBox(10, 20, 40, 60)
+    assert box.to_list() == [10, 20, 40, 60]
+    assert box.to_xywh() == [10, 20, 30, 40]
