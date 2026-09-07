@@ -28,3 +28,14 @@ dev = [
 
 [project.scripts]
 bitikocr = "bitikocr.cli:main"
+
+[tool.black]
+line-length = 80
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 80
+
+[tool.mypy]
+ignore_missing_imports = true
