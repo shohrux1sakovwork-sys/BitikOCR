@@ -28,11 +28,11 @@ uv run bitikocr synth generate birth_certificate -n 30 --boxes
 **Or separately** — sample the text first, look at it or edit it, then draw:
 
 ```bash
-uv run bitikocr synth facts death_certificate -n 30 -o data/death
+uv run bitikocr synth facts death_certificate -n 30 -o data/synthetic/death
 ```
 
 ```bash
-uv run bitikocr synth render data/death --boxes
+uv run bitikocr synth render data/synthetic/death --boxes
 ```
 
 Splitting them means a batch can be re-rendered with different fonts or
@@ -44,7 +44,7 @@ Useful flags:
 | Flag                | Stage  | Meaning                                            |
 |---------------------|--------|----------------------------------------------------|
 | `-n, --count`       | facts  | How many documents.                                 |
-| `-o, --output-dir`  | facts  | Dataset directory (default `output/<type>`).        |
+| `-o, --output-dir`  | facts  | Dataset directory (default `data/synthetic/<type>`).|
 | `--script`          | facts  | Force `latin` or `cyrillic` (default: both).        |
 | `--latin-share`     | facts  | Share written in Latin when neither is forced.      |
 | `--seed`            | facts  | Make the whole run reproducible.                    |
@@ -76,7 +76,7 @@ uv run bitikocr synth list-templates
 A dataset directory holds both stages:
 
 ```
-output/birth_certificate/
+data/synthetic/birth_certificate/
   facts/doc_000002.json        the structured values on the page
   images/doc_000002.png        the rendered page
   annotations/doc_000002.json  the transcription record
@@ -269,6 +269,19 @@ print(document.annotation.text)
 Use `style_overrides` to pin any writer parameter, for example
 `generator.generate(fields, style_overrides={"pen": "soft", "slant": 0.3})`.
 
+The corpus root is `data/`, and `synthetic` names how the pages were made —
+it matches `source.origin` in the schema, so real scans and augmented copies
+get their own trees beside it:
+
+```
+data/
+  synthetic/<document type>/
+  real/<document type>/        later
+  augmented/<document type>/   later
+```
+
+Point it elsewhere with `BITIKOCR_DATA_DIR`.
+
 ## Form templates
 
 Documents that fill a pre-printed form — the birth and death certificates
@@ -349,11 +362,18 @@ twenty lines including the docstring.
 Handwriting fonts, blank form scans and their layouts ship inside the
 package, under `bitikocr/synthetic/assets/`. Point the pipeline at your own
 with `--fonts-dir`, or with the `BITIKOCR_FONTS_DIR`,
-`BITIKOCR_BACKGROUNDS_DIR`, `BITIKOCR_LAYOUTS_DIR` and `BITIKOCR_OUTPUT_DIR`
+`BITIKOCR_BACKGROUNDS_DIR`, `BITIKOCR_LAYOUTS_DIR` and `BITIKOCR_DATA_DIR`
 environment variables.
 
 Only a font that can render every character of a page is used, so adding a
 Latin-only font will not break Cyrillic documents.
+
+## Going further
+
+[`bitikocr/synthetic/README.md`](bitikocr/synthetic/README.md) is the
+developer's guide to the generator: what every module owns, how to add a
+font, a form variant or a whole document type, and the gotchas worth knowing
+before changing anything.
 
 ## Development
 

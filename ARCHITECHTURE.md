@@ -54,6 +54,7 @@
 │       ├── export.py            # Internals to the corpus schema
 │       ├── augment.py           # Spoiling a clean page like a scan
 │       ├── dataset.py           # Records to disk, and rendering them
+│       ├── README.md           # Developer's guide to this module
 │       ├── generators/          # One module per document type
 │       │   ├── base.py          # DocumentGenerator contract
 │       │   ├── form.py          # FormGenerator: filling any printed form
@@ -64,8 +65,14 @@
 │           ├── fonts/           # Handwriting fonts
 │           ├── backgrounds/     # Blank form scans
 │           └── layouts/         # Measured field geometry, one JSON per form
-└── tests/                       # pytest suite, one module per source module
+├── tests/                       # pytest suite, one module per source module
+└── data/                        # The corpus, gitignored
+    └── synthetic/<type>/        # facts, images, annotations, index
 ```
+
+`data/` is the corpus root and its first level names how the pages were
+produced, matching `source.origin` in the schema: `synthetic/` today,
+`real/` and `augmented/` beside it later.
 
 ---
 

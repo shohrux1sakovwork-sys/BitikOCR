@@ -13,9 +13,9 @@ from pathlib import Path
 
 __all__ = [
     "ENV_BACKGROUNDS_DIR",
+    "ENV_DATA_DIR",
     "ENV_FONTS_DIR",
     "ENV_LAYOUTS_DIR",
-    "ENV_OUTPUT_DIR",
     "PACKAGE_ROOT",
     "SyntheticConfig",
 ]
@@ -26,12 +26,17 @@ _ASSETS_DIR = PACKAGE_ROOT / "synthetic" / "assets"
 DEFAULT_FONTS_DIR = _ASSETS_DIR / "fonts"
 DEFAULT_BACKGROUNDS_DIR = _ASSETS_DIR / "backgrounds"
 DEFAULT_LAYOUTS_DIR = _ASSETS_DIR / "layouts"
-DEFAULT_OUTPUT_DIR = Path("output")
+DEFAULT_DATA_DIR = Path("data")
+
+#: Where a dataset sits under the data root. It matches the schema's
+#: ``source.origin``, so generated pages, real scans and augmented
+#: copies of them stay in separate trees.
+DEFAULT_ORIGIN = "synthetic"
 
 ENV_FONTS_DIR = "BITIKOCR_FONTS_DIR"
 ENV_BACKGROUNDS_DIR = "BITIKOCR_BACKGROUNDS_DIR"
 ENV_LAYOUTS_DIR = "BITIKOCR_LAYOUTS_DIR"
-ENV_OUTPUT_DIR = "BITIKOCR_OUTPUT_DIR"
+ENV_DATA_DIR = "BITIKOCR_DATA_DIR"
 
 
 def _path_from_env(name: str, default: Path) -> Path:
@@ -48,13 +53,14 @@ class SyntheticConfig:
         backgrounds_dir: Directory holding blank form scans.
         layouts_dir: Directory holding the measured layout JSON that says
             where each field goes on those scans.
-        output_dir: Directory generated samples are written to.
+        data_dir: Root of the corpus. Datasets live under it as
+            ``<data_dir>/<origin>/<document type>``.
     """
 
     fonts_dir: Path = DEFAULT_FONTS_DIR
     backgrounds_dir: Path = DEFAULT_BACKGROUNDS_DIR
     layouts_dir: Path = DEFAULT_LAYOUTS_DIR
-    output_dir: Path = DEFAULT_OUTPUT_DIR
+    data_dir: Path = DEFAULT_DATA_DIR
 
     @classmethod
     def from_env(cls) -> SyntheticConfig:
@@ -63,7 +69,7 @@ class SyntheticConfig:
         Returns:
             A config whose paths come from ``BITIKOCR_FONTS_DIR``,
             ``BITIKOCR_BACKGROUNDS_DIR``, ``BITIKOCR_LAYOUTS_DIR`` and
-            ``BITIKOCR_OUTPUT_DIR`` when set.
+            ``BITIKOCR_DATA_DIR`` when set.
         """
         return cls(
             fonts_dir=_path_from_env(ENV_FONTS_DIR, DEFAULT_FONTS_DIR),
@@ -71,8 +77,23 @@ class SyntheticConfig:
                 ENV_BACKGROUNDS_DIR, DEFAULT_BACKGROUNDS_DIR
             ),
             layouts_dir=_path_from_env(ENV_LAYOUTS_DIR, DEFAULT_LAYOUTS_DIR),
-            output_dir=_path_from_env(ENV_OUTPUT_DIR, DEFAULT_OUTPUT_DIR),
+            data_dir=_path_from_env(ENV_DATA_DIR, DEFAULT_DATA_DIR),
         )
+
+    def dataset_dir(
+        self, document_type: str, origin: str = DEFAULT_ORIGIN
+    ) -> Path:
+        """Return where one document type's dataset lives.
+
+        Args:
+            document_type: Which documents the dataset holds.
+            origin: How they were produced — ``synthetic``, ``real`` or
+                ``augmented``, matching the schema's ``source.origin``.
+
+        Returns:
+            The dataset directory, which may not exist yet.
+        """
+        return self.data_dir / origin / document_type
 
     def background(self, name: str) -> Path:
         """Resolve a background template by file name.

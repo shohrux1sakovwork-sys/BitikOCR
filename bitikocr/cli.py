@@ -131,7 +131,10 @@ def _add_output_argument(parser: argparse.ArgumentParser) -> None:
         "--output-dir",
         type=Path,
         default=None,
-        help="dataset directory (default: <output dir>/<document type>)",
+        help=(
+            "dataset directory "
+            "(default: <data dir>/<origin>/<document type>)"
+        ),
     )
 
 
@@ -272,7 +275,7 @@ def _config_from_args(args: argparse.Namespace) -> SyntheticConfig:
 
 def _dataset_dir(args: argparse.Namespace, config: SyntheticConfig) -> Path:
     """Resolve where a dataset lives."""
-    return args.output_dir or config.output_dir / args.document_type
+    return args.output_dir or config.dataset_dir(args.document_type)
 
 
 def _augmentation(args: argparse.Namespace) -> AugmentationProfile | None:
