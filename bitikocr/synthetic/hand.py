@@ -36,6 +36,10 @@ _MAX_EROSION_SHARE = 0.55
 
 _MISSING_GLYPH = "?"
 
+# Ceiling on the opacity gain that stands in for sub-pixel stroke width.
+# Beyond this a thin hand stops looking like ink and starts looking printed.
+_MAX_INK_GAIN = 2.0
+
 
 class Hand:
     """Render text lines in a single handwriting style.
@@ -247,7 +251,8 @@ class Hand:
                 + 0.5 * math.sin(x * freq_b + phase_b)
             )
             offset_y += rng.gauss(0, style.char_y_jitter * self.size)
-            alpha = 1.0 - abs(rng.gauss(0, style.ink_variation))
+            fade = style.ink_variation / max(0.1, style.ink_strength)
+            alpha = 1.0 - abs(rng.gauss(0, fade))
             alpha = max(0.35, min(1.0, alpha))
 
             if abs(scale - 1.0) > 0.005:
@@ -302,6 +307,13 @@ class Hand:
     def _apply_pen(self, ink: Image.Image) -> Image.Image:
         """Bring the font's natural stroke to the target width, then texture it.
 
+        Widening happens in whole erosion or dilation passes, each worth
+        about two pixels. Most of the handwriting fonts are thinner than the
+        pen asks for by less than that, so the whole adjustment used to round
+        away and they wrote far too faintly. Whatever a whole pass cannot
+        cover is applied as opacity instead, which darkens the anti-aliased
+        edge and reads as a heavier nib.
+
         Args:
             ink: The ``L`` mask of the rendered line.
 
@@ -309,7 +321,8 @@ class Hand:
             The mask with the pen's stroke weight and edge quality applied.
         """
         natural = self.info.stroke_ratio * self.pixel_size
-        difference = self.style.stroke_px - natural
+        wanted = self.style.stroke_px * self.style.ink_strength
+        difference = wanted - natural
         passes = round(abs(difference) / _PIXELS_PER_MORPHOLOGY_PASS)
 
         if difference < 0:
@@ -321,6 +334,9 @@ class Hand:
         else:
             for _ in range(passes):
                 ink = ink.filter(ImageFilter.MaxFilter(3))
+            ink = self._deepen(
+                ink, difference - passes * _PIXELS_PER_MORPHOLOGY_PASS, natural
+            )
 
         if self.style.pen == "soft":  # Felt or worn ballpoint: fuzzy edge.
             ink = ink.filter(ImageFilter.GaussianBlur(0.8))
@@ -329,6 +345,25 @@ class Hand:
         ):  # Hard ballpoint: crisp, a touch lighter.
             ink = ink.point(lambda v: int(v * 0.94))
         return ink
+
+    @staticmethod
+    def _deepen(
+        ink: Image.Image, residual_px: float, natural: float
+    ) -> Image.Image:
+        """Darken a stroke by the fraction of a pixel dilation cannot add.
+
+        Args:
+            ink: The ``L`` mask of the rendered line.
+            residual_px: Stroke width still wanted, under one dilation pass.
+            natural: The font's own stroke width in pixels.
+
+        Returns:
+            The mask, with its soft edge pulled towards opaque.
+        """
+        if residual_px <= 0:
+            return ink
+        gain = 1.0 + min(_MAX_INK_GAIN - 1.0, residual_px / max(1.0, natural))
+        return ink.point(lambda v: min(255, int(v * gain)))
 
     def _erode(self, ink: Image.Image, passes: int) -> Image.Image:
         """Thin the stroke, backing off before the line disappears.
@@ -371,7 +406,7 @@ class Hand:
 
     def _apply_ink_texture(self, ink: Image.Image) -> Image.Image:
         """Modulate the ink with smooth noise so the line is not evenly dark."""
-        variation = self.style.ink_variation
+        variation = self.style.ink_variation / max(0.1, self.style.ink_strength)
         if variation <= 0.02:
             return ink
 

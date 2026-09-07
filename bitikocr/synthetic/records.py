@@ -17,9 +17,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bitikocr.synthetic import corpus
-from bitikocr.synthetic.scripts import SCRIPTS, Script, in_script
+from bitikocr.synthetic.scripts import Script, in_script
 
 __all__ = [
+    "DEFAULT_LATIN_SHARE",
     "RECORD_SAMPLERS",
     "DocumentRecord",
     "available_record_types",
@@ -28,6 +29,12 @@ __all__ = [
 ]
 
 _MAX_SEED = 2**31
+
+#: Share of records written in Latin when no script is forced. The archive
+#: holds both alphabets, but the font library is overwhelmingly Cyrillic, so
+#: Latin records would otherwise be drawn by the same handful of hands over
+#: and over. Raise this as Latin fonts are added.
+DEFAULT_LATIN_SHARE = 0.2
 
 _ARIZA_SUBJECTS: tuple[str, ...] = (
     "yashab turgan turar joyimga egalik huquqini belgilab berishingizni",
@@ -375,6 +382,7 @@ def sample_record(
     document_type: str,
     rng: random.Random,
     script: Script | None = None,
+    latin_share: float = DEFAULT_LATIN_SHARE,
 ) -> DocumentRecord:
     """Sample the content of one document.
 
@@ -382,6 +390,7 @@ def sample_record(
         document_type: A name from :func:`available_record_types`.
         rng: Random source.
         script: Force an alphabet instead of sampling one.
+        latin_share: Chance of drawing Latin when no script is forced.
 
     Returns:
         The sampled record, carrying its own render seed.
@@ -397,7 +406,10 @@ def sample_record(
             f"No record sampler for {document_type!r}. Known types: {known}"
         ) from error
 
-    chosen: Script = script if script is not None else rng.choice(SCRIPTS)
+    if script is not None:
+        chosen: Script = script
+    else:
+        chosen = "latin" if rng.random() < latin_share else "cyrillic"
     return DocumentRecord(
         document_type=document_type,
         script=chosen,
@@ -411,6 +423,7 @@ def sample_records(
     count: int,
     rng: random.Random,
     script: Script | None = None,
+    latin_share: float = DEFAULT_LATIN_SHARE,
 ) -> list[DocumentRecord]:
     """Sample several records of one document type.
 
@@ -419,13 +432,23 @@ def sample_records(
         count: How many records to sample. Must be positive.
         rng: Random source.
         script: Force an alphabet instead of sampling one per record.
+        latin_share: Share of records written in Latin, when no script is
+            forced.
 
     Returns:
         The sampled records, in order.
 
     Raises:
-        ValueError: If ``count`` is not positive.
+        ValueError: If ``count`` is not positive, or ``latin_share`` is not
+            a proportion.
     """
     if count <= 0:
         raise ValueError(f"count must be positive, got {count}")
-    return [sample_record(document_type, rng, script) for _ in range(count)]
+    if not 0.0 <= latin_share <= 1.0:
+        raise ValueError(
+            f"latin_share must be between 0 and 1, got {latin_share}"
+        )
+    return [
+        sample_record(document_type, rng, script, latin_share)
+        for _ in range(count)
+    ]

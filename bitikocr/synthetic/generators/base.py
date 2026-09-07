@@ -21,11 +21,21 @@ from bitikocr.models.annotation import DocumentAnnotation
 from bitikocr.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.synthetic.style import HandwritingStyle, sample_style
 
-__all__ = ["DocumentGenerator", "FieldValues", "SyntheticDocument"]
+__all__ = [
+    "DEFAULT_INK_STRENGTH",
+    "DocumentGenerator",
+    "FieldValues",
+    "SyntheticDocument",
+]
 
 FieldValues = Mapping[str, Any]
 
 _MAX_SEED = 2**31
+
+#: How heavily a hand writes by default. The shipped fonts have thin
+#: strokes, and a page that is then aged and re-compressed loses more,
+#: so the pen is calibrated a little above what the font asks for.
+DEFAULT_INK_STRENGTH = 1.4
 
 
 @dataclass(frozen=True)
@@ -53,6 +63,8 @@ class DocumentGenerator(ABC):
         config: Paths to the fonts and background templates to use.
         font_path: Force every page to use this handwriting font instead of
             sampling one. Useful for per-font visual comparison.
+        ink_strength: How heavily the pen writes; see
+            :attr:`~bitikocr.synthetic.style.HandwritingStyle.ink_strength`.
 
     Raises:
         FileNotFoundError: If the configured fonts directory holds no font.
@@ -62,10 +74,14 @@ class DocumentGenerator(ABC):
     name: ClassVar[str]
 
     def __init__(
-        self, config: SyntheticConfig, font_path: Path | str | None = None
+        self,
+        config: SyntheticConfig,
+        font_path: Path | str | None = None,
+        ink_strength: float = DEFAULT_INK_STRENGTH,
     ) -> None:
         self.config = config
         self.font_path = Path(font_path) if font_path else None
+        self.ink_strength = ink_strength
         self.library = FontLibrary.from_directory(config.fonts_dir)
 
     @classmethod
@@ -74,6 +90,7 @@ class DocumentGenerator(ABC):
         config: SyntheticConfig,
         font_path: Path | str | None,
         template: str,
+        ink_strength: float = DEFAULT_INK_STRENGTH,
     ) -> DocumentGenerator:
         """Build this generator for a named form template.
 
@@ -84,6 +101,7 @@ class DocumentGenerator(ABC):
             config: Paths to the fonts, backgrounds and layouts to use.
             font_path: Force a specific handwriting font.
             template: Name of the layout to fill.
+            ink_strength: How heavily the pen writes.
 
         Returns:
             A generator bound to that template.
@@ -160,7 +178,9 @@ class DocumentGenerator(ABC):
             name.
         """
         info = self.library.pick(text, rng, self.font_path)
-        style = sample_style(rng, self.library).replace(font=info.name)
+        style = sample_style(rng, self.library).replace(
+            font=info.name, ink_strength=self.ink_strength
+        )
         if style_overrides:
             style = style.replace(**style_overrides)
         return info, style

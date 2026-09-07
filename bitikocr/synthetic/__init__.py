@@ -47,6 +47,7 @@ from bitikocr.synthetic.generators import (
 from bitikocr.synthetic.hand import Hand
 from bitikocr.synthetic.layout import Page, wrap_text
 from bitikocr.synthetic.records import (
+    DEFAULT_LATIN_SHARE,
     DocumentRecord,
     sample_record,
     sample_records,
@@ -56,6 +57,7 @@ from bitikocr.synthetic.style import HandwritingStyle, sample_style
 from bitikocr.synthetic.templates import FieldGeometry, FormTemplate, MarkArea
 
 __all__ = [
+    "DEFAULT_LATIN_SHARE",
     "ArizaGenerator",
     "AugmentationProfile",
     "BirthCertificateGenerator",

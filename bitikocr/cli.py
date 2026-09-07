@@ -26,10 +26,15 @@ from bitikocr.synthetic.dataset import (
 )
 from bitikocr.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.synthetic.generators import (
+    DEFAULT_INK_STRENGTH,
     available_document_types,
     create_generator,
 )
-from bitikocr.synthetic.records import sample_records
+from bitikocr.synthetic.records import (
+    DEFAULT_LATIN_SHARE,
+    DocumentRecord,
+    sample_records,
+)
 from bitikocr.synthetic.scripts import SCRIPTS
 from bitikocr.synthetic.templates import FormTemplate
 
@@ -61,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
         "synth", help="generate synthetic training data"
     ).add_subparsers(dest="synth_command", required=True)
 
-    _add_metadata_command(synth)
+    _add_facts_command(synth)
     _add_render_command(synth)
     _add_generate_command(synth)
     _add_listing_commands(synth)
@@ -87,6 +92,16 @@ def _add_document_arguments(parser: argparse.ArgumentParser) -> None:
         choices=SCRIPTS,
         default=None,
         help="write every document in one alphabet (default: both)",
+    )
+    parser.add_argument(
+        "--latin-share",
+        type=float,
+        default=DEFAULT_LATIN_SHARE,
+        metavar="SHARE",
+        help=(
+            "share of documents written in Latin when no script is forced "
+            "(default: %(default)s, low because most fonts are Cyrillic)"
+        ),
     )
     parser.add_argument(
         "--seed",
@@ -134,32 +149,42 @@ def _add_render_arguments(parser: argparse.ArgumentParser) -> None:
         help="how hard to spoil each page, 0 to disable (default: %(default)s)",
     )
     parser.add_argument(
+        "--ink",
+        type=float,
+        default=DEFAULT_INK_STRENGTH,
+        metavar="STRENGTH",
+        help=(
+            "how heavily the pen writes; raise it if a hand comes out too "
+            "faint (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
         "--boxes",
         action="store_true",
         help="also write a box overlay per page, under previews/",
     )
 
 
-def _add_metadata_command(synth: argparse._SubParsersAction[Any]) -> None:
-    """Register ``synth metadata``."""
-    metadata = synth.add_parser(
-        "metadata",
-        help="sample the field values a batch will carry, without rendering",
+def _add_facts_command(synth: argparse._SubParsersAction[Any]) -> None:
+    """Register ``synth facts``."""
+    facts = synth.add_parser(
+        "facts",
+        help="sample what each document says, without rendering anything",
     )
-    _add_document_arguments(metadata)
-    _add_output_argument(metadata)
-    metadata.set_defaults(handler=_run_metadata)
+    _add_document_arguments(facts)
+    _add_output_argument(facts)
+    facts.set_defaults(handler=_run_facts)
 
 
 def _add_render_command(synth: argparse._SubParsersAction[Any]) -> None:
     """Register ``synth render``."""
     render = synth.add_parser(
-        "render", help="draw the pages for an existing metadata file"
+        "render", help="draw the pages for a dataset that has its facts"
     )
     render.add_argument(
         "output_dir",
         type=Path,
-        help="dataset directory holding metadata.jsonl",
+        help="dataset directory holding a facts/ directory",
     )
     _add_render_arguments(render)
     render.set_defaults(handler=_run_render)
@@ -246,30 +271,36 @@ def _augmentation(args: argparse.Namespace) -> AugmentationProfile | None:
 # -- commands --------------------------------------------------------------
 
 
-def _run_metadata(args: argparse.Namespace, config: SyntheticConfig) -> int:
-    """Sample records and write them, rendering nothing."""
-    records = sample_records(
+def _sample(args: argparse.Namespace) -> list[DocumentRecord]:
+    """Sample the batch of records the arguments describe."""
+    return sample_records(
         args.document_type,
         args.count,
         random.Random(args.seed),
         args.script,
+        args.latin_share,
     )
+
+
+def _run_facts(args: argparse.Namespace, config: SyntheticConfig) -> int:
+    """Sample what each document says and write it, rendering nothing."""
+    records = _sample(args)
     layout = DatasetLayout(_dataset_dir(args, config))
-    write_records(records, layout.metadata)
-    print(f"Wrote {len(records)} records to {layout.metadata.resolve()}")
+    write_records(records, layout)
+    print(f"Wrote {len(records)} facts files to {layout.facts.resolve()}")
     return 0
 
 
 def _run_render(args: argparse.Namespace, config: SyntheticConfig) -> int:
-    """Render an existing metadata file."""
+    """Draw the pages for a dataset that already has its facts."""
     layout = DatasetLayout(args.output_dir)
-    records = read_records(layout.metadata)
+    records = read_records(layout)
     if not records:
-        raise ValueError(f"{layout.metadata} holds no records")
+        raise ValueError(f"{layout.facts} holds no facts files")
 
     document_type = records[0].document_type
     generator = create_generator(
-        document_type, config, args.font, args.template
+        document_type, config, args.font, args.template, args.ink
     )
     summary = render_records(
         generator=generator,
@@ -283,18 +314,13 @@ def _run_render(args: argparse.Namespace, config: SyntheticConfig) -> int:
 
 
 def _run_generate(args: argparse.Namespace, config: SyntheticConfig) -> int:
-    """Sample records and render them in one go."""
-    records = sample_records(
-        args.document_type,
-        args.count,
-        random.Random(args.seed),
-        args.script,
-    )
+    """Sample the facts and render them in one go."""
+    records = _sample(args)
     layout = DatasetLayout(_dataset_dir(args, config))
-    write_records(records, layout.metadata)
+    write_records(records, layout)
 
     generator = create_generator(
-        args.document_type, config, args.font, args.template
+        args.document_type, config, args.font, args.template, args.ink
     )
     summary = render_records(
         generator=generator,
@@ -311,10 +337,12 @@ def _report(summary: DatasetSummary) -> None:
     """Print what a render produced."""
     layout = summary.layout
     print(f"Wrote {len(summary)} pages to {layout.root.resolve()}")
-    print(f"  metadata: {layout.metadata.name}")
-    print(f"  index:    {layout.index.name}")
+    print(f"  facts:       {layout.facts.name}/")
+    print(f"  images:      {layout.images.name}/")
+    print(f"  annotations: {layout.annotations.name}/")
+    print(f"  index:       {layout.index.name}")
     if summary.skipped:
-        print(f"  skipped:  {len(summary.skipped)} record(s)")
+        print(f"  skipped:     {len(summary.skipped)} record(s)")
 
 
 def _run_list_fonts(args: argparse.Namespace, config: SyntheticConfig) -> int:

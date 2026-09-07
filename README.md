@@ -28,7 +28,7 @@ uv run bitikocr synth generate birth_certificate -n 30 --boxes
 **Or separately** — sample the text first, look at it or edit it, then draw:
 
 ```bash
-uv run bitikocr synth metadata death_certificate -n 30 -o data/death
+uv run bitikocr synth facts death_certificate -n 30 -o data/death
 ```
 
 ```bash
@@ -41,18 +41,20 @@ reviewed before the slow step runs.
 
 Useful flags:
 
-| Flag                | Stage    | Meaning                                          |
-|---------------------|----------|--------------------------------------------------|
-| `-n, --count`       | metadata | How many documents.                               |
-| `-o, --output-dir`  | metadata | Dataset directory (default `output/<type>`).      |
-| `--script`          | metadata | Force `latin` or `cyrillic` (default: both).      |
-| `--seed`            | metadata | Make the whole run reproducible.                  |
-| `--template`        | render   | Which form variant to fill.                       |
-| `--font`            | render   | Force one handwriting font instead of sampling.   |
-| `--fonts-dir`       | render   | Use your own handwriting fonts.                   |
-| `--augment`         | render   | How hard to spoil each page; `0` disables it.     |
-| `--boxes`           | render   | Also write a box overlay per page.                |
-| `-v, --verbose`     | both     | Log every generated sample.                       |
+| Flag                | Stage  | Meaning                                            |
+|---------------------|--------|----------------------------------------------------|
+| `-n, --count`       | facts  | How many documents.                                 |
+| `-o, --output-dir`  | facts  | Dataset directory (default `output/<type>`).        |
+| `--script`          | facts  | Force `latin` or `cyrillic` (default: both).        |
+| `--latin-share`     | facts  | Share written in Latin when neither is forced.      |
+| `--seed`            | facts  | Make the whole run reproducible.                    |
+| `--template`        | render | Which form variant to fill.                         |
+| `--font`            | render | Force one handwriting font instead of sampling.     |
+| `--fonts-dir`       | render | Use your own handwriting fonts.                     |
+| `--ink`             | render | How heavily the pen writes; raise it if too faint.  |
+| `--augment`         | render | How hard to spoil each page; `0` disables it.       |
+| `--boxes`           | render | Also write a box overlay per page.                  |
+| `-v, --verbose`     | both   | Log every generated sample.                         |
 
 To see what is available:
 
@@ -74,28 +76,41 @@ A dataset directory holds both stages:
 
 ```
 output/birth_certificate/
-  metadata.jsonl      one record per line: the field values, before drawing
-  index.jsonl         one line per page, for a data loader
-  images/<stem>.png
-  labels/<stem>.json  the ground truth
-  previews/<stem>.png box overlays, only with --boxes
+  facts/<stem>.json        what the document says, before it is drawn
+  images/<stem>.png        the rendered page
+  annotations/<stem>.json  the ground truth
+  previews/<stem>.png      box overlays, only with --boxes
+  index.jsonl              one line per page, for a data loader
 ```
 
-`metadata.jsonl` is stage one — the text a page will carry, with the seed
+Every file for one document shares a stem, so a fine-tuning pipeline can
+pair them directly:
+
+```
+facts/birth_certificate_00002_seed1803740873.json
+images/birth_certificate_00002_seed1803740873.png
+annotations/birth_certificate_00002_seed1803740873.json
+```
+
+A **facts** file is stage one — the text a page will carry, with the seed
 that renders it:
 
 ```json
-{"document_type": "birth_certificate", "script": "cyrillic", "seed": 1799,
- "fields": {"child_surname": "Ҳакимова", "child_given_name": "Азиза Дониёр қизи", "...": "..."}}
+{
+  "document_type": "birth_certificate",
+  "script": "cyrillic",
+  "seed": 1803740873,
+  "fields": {
+    "child_surname": "Ҳакимова",
+    "child_given_name": "Азиза Дониёр қизи",
+    "...": "..."
+  }
+}
 ```
 
-`index.jsonl` is what a training loop reads: image and label paths relative
-to the dataset root, plus the page transcription, the font it was written
-in and the alphabet it used.
-
-Each label holds the full page transcription, one entry per logical block,
-one entry per rendered line, and each with the tight bounding box around the
-ink that was actually drawn:
+An **annotation** holds the full page transcription, one entry per logical
+block, one entry per rendered line, and each with the tight bounding box
+around the ink that was actually drawn:
 
 ```json
 {
@@ -112,8 +127,13 @@ ink that was actually drawn:
 }
 ```
 
-Regenerating a page from its record reproduces it byte for byte, including
-the augmentation: the seed rides on the record.
+`index.jsonl` is what a training loop reads: the three paths relative to
+the dataset root, plus the transcription, the font, the alphabet and the
+seed — enough to filter the set without opening every file.
+
+Regenerating a page from its facts reproduces it byte for byte, including
+the augmentation: the seed rides on the record. Editing a facts file and
+re-running `synth render` draws the corrected text.
 
 ## Text and alphabets
 
@@ -121,6 +141,11 @@ Uzbek is written in both Latin and Cyrillic, and an archive holds both, so
 records are sampled in either unless `--script` forces one. The vocabulary
 lives in `corpus.py` in Latin and is transliterated on demand; widen those
 lists to widen the data.
+
+The default mix is **80% Cyrillic**, because the font library is: fourteen
+Cyrillic hands against one Latin one, so Latin pages would otherwise be
+drawn by the same few fonts over and over. Raise `--latin-share` as Latin
+fonts are added.
 
 Records are internally consistent — a death is registered after it happened,
 a family shares a surname, an age matches the year — because inconsistent
@@ -130,6 +155,14 @@ reviewer.
 A font is only used for text it can actually write, so the Cyrillic-only
 hands never receive Latin records and vice versa. `synth list-fonts` shows
 which alphabets each font covers.
+
+## Ink
+
+The shipped hands vary a lot in stroke weight, and the thinnest wrote too
+faintly to read once a page had been aged and re-compressed. `--ink` sets
+how heavily the pen writes; the default of 1.4 is calibrated above what the
+fonts ask for so every hand stays legible. Raise it if a font still comes
+out light, lower it towards 1.0 for the fonts' own weight.
 
 ## Augmentation
 

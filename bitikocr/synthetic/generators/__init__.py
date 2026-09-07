@@ -15,6 +15,7 @@ from pathlib import Path
 from bitikocr.config import SyntheticConfig
 from bitikocr.synthetic.generators.ariza import ArizaGenerator
 from bitikocr.synthetic.generators.base import (
+    DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
     SyntheticDocument,
@@ -28,6 +29,7 @@ from bitikocr.synthetic.generators.death_certificate import (
 from bitikocr.synthetic.generators.form import FormGenerator, FormOptions
 
 __all__ = [
+    "DEFAULT_INK_STRENGTH",
     "GENERATOR_TYPES",
     "ArizaGenerator",
     "BirthCertificateGenerator",
@@ -58,6 +60,7 @@ def create_generator(
     config: SyntheticConfig,
     font_path: Path | str | None = None,
     template: str | None = None,
+    ink_strength: float = DEFAULT_INK_STRENGTH,
 ) -> DocumentGenerator:
     """Build the generator registered under a document type name.
 
@@ -67,6 +70,7 @@ def create_generator(
         font_path: Force a specific handwriting font instead of sampling.
         template: Fill a specific form variant. Only document types that
             fill a measured printed form accept one.
+        ink_strength: How heavily the pen writes.
 
     Returns:
         A ready-to-use generator.
@@ -85,5 +89,7 @@ def create_generator(
         ) from error
 
     if template is not None:
-        return generator_type.with_template(config, font_path, template)
-    return generator_type(config, font_path)
+        return generator_type.with_template(
+            config, font_path, template, ink_strength
+        )
+    return generator_type(config, font_path, ink_strength=ink_strength)

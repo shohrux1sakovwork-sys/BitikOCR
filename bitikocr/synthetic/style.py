@@ -81,6 +81,11 @@ class HandwritingStyle:
         char_rot_jitter: Random rotation of each glyph, in degrees.
         char_y_jitter: Random vertical offset per glyph, times ``font_size``.
         ink_variation: How unevenly the ink is laid down; 0 is perfectly even.
+        ink_strength: Calibration for how heavily the pen writes. 1.0 draws
+            the stroke the font and pen ask for; above that widens and
+            darkens it, and steadies the fading. Fonts differ enough in
+            stroke weight that the thinnest need help to stay legible once a
+            page has been aged.
         indent: First-line indent of the body, times ``font_size``.
         left_margin: Left text edge, as a fraction of the page width.
         right_margin: Right text edge, as a fraction of the page width.
@@ -111,6 +116,7 @@ class HandwritingStyle:
     char_rot_jitter: float
     char_y_jitter: float
     ink_variation: float
+    ink_strength: float
     indent: float
     left_margin: float
     right_margin: float
@@ -201,6 +207,7 @@ def sample_style(rng: random.Random, library: FontLibrary) -> HandwritingStyle:
         char_rot_jitter=rng.uniform(0.0, 2.5),
         char_y_jitter=rng.uniform(0.0, 0.05),
         ink_variation=rng.uniform(0.05, 0.25),
+        ink_strength=1.0,
         indent=rng.uniform(0.8, 3.0),
         left_margin=rng.uniform(0.08, 0.15),
         right_margin=rng.uniform(0.86, 0.96),

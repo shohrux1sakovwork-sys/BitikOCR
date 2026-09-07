@@ -27,6 +27,7 @@ from bitikocr.config import SyntheticConfig
 from bitikocr.models.geometry import BoundingBox
 from bitikocr.synthetic.effects import draw_round_stamp
 from bitikocr.synthetic.generators.base import (
+    DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
     SyntheticDocument,
@@ -145,8 +146,9 @@ class FormGenerator(DocumentGenerator):
         config: SyntheticConfig,
         font_path: Path | str | None = None,
         options: FormOptions | None = None,
+        ink_strength: float = DEFAULT_INK_STRENGTH,
     ) -> None:
-        super().__init__(config, font_path)
+        super().__init__(config, font_path, ink_strength)
         self.options = options or FormOptions()
         name = self.options.template or self.default_template
         self.template = FormTemplate.load(config.layout(name))
@@ -157,6 +159,7 @@ class FormGenerator(DocumentGenerator):
         config: SyntheticConfig,
         font_path: Path | str | None,
         template: str,
+        ink_strength: float = DEFAULT_INK_STRENGTH,
     ) -> FormGenerator:
         """Build a generator for one of this document's form variants.
 
@@ -164,11 +167,14 @@ class FormGenerator(DocumentGenerator):
             config: Paths to the fonts, backgrounds and layouts to use.
             font_path: Force a specific handwriting font.
             template: Name of the layout to fill.
+            ink_strength: How heavily the pen writes.
 
         Returns:
             A generator bound to that template.
         """
-        return cls(config, font_path, FormOptions(template=template))
+        return cls(
+            config, font_path, FormOptions(template=template), ink_strength
+        )
 
     @property
     def registrar_writes_on_signature(self) -> bool:

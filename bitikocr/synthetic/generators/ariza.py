@@ -14,6 +14,7 @@ from typing import Any, ClassVar
 
 from bitikocr.config import SyntheticConfig
 from bitikocr.synthetic.generators.base import (
+    DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
     SyntheticDocument,
@@ -85,8 +86,9 @@ class ArizaGenerator(DocumentGenerator):
         config: SyntheticConfig,
         font_path: Path | str | None = None,
         page_size: tuple[int, int] = DEFAULT_PAGE_SIZE,
+        ink_strength: float = DEFAULT_INK_STRENGTH,
     ) -> None:
-        super().__init__(config, font_path)
+        super().__init__(config, font_path, ink_strength)
         self.page_size = page_size
 
     @property

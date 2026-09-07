@@ -2,11 +2,11 @@
 
 Generation is two steps, and they are deliberately separable:
 
-1. **Sample records** — the field values a batch of documents will carry.
-   They are written to ``metadata.jsonl``, one JSON object per line, and can
-   be read, edited or replaced before anything is rendered.
-2. **Render records** — draw each one, spoil it like a scan, and write the
-   page beside its ground truth.
+1. **Sample facts** — what each document will say. They are written one JSON
+   per document, and can be read, edited or replaced before anything is
+   drawn.
+2. **Render them** — draw each page, spoil it like a scan, and write it
+   beside its annotation.
 
 Keeping them apart means a batch can be re-rendered with different fonts or
 augmentation without resampling the text, and the text can be reviewed
@@ -15,11 +15,15 @@ before the expensive step runs.
 Layout on disk::
 
     <output>/
-      metadata.jsonl        the records, one per line
-      index.jsonl           one line per rendered page, for a data loader
-      images/<stem>.png
-      labels/<stem>.json    the DocumentAnnotation
-      previews/<stem>.png   box overlays, only with draw_boxes
+      facts/<stem>.json        what the document says, before it is drawn
+      images/<stem>.png        the rendered page
+      annotations/<stem>.json  the ground truth: text, blocks, lines, boxes
+      previews/<stem>.png      box overlays, only with draw_boxes
+      index.jsonl              one line per page, tying the three together
+
+Every file for one document shares a stem, so a fine-tuning pipeline can
+pair them without consulting the index. The index is there to iterate the
+set in order and to filter it by font, script or document type.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import random
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -43,10 +47,12 @@ from bitikocr.synthetic.generators.base import (
 from bitikocr.synthetic.records import DocumentRecord
 
 __all__ = [
+    "INDEX_NAME",
     "DatasetLayout",
     "DatasetSummary",
     "SampleFiles",
     "draw_annotations",
+    "iter_index",
     "read_records",
     "render_records",
     "write_records",
@@ -57,7 +63,6 @@ logger = logging.getLogger(__name__)
 _BLOCK_OUTLINE = (30, 160, 30)
 _LINE_OUTLINE = (220, 30, 30)
 
-METADATA_NAME = "metadata.jsonl"
 INDEX_NAME = "index.jsonl"
 
 
@@ -72,14 +77,9 @@ class DatasetLayout:
     root: Path
 
     @property
-    def metadata(self) -> Path:
-        """The sampled records, one JSON object per line."""
-        return self.root / METADATA_NAME
-
-    @property
-    def index(self) -> Path:
-        """One line per rendered page, for a data loader to read."""
-        return self.root / INDEX_NAME
+    def facts(self) -> Path:
+        """What each document says, one JSON per document."""
+        return self.root / "facts"
 
     @property
     def images(self) -> Path:
@@ -87,37 +87,57 @@ class DatasetLayout:
         return self.root / "images"
 
     @property
-    def labels(self) -> Path:
+    def annotations(self) -> Path:
         """The ground truth, one JSON per page."""
-        return self.root / "labels"
+        return self.root / "annotations"
 
     @property
     def previews(self) -> Path:
         """Box overlays, for looking at rather than training on."""
         return self.root / "previews"
 
+    @property
+    def index(self) -> Path:
+        """One line per rendered page, for a data loader to read."""
+        return self.root / INDEX_NAME
+
     def create(self, with_previews: bool = False) -> None:
         """Create the directories a render will write into."""
+        self.facts.mkdir(parents=True, exist_ok=True)
         self.images.mkdir(parents=True, exist_ok=True)
-        self.labels.mkdir(parents=True, exist_ok=True)
+        self.annotations.mkdir(parents=True, exist_ok=True)
         if with_previews:
             self.previews.mkdir(parents=True, exist_ok=True)
+
+    def stem(self, record: DocumentRecord, position: int) -> str:
+        """Return the name every file for one document shares.
+
+        Args:
+            record: The record being written.
+            position: Its place in the batch.
+
+        Returns:
+            A stem carrying the document type, the position and the seed.
+        """
+        return f"{record.document_type}_{position:05d}_seed{record.seed}"
 
 
 @dataclass(frozen=True)
 class SampleFiles:
-    """Where one rendered sample was written.
+    """Where one sample's files were written.
 
     Args:
         stem: The name every file for this sample shares.
+        facts: Path to the field values the page was drawn from.
         image: Path to the rendered page.
-        label: Path to the ground-truth JSON.
+        annotation: Path to the ground-truth JSON.
         preview: Path to the box overlay, when one was requested.
     """
 
     stem: str
+    facts: Path
     image: Path
-    label: Path
+    annotation: Path
     preview: Path | None = None
 
 
@@ -141,54 +161,56 @@ class DatasetSummary:
         return len(self.samples)
 
 
-# -- records on disk -------------------------------------------------------
+# -- facts on disk ---------------------------------------------------------
 
 
-def write_records(records: Iterable[DocumentRecord], path: Path) -> Path:
-    """Write records to a JSON Lines file.
+def write_records(
+    records: Sequence[DocumentRecord], layout: DatasetLayout
+) -> list[Path]:
+    """Write one facts file per record.
 
     Args:
-        records: The records to write.
-        path: File to write to; parent directories are created.
+        records: The records to write, in order.
+        layout: The dataset to write them into.
 
     Returns:
-        The path written.
+        The paths written, in the same order.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as handle:
-        for record in records:
-            handle.write(
-                json.dumps(record.to_dict(), ensure_ascii=False) + "\n"
-            )
-    return path
+    layout.facts.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for position, record in enumerate(records):
+        path = layout.facts / f"{layout.stem(record, position)}.json"
+        path.write_text(
+            json.dumps(record.to_dict(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        written.append(path)
+    return written
 
 
-def read_records(path: Path) -> list[DocumentRecord]:
-    """Read records back from a JSON Lines file.
+def read_records(layout: DatasetLayout) -> list[DocumentRecord]:
+    """Read every facts file in a dataset, in file-name order.
 
     Args:
-        path: The metadata file to read.
+        layout: The dataset to read from.
 
     Returns:
-        The records, in file order.
+        The records.
 
     Raises:
-        FileNotFoundError: If the file does not exist.
-        ValueError: If a line is not a well-formed record.
+        FileNotFoundError: If the dataset has no facts directory.
+        ValueError: If a file is not a well-formed record.
     """
+    if not layout.facts.is_dir():
+        raise FileNotFoundError(f"No facts directory in {layout.root}")
+
     records: list[DocumentRecord] = []
-    with path.open(encoding="utf-8") as handle:
-        for number, line in enumerate(handle, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                payload = json.loads(line)
-            except json.JSONDecodeError as error:
-                raise ValueError(
-                    f"{path}:{number} is not valid JSON"
-                ) from error
-            records.append(DocumentRecord.from_dict(payload))
+    for path in sorted(layout.facts.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{path} is not valid JSON") from error
+        records.append(DocumentRecord.from_dict(payload))
     return records
 
 
@@ -202,7 +224,7 @@ def render_records(
     augmentation: AugmentationProfile | None = None,
     draw_boxes: bool = False,
 ) -> DatasetSummary:
-    """Render records to images and ground truth.
+    """Render records to pages, annotations and an index.
 
     Args:
         generator: The generator matching the records' document type.
@@ -233,14 +255,19 @@ def render_records(
             document = generator.generate(record.fields, seed=record.seed)
         except ValueError as error:
             logger.warning(
-                "Skipping record %d (seed %d): %s", position, record.seed, error
+                "Skipping record %d (seed %d): %s",
+                position,
+                record.seed,
+                error,
             )
             skipped.append((position, str(error)))
             continue
 
         image, annotation = _finish(document, record, augmentation)
-        stem = f"{record.document_type}_{position:05d}_seed{record.seed}"
-        files = _write_sample(layout, stem, image, annotation, draw_boxes)
+        stem = layout.stem(record, position)
+        files = _write_sample(
+            layout, stem, record, image, annotation, draw_boxes
+        )
         written.append(files)
         index_lines.append(
             json.dumps(
@@ -273,7 +300,7 @@ def _finish(
     record: DocumentRecord,
     augmentation: AugmentationProfile | None,
 ) -> tuple[Image.Image, DocumentAnnotation]:
-    """Spoil a rendered page and record what the record contributed."""
+    """Spoil a rendered page and note the alphabet it was written in."""
     image, annotation = document.image, document.annotation
     if augmentation is not None:
         image, annotation = augment_page(
@@ -286,16 +313,26 @@ def _finish(
 def _write_sample(
     layout: DatasetLayout,
     stem: str,
+    record: DocumentRecord,
     image: Image.Image,
     annotation: DocumentAnnotation,
     draw_boxes: bool,
 ) -> SampleFiles:
-    """Write one page, its ground truth and optionally its box overlay."""
-    image_path = layout.images / f"{stem}.png"
-    label_path = layout.labels / f"{stem}.json"
+    """Write one page, its facts, its ground truth and any box overlay.
 
+    The facts are written here as well as at sampling time, so a dataset
+    rendered from hand-edited facts still carries the facts it used.
+    """
+    facts_path = layout.facts / f"{stem}.json"
+    image_path = layout.images / f"{stem}.png"
+    annotation_path = layout.annotations / f"{stem}.json"
+
+    facts_path.write_text(
+        json.dumps(record.to_dict(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     image.save(image_path)
-    label_path.write_text(
+    annotation_path.write_text(
         json.dumps(annotation.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -307,8 +344,9 @@ def _write_sample(
 
     return SampleFiles(
         stem=stem,
+        facts=facts_path,
         image=image_path,
-        label=label_path,
+        annotation=annotation_path,
         preview=preview_path,
     )
 
@@ -323,7 +361,8 @@ def _index_entry(
     return {
         "stem": files.stem,
         "image": files.image.relative_to(layout.root).as_posix(),
-        "label": files.label.relative_to(layout.root).as_posix(),
+        "annotation": files.annotation.relative_to(layout.root).as_posix(),
+        "facts": files.facts.relative_to(layout.root).as_posix(),
         "document_type": record.document_type,
         "script": record.script,
         "seed": record.seed,

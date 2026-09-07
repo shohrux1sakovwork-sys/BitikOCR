@@ -118,7 +118,7 @@ and the dataset builder never special-case a document type.
 Content and rendering are separate steps, joined only by a record:
 
 ```
-sample_records()  ->  metadata.jsonl  ->  render_records()  ->  images + labels
+sample_records()  ->  facts/*.json  ->  render_records()  ->  images + annotations
 ```
 
 A `DocumentRecord` is what a document *says* — field values in one alphabet,
@@ -126,6 +126,10 @@ plus the seed that will draw it. Nothing about fonts, ink or paper. That
 split is what lets a batch's text be reviewed or hand-edited before the slow
 step runs, and lets the same text be re-rendered with different fonts or
 heavier augmentation.
+
+Every file belonging to one document shares a stem, so the three artefacts a
+fine-tuning run needs — the facts, the page and its annotation — pair up
+without an index. The index exists to iterate and filter the set.
 
 Augmentation is likewise a step after rendering, not a generator option: a
 generator produces a clean page, and `augment` decides how much of a scan it
