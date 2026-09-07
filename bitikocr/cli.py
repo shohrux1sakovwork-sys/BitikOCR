@@ -18,6 +18,7 @@ from typing import Any
 from bitikocr.config import SyntheticConfig
 from bitikocr.synthetic.augment import AugmentationProfile
 from bitikocr.synthetic.dataset import (
+    DEFAULT_ID_PREFIX,
     DatasetLayout,
     DatasetSummary,
     read_records,
@@ -111,6 +112,18 @@ def _add_document_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_id_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the argument naming documents in a dataset."""
+    parser.add_argument(
+        "--id-prefix",
+        default=DEFAULT_ID_PREFIX,
+        help=(
+            "what to call documents in this set; namespace it per type if "
+            "several sets are merged (default: %(default)s)"
+        ),
+    )
+
+
 def _add_output_argument(parser: argparse.ArgumentParser) -> None:
     """Add the dataset directory argument."""
     parser.add_argument(
@@ -173,6 +186,7 @@ def _add_facts_command(synth: argparse._SubParsersAction[Any]) -> None:
     )
     _add_document_arguments(facts)
     _add_output_argument(facts)
+    _add_id_argument(facts)
     facts.set_defaults(handler=_run_facts)
 
 
@@ -187,6 +201,7 @@ def _add_render_command(synth: argparse._SubParsersAction[Any]) -> None:
         help="dataset directory holding a facts/ directory",
     )
     _add_render_arguments(render)
+    _add_id_argument(render)
     render.set_defaults(handler=_run_render)
 
 
@@ -198,6 +213,7 @@ def _add_generate_command(synth: argparse._SubParsersAction[Any]) -> None:
     _add_document_arguments(generate)
     _add_output_argument(generate)
     _add_render_arguments(generate)
+    _add_id_argument(generate)
     generate.set_defaults(handler=_run_generate)
 
 
@@ -286,7 +302,7 @@ def _run_facts(args: argparse.Namespace, config: SyntheticConfig) -> int:
     """Sample what each document says and write it, rendering nothing."""
     records = _sample(args)
     layout = DatasetLayout(_dataset_dir(args, config))
-    write_records(records, layout)
+    write_records(records, layout, args.id_prefix)
     print(f"Wrote {len(records)} facts files to {layout.facts.resolve()}")
     return 0
 
@@ -308,6 +324,7 @@ def _run_render(args: argparse.Namespace, config: SyntheticConfig) -> int:
         output_dir=layout.root,
         augmentation=_augmentation(args),
         draw_boxes=args.boxes,
+        prefix=args.id_prefix,
     )
     _report(summary)
     return 0
@@ -317,7 +334,7 @@ def _run_generate(args: argparse.Namespace, config: SyntheticConfig) -> int:
     """Sample the facts and render them in one go."""
     records = _sample(args)
     layout = DatasetLayout(_dataset_dir(args, config))
-    write_records(records, layout)
+    write_records(records, layout, args.id_prefix)
 
     generator = create_generator(
         args.document_type, config, args.font, args.template, args.ink
@@ -328,6 +345,7 @@ def _run_generate(args: argparse.Namespace, config: SyntheticConfig) -> int:
         output_dir=layout.root,
         augmentation=_augmentation(args),
         draw_boxes=args.boxes,
+        prefix=args.id_prefix,
     )
     _report(summary)
     return 0

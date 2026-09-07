@@ -21,14 +21,21 @@ from bitikocr.synthetic.scripts import Script, in_script
 
 __all__ = [
     "DEFAULT_LATIN_SHARE",
+    "MODERN_FROM",
     "RECORD_SAMPLERS",
     "DocumentRecord",
+    "SampledContent",
     "available_record_types",
     "sample_record",
     "sample_records",
 ]
 
 _MAX_SEED = 2**31
+
+#: The year Uzbekistan's documents are treated as modern from. The
+#: alphabet reform and the forms themselves changed either side of it, so it
+#: is the axis the corpus balances on.
+MODERN_FROM = 2000
 
 #: Share of records written in Latin when no script is forced. The archive
 #: holds both alphabets, but the font library is overwhelmingly Cyrillic, so
@@ -58,6 +65,21 @@ _TITLES: tuple[str, ...] = ("Ariza",)
 
 
 @dataclass(frozen=True)
+class SampledContent:
+    """What one sampler produced.
+
+    Args:
+        fields: The field values, as they will be written on the page.
+        year: The year the document is dated, for balancing the corpus.
+        dates: Normalised ``YYYY-MM-DD`` dates for its date groups.
+    """
+
+    fields: dict[str, Any]
+    year: int
+    dates: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class DocumentRecord:
     """The content of one document, before anything is drawn.
 
@@ -66,8 +88,8 @@ class DocumentRecord:
         script: The alphabet its text is written in.
         seed: Makes the rendered page reproducible.
         fields: Field name mapped to its value.
-        notes: Anything worth carrying alongside, such as the template a
-            record was sampled for.
+        notes: What the sampler knows that the fields do not say — the
+            year the document is dated, its era, and its normalised dates.
     """
 
     document_type: str
@@ -75,6 +97,26 @@ class DocumentRecord:
     seed: int
     fields: dict[str, Any]
     notes: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def year(self) -> int | None:
+        """The year the document is dated, if the sampler recorded one."""
+        year = self.notes.get("year_approx")
+        return int(year) if year is not None else None
+
+    @property
+    def era(self) -> str:
+        """Whether the document is old or modern."""
+        recorded = self.notes.get("era")
+        if recorded:
+            return str(recorded)
+        year = self.year
+        return "modern" if year is None or year >= MODERN_FROM else "old"
+
+    @property
+    def dates(self) -> dict[str, str]:
+        """Normalised dates for the document's date groups."""
+        return dict(self.notes.get("dates", {}))
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of the record."""
@@ -169,7 +211,7 @@ def _later_date(
 
 def _sample_death_certificate(
     rng: random.Random, script: Script
-) -> dict[str, Any]:
+) -> SampledContent:
     """Sample the content of one death certificate."""
     person = corpus.sample_person(rng, script)
     born = rng.randint(1925, 1975)
@@ -184,7 +226,7 @@ def _sample_death_certificate(
     reg_month = in_script(corpus.MONTHS[reg_month_number - 1], script)
     place = corpus.sample_place(rng, script)
 
-    return {
+    fields: dict[str, Any] = {
         "surname": person.surname,
         "given_name_patronymic": person.full_given_name(),
         "citizenship": in_script("O'zbekiston", script),
@@ -210,6 +252,16 @@ def _sample_death_certificate(
         "serial_number": _serial(rng),
         **_seal_text(rng, script),
     }
+    registered = _iso(reg_year, reg_month_number, reg_day)
+    return SampledContent(
+        fields=fields,
+        year=died,
+        dates={
+            "death": _iso(died, month_number, day),
+            "record": registered,
+            "issue": registered,
+        },
+    )
 
 
 # -- birth certificate -----------------------------------------------------
@@ -217,7 +269,7 @@ def _sample_death_certificate(
 
 def _sample_birth_certificate(
     rng: random.Random, script: Script
-) -> dict[str, Any]:
+) -> SampledContent:
     """Sample the content of one birth certificate."""
     stem = corpus.surname_stem(rng)
     father = corpus.sample_person(
@@ -243,7 +295,7 @@ def _sample_birth_certificate(
     place = corpus.sample_place(rng, script)
     nationality = corpus.sample_nationality(rng, script)
 
-    fields = {
+    fields: dict[str, Any] = {
         "child_surname": child.surname,
         "child_given_name": (
             f"{child.given_name} {father.given_name} {suffix}"
@@ -281,7 +333,17 @@ def _sample_birth_certificate(
     # A settlement is often left blank on the real forms.
     if rng.random() < 0.25:
         fields["birth_settlement"] = ""
-    return fields
+
+    registered = _iso(reg_year, reg_month_number, reg_day)
+    return SampledContent(
+        fields=fields,
+        year=born,
+        dates={
+            "birth": _iso(born, month_number, day),
+            "record": registered,
+            "issue": registered,
+        },
+    )
 
 
 def _form_series(rng: random.Random, script: Script) -> str:
@@ -311,7 +373,7 @@ def _form_series(rng: random.Random, script: Script) -> str:
 # -- ariza -----------------------------------------------------------------
 
 
-def _sample_ariza(rng: random.Random, script: Script) -> dict[str, Any]:
+def _sample_ariza(rng: random.Random, script: Script) -> SampledContent:
     """Sample the content of one application letter."""
     official = corpus.sample_person(rng, script, is_female=False)
     applicant = corpus.sample_person(rng, script)
@@ -340,7 +402,8 @@ def _sample_ariza(rng: random.Random, script: Script) -> dict[str, Any]:
         f"{in_script(rng.choice(_ARIZA_SUBJECTS), script)} {request}."
     )
 
-    year = rng.randint(2004, 2024)
+    year = rng.randint(1985, 2024)
+    month = rng.randint(1, 12)
     day = rng.randint(1, 28)
 
     fields: dict[str, Any] = {
@@ -349,9 +412,9 @@ def _sample_ariza(rng: random.Random, script: Script) -> dict[str, Any]:
         "title": in_script(rng.choice(_TITLES), script),
         "body": body,
         "signature_name": f"{applicant.surname} {applicant.given_name[0]}.",
-        "date": f"{day:02d}.{rng.randint(1, 12):02d}.{year}",
+        "date": f"{day:02d}.{month:02d}.{year}",
         "reg_number": f"{applicant.surname[0]}-{rng.randint(100, 1999)}",
-        "reg_date": f"{day:02d}.{rng.randint(1, 12):02d}.{year}",
+        "reg_date": f"{day:02d}.{month:02d}.{year}",
         "page_number": str(rng.randint(1, 250)),
     }
 
@@ -360,12 +423,19 @@ def _sample_ariza(rng: random.Random, script: Script) -> dict[str, Any]:
         fields["phone"] = f"9989{rng.randrange(10**8):08d}"
     if rng.random() < 0.3:
         fields.pop("page_number")
-    return fields
+    return SampledContent(
+        fields=fields, year=year, dates={"filed": _iso(year, month, day)}
+    )
+
+
+def _iso(year: int, month: int, day: int) -> str:
+    """Format a date the way the facts records normalise them."""
+    return f"{year:04d}-{month:02d}-{day:02d}"
 
 
 #: Document type mapped to the sampler that fills it.
 RECORD_SAMPLERS: dict[
-    str, Callable[[random.Random, Script], dict[str, Any]]
+    str, Callable[[random.Random, Script], SampledContent]
 ] = {
     "ariza": _sample_ariza,
     "birth_certificate": _sample_birth_certificate,
@@ -410,11 +480,17 @@ def sample_record(
         chosen: Script = script
     else:
         chosen = "latin" if rng.random() < latin_share else "cyrillic"
+    content = sampler(rng, chosen)
     return DocumentRecord(
         document_type=document_type,
         script=chosen,
         seed=rng.randrange(_MAX_SEED),
-        fields=sampler(rng, chosen),
+        fields=content.fields,
+        notes={
+            "year_approx": content.year,
+            "era": "modern" if content.year >= MODERN_FROM else "old",
+            "dates": content.dates,
+        },
     )
 
 

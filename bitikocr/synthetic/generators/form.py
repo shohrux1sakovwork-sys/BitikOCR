@@ -141,6 +141,11 @@ class FormGenerator(DocumentGenerator):
     #: Layout filled when the caller names no variant.
     default_template: ClassVar[str]
 
+    # A form is printed matter that someone has written on.
+    text_mode: ClassVar[str] = "mixed"
+    layout: ClassVar[str] = "two_column"
+    has_printed_text: ClassVar[bool] = True
+
     def __init__(
         self,
         config: SyntheticConfig,

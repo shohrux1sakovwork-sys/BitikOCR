@@ -27,7 +27,45 @@ from bitikocr.models.annotation import (
 )
 from bitikocr.models.geometry import BoundingBox
 
-__all__ = ["AugmentationProfile", "augment_page", "rotate_page"]
+__all__ = [
+    "AugmentationProfile",
+    "AugmentationReport",
+    "augment_page",
+    "rotate_page",
+]
+
+
+@dataclass(frozen=True)
+class AugmentationReport:
+    """What was actually done to one page.
+
+    The corpus schema records capture conditions, and a recogniser can be
+    evaluated by them, so a page has to be able to say how blurred, skewed
+    and noisy it is rather than leaving it to be guessed.
+
+    Args:
+        blur: Whether a defocus blur was applied.
+        rotation: The skew applied, in degrees.
+        noise: How much grain was added, as a band.
+    """
+
+    blur: bool = False
+    rotation: float = 0.0
+    noise: str = "low"
+
+    @property
+    def skew(self) -> bool:
+        """Whether the page ended up off square at all."""
+        return abs(self.rotation) >= 0.05
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the JSON-serialisable form of the report."""
+        return {
+            "blur": self.blur,
+            "rotation": round(self.rotation, 3),
+            "skew": self.skew,
+            "noise": self.noise,
+        }
 
 
 @dataclass(frozen=True)
@@ -73,7 +111,7 @@ def augment_page(
     annotation: DocumentAnnotation,
     rng: random.Random,
     profile: AugmentationProfile | None = None,
-) -> tuple[Image.Image, DocumentAnnotation]:
+) -> tuple[Image.Image, DocumentAnnotation, AugmentationReport]:
     """Spoil a rendered page the way a scanner and time would.
 
     Args:
@@ -83,14 +121,15 @@ def augment_page(
         profile: How hard to spoil it; a default profile when omitted.
 
     Returns:
-        ``(image, annotation)``, both updated. The annotation is a new
-        object whenever a step moved the ink.
+        ``(image, annotation, report)``. The annotation is a new object
+        whenever a step moved the ink, and the report says what was done.
     """
     profile = profile or AugmentationProfile()
     if profile.strength <= 0 and profile.max_rotation <= 0:
-        return image, annotation
+        return image, annotation, AugmentationReport()
 
     image = image.convert("RGB")
+    degrees = 0.0
     if profile.max_rotation > 0:
         degrees = rng.uniform(-profile.max_rotation, profile.max_rotation)
         image, annotation = rotate_page(image, annotation, degrees)
@@ -99,17 +138,36 @@ def augment_page(
     image = _apply_vignette(image, rng, profile.vignette * profile.strength)
     image = _apply_specks(image, rng, profile.speck_density * profile.strength)
 
-    if profile.blur > 0 and rng.random() < 0.6:
+    blurred = profile.blur > 0 and rng.random() < 0.6
+    if blurred:
         image = image.filter(
             ImageFilter.GaussianBlur(
                 rng.uniform(0.2, profile.blur) * profile.strength
             )
         )
+
+    grain = profile.noise * profile.strength
     if profile.noise > 0:
-        image = _apply_noise(image, rng, profile.noise * profile.strength)
+        image = _apply_noise(image, rng, grain)
     if profile.jpeg_quality is not None:
         image = _apply_jpeg(image, rng, profile.jpeg_quality)
-    return image, annotation
+
+    return (
+        image,
+        annotation,
+        AugmentationReport(
+            blur=blurred, rotation=degrees, noise=_noise_band(grain)
+        ),
+    )
+
+
+def _noise_band(deviation: float) -> str:
+    """Describe a grain level the way the corpus schema does."""
+    if deviation < 3.0:
+        return "low"
+    if deviation < 8.0:
+        return "medium"
+    return "high"
 
 
 # -- geometry --------------------------------------------------------------

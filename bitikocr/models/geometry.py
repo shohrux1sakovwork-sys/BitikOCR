@@ -38,6 +38,14 @@ class BoundingBox:
         """Return the box as ``[left, top, right, bottom]``."""
         return [self.left, self.top, self.right, self.bottom]
 
+    def to_xywh(self) -> list[int]:
+        """Return the box as ``[x, y, width, height]``.
+
+        This is the corner-and-size spelling the dataset schema uses, as
+        opposed to the two-corner spelling the renderer works in.
+        """
+        return [self.left, self.top, self.width, self.height]
+
     @classmethod
     def from_iterable(cls, values: Iterable[float]) -> BoundingBox:
         """Build a box from four numbers in ``left, top, right, bottom`` order.

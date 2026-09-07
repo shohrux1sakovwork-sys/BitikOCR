@@ -435,5 +435,9 @@
       "notes": "printed after the 'I-HR №' label; no underline in template"
     }
   ],
-  "source": "Measured from the printed underlines of the scanned blank form; see detected_underlines_raw.txt in the source material."
+  "source": "Measured from the printed underlines of the scanned blank form; see detected_underlines_raw.txt in the source material.",
+  "printed_scripts": [
+    "latin",
+    "cyrillic"
+  ]
 }

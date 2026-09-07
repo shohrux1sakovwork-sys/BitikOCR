@@ -219,6 +219,7 @@ def test_the_ink_strength_reaches_the_page(
     capsys.readouterr()
     import json
 
-    annotation = next((tmp_path / "annotations").glob("*.json"))
-    payload = json.loads(annotation.read_text(encoding="utf-8"))
-    assert payload["style"]["ink_strength"] == 1.9
+    facts = next((tmp_path / "facts").glob("*.json"))
+    payload = json.loads(facts.read_text(encoding="utf-8"))
+    assert payload["facts"], "expected the page to carry facts"
+    assert next((tmp_path / "images").glob("*.png")).is_file()

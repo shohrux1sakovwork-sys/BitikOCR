@@ -73,6 +73,17 @@ class DocumentGenerator(ABC):
     #: Name used on the command line and in the generator registry.
     name: ClassVar[str]
 
+    #: Whether the pages carry handwriting, print, or both. A blank sheet
+    #: written on by hand is not the same corpus problem as a printed form
+    #: filled in by hand, and a recogniser is evaluated on them separately.
+    text_mode: ClassVar[str] = "handwritten"
+
+    #: How the page is arranged, for the corpus metadata.
+    layout: ClassVar[str] = "single_column"
+
+    #: Whether the blank page already carries printed text of its own.
+    has_printed_text: ClassVar[bool] = False
+
     def __init__(
         self,
         config: SyntheticConfig,

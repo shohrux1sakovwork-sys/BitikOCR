@@ -115,17 +115,30 @@ def test_each_kind_of_file_lives_in_its_own_directory(
         assert sample.annotation.parent == layout.annotations
 
 
-def test_a_sample_files_share_one_stem(
+def test_a_samples_files_share_one_id(
     ariza_generator: ArizaGenerator,
     ariza_records: list[DocumentRecord],
     tmp_path: Path,
 ) -> None:
     """A training pipeline should be able to pair files without the index."""
     summary = render_records(ariza_generator, ariza_records, tmp_path)
-    for sample in summary.samples:
-        assert sample.facts.stem == sample.stem
-        assert sample.image.stem == sample.stem
-        assert sample.annotation.stem == sample.stem
+    for position, sample in enumerate(summary.samples):
+        assert sample.id == f"doc_{position:06d}"
+        assert sample.facts.stem == sample.id
+        assert sample.image.stem == sample.id
+        assert sample.annotation.stem == sample.id
+
+
+def test_the_id_prefix_can_be_changed(
+    ariza_generator: ArizaGenerator,
+    ariza_records: list[DocumentRecord],
+    tmp_path: Path,
+) -> None:
+    """Sets merged into one corpus must not collide on ids."""
+    summary = render_records(
+        ariza_generator, ariza_records, tmp_path, prefix="ariza"
+    )
+    assert summary.samples[0].id == "ariza_000000"
 
 
 def test_the_annotation_holds_the_ground_truth(
@@ -137,21 +150,25 @@ def test_the_annotation_holds_the_ground_truth(
     payload = json.loads(
         summary.samples[0].annotation.read_text(encoding="utf-8")
     )
-    assert payload["document_type"] == "ariza"
-    assert payload["script"] == "cyrillic"
-    assert payload["lines"]
-    assert payload["text"]
+    assert payload["id"] == summary.samples[0].id
+    assert payload["metadata"]["document_type"] == "ariza"
+    assert payload["metadata"]["primary_script"] == "cyrillic"
+    assert payload["target"]["text"]
+    assert payload["target"]["parts"]
 
 
-def test_the_facts_beside_a_page_are_the_ones_it_was_drawn_from(
+def test_the_facts_beside_a_page_describe_that_page(
     ariza_generator: ArizaGenerator,
     ariza_records: list[DocumentRecord],
     tmp_path: Path,
 ) -> None:
     summary = render_records(ariza_generator, ariza_records, tmp_path)
     payload = json.loads(summary.samples[0].facts.read_text(encoding="utf-8"))
-    assert payload["seed"] == ariza_records[0].seed
-    assert payload["fields"] == ariza_records[0].fields
+    assert payload["id"] == summary.samples[0].id
+    assert payload["image"].endswith(".png")
+
+    written = {fact["evidence_text"] for fact in payload["facts"]}
+    assert ariza_records[0].fields["signature_name"] in written
 
 
 def test_the_index_describes_every_page(
@@ -205,7 +222,7 @@ def test_a_render_is_reproducible_from_its_facts(
         tmp_path / "b",
         augmentation=AugmentationProfile(),
     )
-    assert [s.stem for s in first.samples] == [s.stem for s in second.samples]
+    assert [s.id for s in first.samples] == [s.id for s in second.samples]
     assert (
         first.samples[0].image.read_bytes()
         == second.samples[0].image.read_bytes()
@@ -232,7 +249,7 @@ def test_edited_facts_are_rendered_as_edited(
     annotation = json.loads(
         summary.samples[0].annotation.read_text(encoding="utf-8")
     )
-    assert "Ўзгартирилган" in annotation["text"]
+    assert "Ўзгартирилган" in annotation["target"]["text"]
 
 
 def test_rendering_nothing_is_rejected(

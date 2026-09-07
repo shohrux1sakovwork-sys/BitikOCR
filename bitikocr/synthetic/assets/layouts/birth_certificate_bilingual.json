@@ -404,5 +404,9 @@
       }
     }
   ],
-  "source": "Measured from the blank two-page bilingual birth certificate scan."
+  "source": "Measured from the blank two-page bilingual birth certificate scan.",
+  "printed_scripts": [
+    "latin",
+    "cyrillic"
+  ]
 }

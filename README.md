@@ -48,6 +48,7 @@ Useful flags:
 | `--script`          | facts  | Force `latin` or `cyrillic` (default: both).        |
 | `--latin-share`     | facts  | Share written in Latin when neither is forced.      |
 | `--seed`            | facts  | Make the whole run reproducible.                    |
+| `--id-prefix`       | both   | What documents are called (default `doc`).          |
 | `--template`        | render | Which form variant to fill.                         |
 | `--font`            | render | Force one handwriting font instead of sampling.     |
 | `--fonts-dir`       | render | Use your own handwriting fonts.                     |
@@ -76,41 +77,106 @@ A dataset directory holds both stages:
 
 ```
 output/birth_certificate/
-  facts/<stem>.json        what the document says, before it is drawn
-  images/<stem>.png        the rendered page
-  annotations/<stem>.json  the ground truth
-  previews/<stem>.png      box overlays, only with --boxes
-  index.jsonl              one line per page, for a data loader
+  facts/doc_000002.json        the structured values on the page
+  images/doc_000002.png        the rendered page
+  annotations/doc_000002.json  the transcription record
+  previews/doc_000002.png      box overlays, only with --boxes
+  index.jsonl                  one line per page, for a data loader
 ```
 
-Every file for one document shares a stem, so a fine-tuning pipeline can
-pair them directly:
+Every file for one document shares its id, so a fine-tuning pipeline pairs
+them directly. Use `--id-prefix` to namespace a set if several will be
+merged into one corpus.
 
-```
-facts/birth_certificate_00002_seed1803740873.json
-images/birth_certificate_00002_seed1803740873.png
-annotations/birth_certificate_00002_seed1803740873.json
-```
+Both JSON records follow the corpus schema — see
+`bitikocr/models/schema.py`, which is the typed definition.
 
-A **facts** file is stage one — the text a page will carry, with the seed
-that renders it:
+An **annotation** is the transcription record: what is written, where, and
+under what conditions the page was captured.
 
 ```json
 {
-  "document_type": "birth_certificate",
-  "script": "cyrillic",
-  "seed": 1803740873,
-  "fields": {
-    "child_surname": "Ҳакимова",
-    "child_given_name": "Азиза Дониёр қизи",
-    "...": "..."
+  "id": "doc_000002",
+  "image": "images/doc_000002.png",
+  "source": {
+    "origin": "synthetic",
+    "collection": "birth_certificate",
+    "era": "modern",
+    "year_approx": 2019,
+    "seed": 1803740873,
+    "generator": "bitikocr@0.1.0",
+    "font": "CyrilicHand06.otf"
+  },
+  "metadata": {
+    "language": ["uz"],
+    "scripts": ["cyrillic", "latin"],
+    "primary_script": "cyrillic",
+    "document_type": "birth_certificate",
+    "text_mode": "mixed",
+    "has_handwriting": true,
+    "has_printed_text": true,
+    "has_stamp": true,
+    "has_signature": true,
+    "layout": "two_column",
+    "quality": {
+      "blur": true, "rotation": -0.463, "skew": true,
+      "noise": "medium", "capture": "scanner"
+    }
+  },
+  "target": {
+    "text": "whole text, reading order, one line per physical line",
+    "parts": [
+      {"role": "child_surname", "text": "Ҳакимова", "bbox": [637, 605, 217, 62],
+       "lines": [{"text": "Ҳакимова", "bbox": [637, 605, 217, 62]}]}
+    ]
+  },
+  "annotation": {
+    "status": "gold",
+    "pre_annotator": "generator:bitikocr@0.1.0",
+    "reviewer": null, "reviewed_at": null,
+    "revision": 1, "unclear_reason": null
   }
 }
 ```
 
-An **annotation** holds the full page transcription, one entry per logical
-block, one entry per rendered line, and each with the tight bounding box
-around the ink that was actually drawn:
+Boxes here are `[x, y, width, height]`. Every one is measured from the ink
+actually drawn, so it stays correct through jitter, slant and scan skew.
+`parts` are the page's regions; each also carries the `lines` inside it,
+which is what line-level HTR training needs — a reader that only knows
+`role`/`text`/`bbox` can ignore them.
+
+Nothing in the metadata is assumed: `has_stamp` is read from what was drawn,
+`quality` from what the augmentation actually did, `era` from the year the
+document is dated.
+
+A **facts** file is the structured values a reader would take off the page:
+
+```json
+{
+  "id": "doc_000002",
+  "image": "images/doc_000002.png",
+  "facts": [
+    {"category": "date", "value": "2019-06-25", "fuzzy": false,
+     "evidence_text": "2019 йил июн 25", "field": "birth"},
+    {"category": "person_name", "value": "Ҳакимова", "fuzzy": false,
+     "evidence_text": "Ҳакимова", "field": "child_surname"}
+  ]
+}
+```
+
+`value` is normalised where there is a normal form — a date spread over
+three cells becomes one ISO date, a year written out in words becomes the
+year — and `evidence_text` is always the surface form as it appears on the
+page, so a wrong fact can be traced back to the transcription. `fuzzy` is
+never true for synthetic pages: the page was written from the fact.
+
+The category vocabulary and the field-to-category mapping live in
+`bitikocr/synthetic/facts.py`, versioned by `CATEGORY_SET_VERSION`. Correct
+a wrong category there in one line.
+
+Before a render, `facts/` instead holds the generator's own record — the
+text a page will be told to say, with the seed that draws it. Rendering
+replaces each with the facts record above:
 
 ```json
 {
@@ -127,9 +193,15 @@ around the ink that was actually drawn:
 }
 ```
 
-`index.jsonl` is what a training loop reads: the three paths relative to
-the dataset root, plus the transcription, the font, the alphabet and the
-seed — enough to filter the set without opening every file.
+```json
+{"document_type": "birth_certificate", "script": "cyrillic", "seed": 1803740873,
+ "fields": {"child_surname": "Ҳакимова", "...": "..."},
+ "notes": {"year_approx": 2019, "era": "modern", "dates": {"birth": "2019-06-25"}}}
+```
+
+`index.jsonl` is what a training loop reads: the three paths relative to the
+dataset root, plus the transcription, the font, the alphabet, the era and
+the seed — enough to filter or balance the set without opening every file.
 
 Regenerating a page from its facts reproduces it byte for byte, including
 the augmentation: the seed rides on the record. Editing a facts file and

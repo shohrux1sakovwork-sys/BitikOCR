@@ -35,7 +35,8 @@
 │   ├── config.py                # The only module that reads the environment
 │   ├── models/                  # Data classes and schemas
 │   │   ├── geometry.py          # BoundingBox
-│   │   └── annotation.py        # Line / Block / Document annotations
+│   │   ├── annotation.py        # Line / Block / Document annotations
+│   │   └── schema.py            # The corpus interchange schema
 │   ├── utils/                   # Pure helpers, no business logic
 │   │   └── image_ops.py         # Alpha boxes, photometric augmentation
 │   └── synthetic/               # Synthetic training-data generation
@@ -49,6 +50,8 @@
 │       ├── scripts.py           # Latin/Cyrillic and the transliteration
 │       ├── corpus.py            # Uzbek vocabulary records are drawn from
 │       ├── records.py           # Sampling a document's field values
+│       ├── facts.py             # Field values to structured facts
+│       ├── export.py            # Internals to the corpus schema
 │       ├── augment.py           # Spoiling a clean page like a scan
 │       ├── dataset.py           # Records to disk, and rendering them
 │       ├── generators/          # One module per document type
@@ -97,6 +100,8 @@ truth. It is layered so each piece has exactly one job:
 | `scripts`        | The two alphabets and how to convert         | Documents, rendering       |
 | `corpus`         | Uzbek names, places, months, causes          | Documents, rendering       |
 | `records`        | What one document *says*                     | How it is drawn            |
+| `facts`          | Which values are of which kind               | How anything is drawn      |
+| `export`         | Mapping internals onto the corpus schema     | How anything is drawn      |
 | `generators/`    | Where things go on one kind of document      | What it says, how it ages  |
 | `augment`        | Spoiling a finished page                     | What the page says         |
 | `dataset`        | Batches, file names, on-disk format          | Layout, rendering          |
@@ -127,9 +132,23 @@ split is what lets a batch's text be reviewed or hand-edited before the slow
 step runs, and lets the same text be re-rendered with different fonts or
 heavier augmentation.
 
-Every file belonging to one document shares a stem, so the three artefacts a
-fine-tuning run needs — the facts, the page and its annotation — pair up
+Every file belonging to one document shares its id, so the three artefacts
+a fine-tuning run needs — the facts, the page and its annotation — pair up
 without an index. The index exists to iterate and filter the set.
+
+### The corpus schema
+
+`models/schema.py` is the interchange contract: a transcription record and
+a facts record per document. It is deliberately independent of how a
+document was produced, so a synthetic page, a real archive scan and an
+augmented copy all describe themselves the same way and `source.origin`
+tells them apart.
+
+`synthetic/export.py` is the only place that maps the generator's terms —
+blocks, lines, styles, seeds — onto that schema. The generator stays free to
+change and the schema stays stable. Nothing there is guessed: the marks come
+from what was drawn, the capture quality from the augmentation's own report,
+the era from the year the record is dated.
 
 Augmentation is likewise a step after rendering, not a generator option: a
 generator produces a clean page, and `augment` decides how much of a scan it

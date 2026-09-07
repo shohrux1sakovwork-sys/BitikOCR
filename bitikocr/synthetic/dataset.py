@@ -15,15 +15,21 @@ before the expensive step runs.
 Layout on disk::
 
     <output>/
-      facts/<stem>.json        what the document says, before it is drawn
-      images/<stem>.png        the rendered page
-      annotations/<stem>.json  the ground truth: text, blocks, lines, boxes
-      previews/<stem>.png      box overlays, only with draw_boxes
-      index.jsonl              one line per page, tying the three together
+      facts/<id>.json        the structured values the page carries
+      images/<id>.png        the rendered page
+      annotations/<id>.json  the transcription record: text, parts, capture
+      previews/<id>.png      box overlays, only with draw_boxes
+      index.jsonl            one line per page, tying the three together
 
-Every file for one document shares a stem, so a fine-tuning pipeline can
-pair them without consulting the index. The index is there to iterate the
-set in order and to filter it by font, script or document type.
+Both JSON records follow the corpus schema in
+:mod:`bitikocr.models.schema`, and every file for one document shares its
+id, so a fine-tuning pipeline can pair them without consulting the index.
+The index is there to iterate the set in order and to filter it by era,
+script, font or document type.
+
+The facts written before a render are the generator's own record — what a
+page will be told to say. Rendering replaces them with the schema's facts
+record, which is what a reader would take off the finished page.
 """
 
 from __future__ import annotations
@@ -39,7 +45,16 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 from bitikocr.models.annotation import DocumentAnnotation
-from bitikocr.synthetic.augment import AugmentationProfile, augment_page
+from bitikocr.synthetic.augment import (
+    AugmentationProfile,
+    AugmentationReport,
+    augment_page,
+)
+from bitikocr.synthetic.export import (
+    build_facts_record,
+    build_transcription_record,
+    document_id,
+)
 from bitikocr.synthetic.generators.base import (
     DocumentGenerator,
     SyntheticDocument,
@@ -47,6 +62,7 @@ from bitikocr.synthetic.generators.base import (
 from bitikocr.synthetic.records import DocumentRecord
 
 __all__ = [
+    "DEFAULT_ID_PREFIX",
     "INDEX_NAME",
     "DatasetLayout",
     "DatasetSummary",
@@ -64,6 +80,10 @@ _BLOCK_OUTLINE = (30, 160, 30)
 _LINE_OUTLINE = (220, 30, 30)
 
 INDEX_NAME = "index.jsonl"
+
+#: What documents are called when the caller does not say. Namespace it per
+#: document type if several sets will be merged into one corpus.
+DEFAULT_ID_PREFIX = "doc"
 
 
 @dataclass(frozen=True)
@@ -109,17 +129,9 @@ class DatasetLayout:
         if with_previews:
             self.previews.mkdir(parents=True, exist_ok=True)
 
-    def stem(self, record: DocumentRecord, position: int) -> str:
-        """Return the name every file for one document shares.
-
-        Args:
-            record: The record being written.
-            position: Its place in the batch.
-
-        Returns:
-            A stem carrying the document type, the position and the seed.
-        """
-        return f"{record.document_type}_{position:05d}_seed{record.seed}"
+    def document_id(self, position: int, prefix: str) -> str:
+        """Return the id every file for one document shares."""
+        return document_id(prefix, position)
 
 
 @dataclass(frozen=True)
@@ -127,14 +139,14 @@ class SampleFiles:
     """Where one sample's files were written.
 
     Args:
-        stem: The name every file for this sample shares.
-        facts: Path to the field values the page was drawn from.
+        id: The identifier every file for this sample shares.
+        facts: Path to the structured values the page carries.
         image: Path to the rendered page.
-        annotation: Path to the ground-truth JSON.
+        annotation: Path to the transcription record.
         preview: Path to the box overlay, when one was requested.
     """
 
-    stem: str
+    id: str
     facts: Path
     image: Path
     annotation: Path
@@ -165,13 +177,20 @@ class DatasetSummary:
 
 
 def write_records(
-    records: Sequence[DocumentRecord], layout: DatasetLayout
+    records: Sequence[DocumentRecord],
+    layout: DatasetLayout,
+    prefix: str = DEFAULT_ID_PREFIX,
 ) -> list[Path]:
-    """Write one facts file per record.
+    """Write one file per record, before anything has been drawn.
+
+    These hold the generator's own record — what a page will be told to say
+    — so they can be read and corrected. Rendering replaces each with the
+    schema's facts record for the finished page.
 
     Args:
         records: The records to write, in order.
         layout: The dataset to write them into.
+        prefix: What to call documents in this dataset.
 
     Returns:
         The paths written, in the same order.
@@ -179,7 +198,7 @@ def write_records(
     layout.facts.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for position, record in enumerate(records):
-        path = layout.facts / f"{layout.stem(record, position)}.json"
+        path = layout.facts / f"{layout.document_id(position, prefix)}.json"
         path.write_text(
             json.dumps(record.to_dict(), ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -210,6 +229,11 @@ def read_records(layout: DatasetLayout) -> list[DocumentRecord]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as error:
             raise ValueError(f"{path} is not valid JSON") from error
+        if "facts" in payload and "fields" not in payload:
+            raise ValueError(
+                f"{path} is a rendered facts record, not a generator record; "
+                "re-sample the batch to render it again"
+            )
         records.append(DocumentRecord.from_dict(payload))
     return records
 
@@ -223,8 +247,10 @@ def render_records(
     output_dir: Path,
     augmentation: AugmentationProfile | None = None,
     draw_boxes: bool = False,
+    prefix: str = DEFAULT_ID_PREFIX,
+    collection: str | None = None,
 ) -> DatasetSummary:
-    """Render records to pages, annotations and an index.
+    """Render records to pages, transcriptions, facts and an index.
 
     Args:
         generator: The generator matching the records' document type.
@@ -233,6 +259,9 @@ def render_records(
         augmentation: How hard to spoil each page; no augmentation when
             omitted.
         draw_boxes: Also write a box overlay per page.
+        prefix: What to call documents in this dataset.
+        collection: The batch name recorded on every page; the dataset
+            directory's name when omitted.
 
     Returns:
         A summary listing every file written and every record skipped.
@@ -245,6 +274,7 @@ def render_records(
 
     layout = DatasetLayout(output_dir)
     layout.create(with_previews=draw_boxes)
+    collection = collection or output_dir.name
 
     written: list[SampleFiles] = []
     skipped: list[tuple[int, str]] = []
@@ -263,10 +293,18 @@ def render_records(
             skipped.append((position, str(error)))
             continue
 
-        image, annotation = _finish(document, record, augmentation)
-        stem = layout.stem(record, position)
+        image, annotation, quality = _finish(document, record, augmentation)
+        identifier = layout.document_id(position, prefix)
         files = _write_sample(
-            layout, stem, record, image, annotation, draw_boxes
+            layout=layout,
+            identifier=identifier,
+            record=record,
+            generator=generator,
+            image=image,
+            annotation=annotation,
+            quality=quality,
+            collection=collection,
+            draw_boxes=draw_boxes,
         )
         written.append(files)
         index_lines.append(
@@ -276,10 +314,11 @@ def render_records(
             )
         )
         logger.info(
-            "Rendered %s (font=%s, script=%s, lines=%d)",
-            stem,
+            "Rendered %s (font=%s, script=%s, era=%s, lines=%d)",
+            identifier,
             annotation.metadata.get("font"),
             record.script,
+            record.era,
             len(annotation.lines),
         )
 
@@ -299,51 +338,64 @@ def _finish(
     document: SyntheticDocument,
     record: DocumentRecord,
     augmentation: AugmentationProfile | None,
-) -> tuple[Image.Image, DocumentAnnotation]:
-    """Spoil a rendered page and note the alphabet it was written in."""
+) -> tuple[Image.Image, DocumentAnnotation, AugmentationReport]:
+    """Spoil a rendered page and note how it ended up being captured."""
     image, annotation = document.image, document.annotation
+    quality = AugmentationReport()
     if augmentation is not None:
-        image, annotation = augment_page(
+        image, annotation, quality = augment_page(
             image, annotation, random.Random(record.seed), augmentation
         )
     annotation.metadata.setdefault("script", record.script)
-    return image, annotation
+    return image, annotation, quality
 
 
 def _write_sample(
     layout: DatasetLayout,
-    stem: str,
+    identifier: str,
     record: DocumentRecord,
+    generator: DocumentGenerator,
     image: Image.Image,
     annotation: DocumentAnnotation,
+    quality: AugmentationReport,
+    collection: str,
     draw_boxes: bool,
 ) -> SampleFiles:
-    """Write one page, its facts, its ground truth and any box overlay.
+    """Write one page and the two schema records describing it."""
+    facts_path = layout.facts / f"{identifier}.json"
+    image_path = layout.images / f"{identifier}.png"
+    annotation_path = layout.annotations / f"{identifier}.json"
 
-    The facts are written here as well as at sampling time, so a dataset
-    rendered from hand-edited facts still carries the facts it used.
-    """
-    facts_path = layout.facts / f"{stem}.json"
-    image_path = layout.images / f"{stem}.png"
-    annotation_path = layout.annotations / f"{stem}.json"
+    image.save(image_path)
+    relative_image = image_path.relative_to(layout.root).as_posix()
 
-    facts_path.write_text(
-        json.dumps(record.to_dict(), ensure_ascii=False, indent=2),
+    transcription = build_transcription_record(
+        record=record,
+        annotation=annotation,
+        generator=generator,
+        document_id=identifier,
+        image_path=relative_image,
+        collection=collection,
+        quality=quality,
+    )
+    annotation_path.write_text(
+        json.dumps(transcription.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    image.save(image_path)
-    annotation_path.write_text(
-        json.dumps(annotation.to_dict(), ensure_ascii=False, indent=2),
+
+    facts = build_facts_record(record, identifier, relative_image)
+    facts_path.write_text(
+        json.dumps(facts.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
     preview_path: Path | None = None
     if draw_boxes:
-        preview_path = layout.previews / f"{stem}.png"
+        preview_path = layout.previews / f"{identifier}.png"
         draw_annotations(image, annotation).save(preview_path)
 
     return SampleFiles(
-        stem=stem,
+        id=identifier,
         facts=facts_path,
         image=image_path,
         annotation=annotation_path,
@@ -359,12 +411,14 @@ def _index_entry(
 ) -> dict[str, Any]:
     """Build one line of the data loader's index."""
     return {
-        "stem": files.stem,
+        "id": files.id,
         "image": files.image.relative_to(layout.root).as_posix(),
         "annotation": files.annotation.relative_to(layout.root).as_posix(),
         "facts": files.facts.relative_to(layout.root).as_posix(),
         "document_type": record.document_type,
         "script": record.script,
+        "era": record.era,
+        "year_approx": record.year,
         "seed": record.seed,
         "font": annotation.metadata.get("font"),
         "template": annotation.metadata.get("template"),

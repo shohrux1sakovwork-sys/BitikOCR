@@ -39,7 +39,7 @@ def test_augmentation_keeps_the_page_size(
     page: tuple[Image.Image, DocumentAnnotation],
 ) -> None:
     image, annotation = page
-    spoiled, _ = augment_page(image, annotation, random.Random(1))
+    spoiled, _, _ = augment_page(image, annotation, random.Random(1))
     assert spoiled.size == image.size
 
 
@@ -47,7 +47,7 @@ def test_augmentation_changes_the_pixels(
     page: tuple[Image.Image, DocumentAnnotation],
 ) -> None:
     image, annotation = page
-    spoiled, _ = augment_page(image, annotation, random.Random(1))
+    spoiled, _, _ = augment_page(image, annotation, random.Random(1))
     assert spoiled.tobytes() != image.tobytes()
 
 
@@ -55,8 +55,8 @@ def test_the_same_seed_spoils_a_page_the_same_way(
     page: tuple[Image.Image, DocumentAnnotation],
 ) -> None:
     image, annotation = page
-    first, _ = augment_page(image, annotation, random.Random(2))
-    second, _ = augment_page(image, annotation, random.Random(2))
+    first, _, _ = augment_page(image, annotation, random.Random(2))
+    second, _, _ = augment_page(image, annotation, random.Random(2))
     assert first.tobytes() == second.tobytes()
 
 
@@ -64,8 +64,8 @@ def test_different_seeds_spoil_a_page_differently(
     page: tuple[Image.Image, DocumentAnnotation],
 ) -> None:
     image, annotation = page
-    first, _ = augment_page(image, annotation, random.Random(2))
-    second, _ = augment_page(image, annotation, random.Random(3))
+    first, _, _ = augment_page(image, annotation, random.Random(2))
+    second, _, _ = augment_page(image, annotation, random.Random(3))
     assert first.tobytes() != second.tobytes()
 
 
@@ -73,11 +73,12 @@ def test_the_empty_profile_leaves_the_page_alone(
     page: tuple[Image.Image, DocumentAnnotation],
 ) -> None:
     image, annotation = page
-    spoiled, kept = augment_page(
+    spoiled, kept, report = augment_page(
         image, annotation, random.Random(1), AugmentationProfile.none()
     )
     assert spoiled is image
     assert kept is annotation
+    assert not report.blur and not report.skew
 
 
 def test_photometric_augmentation_leaves_the_boxes_alone(
@@ -85,7 +86,7 @@ def test_photometric_augmentation_leaves_the_boxes_alone(
 ) -> None:
     image, annotation = page
     profile = AugmentationProfile(max_rotation=0.0)
-    _, kept = augment_page(image, annotation, random.Random(1), profile)
+    _, kept, _ = augment_page(image, annotation, random.Random(1), profile)
     assert kept.lines[0].bbox == annotation.lines[0].bbox
 
 
