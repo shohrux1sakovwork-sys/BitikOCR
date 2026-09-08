@@ -404,16 +404,17 @@
       "id": "serial_number",
       "measured_id": "series_number",
       "baseline_y": null,
+      "prefix": "№",
       "bbox_xyxy": [
         540,
         1345,
-        680,
+        700,
         1372
       ],
       "label_uz": "",
       "text_type": "printed_digits_7 (typewriter, NOT handwritten)",
-      "example": "0024695",
-      "notes": "Follows the series on the same printed line."
+      "example": "№ 0024695",
+      "notes": "Follows the series on the same printed line. The blank form prints no № of its own, unlike the bilingual one, so the sign is typeset with the digits."
     }
   ]
 }

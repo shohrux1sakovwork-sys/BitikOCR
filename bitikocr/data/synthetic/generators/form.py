@@ -35,6 +35,7 @@ from bitikocr.data.synthetic.hand import Hand
 from bitikocr.data.synthetic.layout import Page, wrap_text
 from bitikocr.data.synthetic.style import Color, HandwritingStyle
 from bitikocr.data.synthetic.system_fonts import (
+    PrintFont,
     find_monospace_font,
     find_print_font,
 )
@@ -89,6 +90,9 @@ _SEAL_JITTER_Y = 0.15
 _PRINTED_INSET = 0.04
 _PRINTED_HEIGHT_RATIO = 0.8
 _PRINTED_COLOR: Color = (25, 22, 28)
+
+# Type size below which printed text stops shrinking to fit its area.
+_MIN_PRINTED_SIZE = 8
 
 # A hand shrinking below this share of its normal size is worth a debug note.
 _MIN_FIT_RATIO = 0.6
@@ -533,6 +537,11 @@ class FormGenerator(DocumentGenerator):
         These are typeset rather than handwritten, and the blank form leaves
         their area empty, so nothing has to be covered first.
 
+        A form that prints its own label — "I-HR №" beside the serial — is
+        filled with the bare value. One whose blank carries nothing there
+        gives the label as the area's ``prefix``, and it is typeset with the
+        value, so the page reads "№ 0024695" as the real form does.
+
         Args:
             page: The page being filled.
             area: The printed region measured on the form.
@@ -546,17 +555,17 @@ class FormGenerator(DocumentGenerator):
         bottom = int(area.bbox.bottom * scale_y)
         height = bottom - top
 
-        size = max(8, int(height * _PRINTED_HEIGHT_RATIO))
-        font = find_monospace_font(size)
-        width = font.getlength(text)
+        printed = f"{area.prefix} {text}" if area.prefix else text
 
-        # The form prints its label ("I-HR №", "№") right at the area's left
-        # edge, so the value follows it instead of sitting in the middle.
+        # The form prints its label right at the area's left edge, so the
+        # value follows it instead of sitting in the middle.
         text_left = left + int((right - left) * _PRINTED_INSET)
+        font, size, width = _fit_printed(printed, height, right - text_left)
+
         text_top = top + int((height - size) / 2)
         ImageDraw.Draw(page.image).text(
             (text_left, text_top),
-            text,
+            printed,
             font=font,
             fill=_PRINTED_COLOR + (255,),
         )
@@ -567,8 +576,8 @@ class FormGenerator(DocumentGenerator):
             right=int(text_left + width),
             bottom=text_top + size,
         )
-        page.add_block(area.name, text, box)
-        page.add_line(area.name, text, box)
+        page.add_block(area.name, printed, box)
+        page.add_line(area.name, printed, box)
 
 
 @dataclass
@@ -795,6 +804,33 @@ class _FieldWriter:
                 width,
             )
         return hand
+
+
+def _fit_printed(
+    text: str, height: int, width: float
+) -> tuple[PrintFont, int, float]:
+    """Open a typewriter font sized to fill the area without leaving it.
+
+    A printed area is measured on the blank form, and a value typeset past
+    its right edge would collide with whatever the form prints next — the
+    series and the serial sit side by side — so the type is set smaller
+    rather than allowed to run on.
+
+    Args:
+        text: The characters to be printed, label included.
+        height: The area's height in page pixels.
+        width: The space available to the right of where printing starts.
+
+    Returns:
+        ``(font, size, width)``: the font to draw with, the size it was
+        opened at, and how wide the text is in it.
+    """
+    size = max(_MIN_PRINTED_SIZE, int(height * _PRINTED_HEIGHT_RATIO))
+    font = find_monospace_font(size)
+    while font.getlength(text) > width and size > _MIN_PRINTED_SIZE:
+        size = max(_MIN_PRINTED_SIZE, int(size * _FIT_STEP))
+        font = find_monospace_font(size)
+    return font, size, font.getlength(text)
 
 
 def _overlaps(first: BoundingBox, second: BoundingBox) -> bool:

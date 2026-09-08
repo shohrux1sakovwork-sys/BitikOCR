@@ -533,6 +533,16 @@ def test_the_single_layout_typesets_a_series_beside_the_serial(
     assert single.printed_names == ("form_series", "serial_number")
 
 
+def test_only_the_form_that_prints_no_sign_carries_one(
+    single: FormTemplate, bilingual: FormTemplate
+) -> None:
+    """The bilingual blank prints "I-HR №" itself; this one prints nothing
+    there, so the sign is typeset with the digits."""
+    prefixes = {area.name: area.prefix for area in single.printed}
+    assert prefixes == {"form_series": "", "serial_number": "№"}
+    assert [area.prefix for area in bilingual.printed] == [""]
+
+
 def test_the_single_signature_line_is_also_the_name_line(
     single: FormTemplate,
 ) -> None:

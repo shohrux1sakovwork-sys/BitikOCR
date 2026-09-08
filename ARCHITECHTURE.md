@@ -228,6 +228,12 @@ Roles are inferred from each entry's free-text `text_type`, which is what
 lets a layout describe a seal, a signature zone, machine-printed text or a
 printed QR code that must never be drawn over.
 
+What a form prints for itself is a layout fact too, not a rendering one. A
+machine-printed area carries a `prefix` when its label is missing from the
+blank: one certificate prints "I-HR №" and is given only the digits,
+another prints nothing there and is given `"prefix": "№"` so the sign is
+typeset with them.
+
 ### Adding a document type
 
 1. Add `bitikocr/data/synthetic/generators/<type>.py` with a

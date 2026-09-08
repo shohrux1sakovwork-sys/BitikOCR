@@ -76,6 +76,19 @@ def test_listing_templates(capsys: pytest.CaptureFixture[str]) -> None:
     assert "keep-out: qr_code" in printed
 
 
+def test_listing_templates_shows_every_death_certificate_variant(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A developer picking a --template has to be able to see the choice,
+    which alphabet each form is printed in, and what it typesets itself."""
+    assert main(["synth", "list-templates"]) == 0
+    printed = capsys.readouterr().out
+    assert "death_certificate_cyrillic_single" in printed
+    assert "printed in: cyrillic" in printed
+    assert "printed in: latin, cyrillic" in printed
+    assert "serial_number ('№' + value)" in printed
+
+
 def test_facts_are_written_without_rendering(tmp_path: Path) -> None:
     """Stage one must be usable on its own, before any page is drawn."""
     exit_code = main(

@@ -32,6 +32,11 @@ y2}``, and a rule as ``underline_y`` (preferred, the printed line itself) or
 see :data:`ROLE_KEYWORDS`. Entries whose id ends in ``_line1``, ``_line2``,
 ... are one logical field written across several printed lines, and are
 merged under their shared base name.
+
+A machine-printed entry may carry a ``prefix``, the label the value is
+typeset behind. It belongs to the forms whose blank does not print that
+label itself — one certificate prints "I-HR №" and leaves the digits to the
+registry, another prints nothing and gets "№ 0024695" whole.
 """
 
 from __future__ import annotations
@@ -120,11 +125,16 @@ class MarkArea:
         name: The area's name in the layout.
         bbox: The region, in template pixels.
         baseline_y: The printed rule inside the region, when there is one.
+        prefix: Label typeset in front of a printed value. Forms that print
+            their own label — "I-HR №" beside the serial — leave this
+            empty; forms whose blank carries nothing there give the label
+            here, so it is typeset along with the value.
     """
 
     name: str
     bbox: BoundingBox
     baseline_y: int | None = None
+    prefix: str = ""
 
     @property
     def centre(self) -> tuple[int, int]:
@@ -376,7 +386,12 @@ def _read_entry(
 
     if role in MARK_ROLES:
         marks.setdefault(role, []).append(
-            MarkArea(name=entry_id, bbox=bbox, baseline_y=baseline)
+            MarkArea(
+                name=entry_id,
+                bbox=bbox,
+                baseline_y=baseline,
+                prefix=str(entry.get("prefix", "")),
+            )
         )
         return
 

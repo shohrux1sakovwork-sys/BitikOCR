@@ -270,6 +270,13 @@ Field geometry is measured on a scan of the blank form:
 
 Order matters, so `digits_7 (typographic)` is typeset rather than written.
 
+A printed area may carry a `prefix`, the label its value is typeset behind.
+It is for forms whose blank does not print that label itself: the bilingual
+certificate has "I-HR №" on the paper and takes the bare digits, while the
+single-page one has nothing there and is given `"prefix": "№"`, so the page
+reads `II-HR № 0024695`. Printed type shrinks to stay inside its measured
+area, since the series and the serial sit side by side.
+
 Both spellings of a box are accepted — `bbox_xyxy: [x1, y1, x2, y2]` and
 `bbox: {x1, y1, x2, y2}` — and both spellings of a rule, `underline_y` (the
 printed line itself, preferred) and `baseline_y`. Ids ending `_line1`,

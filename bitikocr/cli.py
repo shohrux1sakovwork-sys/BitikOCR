@@ -140,7 +140,11 @@ def _add_render_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--template",
         default=None,
-        help="form variant to fill, for document types that use one",
+        help=(
+            "form variant to fill, for document types that use one; "
+            "see 'synth list-templates'. Defaults to the document type's "
+            "own default variant"
+        ),
     )
     parser.add_argument(
         "--font",
@@ -413,9 +417,21 @@ def _run_list_templates(
         template = FormTemplate.load(config.layout(name))
         width, height = template.native_size
         print(f"{template.name}  ({width}x{height}, {template.background})")
+        if template.printed_scripts:
+            print(f"  printed in: {', '.join(template.printed_scripts)}")
         print(f"  fields:   {', '.join(template.field_names)}")
         if template.printed:
-            print(f"  printed:  {', '.join(template.printed_names)}")
+            # A prefix is the label the form does not print for itself, so
+            # it is worth showing beside the area it is typeset into.
+            areas = [
+                (
+                    f"{area.name} ({area.prefix!r} + value)"
+                    if area.prefix
+                    else area.name
+                )
+                for area in template.printed
+            ]
+            print(f"  printed:  {', '.join(areas)}")
         marks = [
             label
             for label, area in (

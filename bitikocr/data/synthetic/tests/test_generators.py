@@ -643,12 +643,49 @@ def test_the_single_form_prints_the_series_beside_the_serial(
     assert (
         printed["form_series"].text == single_certificate_fields["form_series"]
     )
+    # This blank form prints no № of its own, so it is typeset with the
+    # digits, reading "II-HR № 0024695" as the real document does.
     assert printed["serial_number"].text == (
-        single_certificate_fields["serial_number"]
+        f"№ {single_certificate_fields['serial_number']}"
     )
     series, serial = printed["form_series"].bbox, printed["serial_number"].bbox
     assert series is not None and serial is not None
     assert series.right <= serial.left, "the series must come first"
+
+
+def test_the_bilingual_form_prints_the_serial_without_a_sign(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    """Its blank already prints "I-HR №", so printing another would put two
+    signs on the page."""
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    serial = next(
+        block for block in annotation.blocks if block.kind == "serial_number"
+    )
+    assert serial.text == certificate_fields["serial_number"]
+
+
+def test_printed_text_stays_inside_the_area_it_was_measured_in(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    """The series and the serial sit side by side, so type that overran its
+    area would collide with its neighbour."""
+    template = single_generator.template
+    scale = single_generator.options.scale
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+
+    boxes = {block.kind: block.bbox for block in annotation.blocks}
+    for area in template.printed:
+        box = boxes[area.name]
+        assert box is not None
+        assert box.left >= area.bbox.left * scale, area.name
+        assert box.right <= area.bbox.right * scale, area.name
 
 
 def test_the_single_form_writes_values_on_their_rules(
