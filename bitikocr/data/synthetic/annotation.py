@@ -1,7 +1,15 @@
-"""Ground-truth annotations produced by the synthetic document generators.
+"""What a generator drew, in the generator's own terms.
 
-The JSON written next to every generated image is exactly
-:meth:`DocumentAnnotation.to_dict` serialised with ``json.dump``.
+A page is built block by block and line by line, each with the box its ink
+actually occupies, and this is the structure that collects them. It is
+internal to the generator: :mod:`bitikocr.data.synthetic.export` maps it
+onto the corpus schema, which is what gets written beside the image and
+what a reader outside this package consumes.
+
+That translation is the point of keeping the two apart. This structure is
+free to carry whatever the renderer finds useful — a style, a seed, a font
+— while :mod:`bitikocr.models.schema` stays a stable contract that real
+scans and human annotators describe themselves in too.
 """
 
 from __future__ import annotations

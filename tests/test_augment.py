@@ -8,15 +8,15 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from bitikocr.data.synthetic.annotation import (
+    BlockAnnotation,
+    DocumentAnnotation,
+    LineAnnotation,
+)
 from bitikocr.data.synthetic.augment import (
     AugmentationProfile,
     augment_page,
     rotate_page,
-)
-from bitikocr.models.annotation import (
-    BlockAnnotation,
-    DocumentAnnotation,
-    LineAnnotation,
 )
 from bitikocr.models.geometry import BoundingBox
 

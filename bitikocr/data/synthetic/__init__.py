@@ -22,6 +22,7 @@ Typical use::
     document = generator.generate(fields, seed=42)
 """
 
+from bitikocr.data.synthetic.annotation import DocumentAnnotation
 from bitikocr.data.synthetic.augment import AugmentationProfile, augment_page
 from bitikocr.data.synthetic.dataset import (
     DatasetLayout,
@@ -68,6 +69,7 @@ __all__ = [
     "DatasetLayout",
     "DatasetSummary",
     "DeathCertificateGenerator",
+    "DocumentAnnotation",
     "DocumentGenerator",
     "DocumentRecord",
     "FieldGeometry",

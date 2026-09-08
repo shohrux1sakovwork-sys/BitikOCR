@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageFilter
 
-from bitikocr.models.annotation import (
+from bitikocr.data.synthetic.annotation import (
     BlockAnnotation,
     DocumentAnnotation,
     LineAnnotation,

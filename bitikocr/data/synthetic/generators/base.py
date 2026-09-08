@@ -17,9 +17,9 @@ from typing import Any, ClassVar
 from PIL import Image
 
 from bitikocr.config import SyntheticConfig
+from bitikocr.data.synthetic.annotation import DocumentAnnotation
 from bitikocr.data.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.data.synthetic.style import HandwritingStyle, sample_style
-from bitikocr.models.annotation import DocumentAnnotation
 
 __all__ = [
     "DEFAULT_INK_STRENGTH",

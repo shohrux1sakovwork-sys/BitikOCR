@@ -44,6 +44,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from bitikocr.data.synthetic.annotation import DocumentAnnotation
 from bitikocr.data.synthetic.augment import (
     AugmentationProfile,
     AugmentationReport,
@@ -59,7 +60,6 @@ from bitikocr.data.synthetic.generators.base import (
     SyntheticDocument,
 )
 from bitikocr.data.synthetic.records import DocumentRecord
-from bitikocr.models.annotation import DocumentAnnotation
 
 __all__ = [
     "DEFAULT_ID_PREFIX",

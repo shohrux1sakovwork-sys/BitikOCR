@@ -33,9 +33,8 @@
 │   ├── py.typed                 # Type hinting marker
 │   ├── cli.py                   # Application entry point
 │   ├── config.py                # The only module that reads the environment
-│   ├── models/                  # Data classes and schemas
+│   ├── models/                  # The vocabulary every document uses
 │   │   ├── geometry.py          # BoundingBox
-│   │   ├── annotation.py        # Line / Block / Document annotations
 │   │   └── schema.py            # The corpus interchange schema
 │   └── data/                    # Everything to do with the corpus
 │       └── synthetic/           # Synthetic training-data generation
@@ -44,6 +43,7 @@
 │           ├── style.py         # HandwritingStyle and its sampler
 │           ├── hand.py          # The handwriting renderer
 │           ├── effects.py       # Signature scribbles, round office seals
+│           ├── annotation.py    # The generator's own ground truth
 │           ├── layout.py        # Page canvas + ground-truth collection
 │           ├── templates.py     # Measured geometry of pre-printed forms
 │           ├── system_fonts.py  # Printed fonts for stamps and serials
@@ -82,7 +82,7 @@ the pipelines that prepare them belong beside `synthetic/` as they arrive.
 |-----------------|---------------------------------------------------------|-----------------------------|
 | `cli`           | Application entry point, CLI setup                      | `config`, `data`            |
 | `config`        | Load and validate configuration from env/files          | (none)                      |
-| `models/`       | Data classes, schemas, type definitions                 | (none)                      |
+| `models/`       | The corpus schema and the geometry it uses              | (none)                      |
 | `data/synthetic/` | Synthetic handwritten-document generation             | `config`, `models`          |
 
 The dependency flow is one-way. Nothing in `models/` may import from
@@ -92,6 +92,18 @@ There is no `utils/`. It held one live helper used only by the generator,
 which now sits beside it in `data/synthetic/ink.py`. A package for shared
 helpers is worth adding when something is genuinely shared; kept alive on
 speculation it collects whatever has no other home.
+
+`models/` is held to the same test, so it holds only two things: the corpus
+schema and the geometry it is written in. The schema earns its place by
+being independent of how a document was produced — its `origin` covers real
+scans and augmented copies, its `status` covers human review — so it is the
+contract a recogniser and an annotation tool will meet the generator in.
+
+A structure that serves one producer belongs to that producer. The
+generator's own ground truth is `data/synthetic/annotation.py`, not a shared
+model: `export.py` exists precisely to translate it into the schema, and
+that translation is the tell. It carries whatever the renderer finds useful
+— a seed, a style, a font — while the schema stays stable.
 
 ---
 
@@ -106,6 +118,7 @@ ground truth. It is layered so each piece has exactly one job:
 | `style`          | What varies between writers and sheets       | Rendering, layout          |
 | `hand`           | Turning a string into handwritten ink        | Documents, pages           |
 | `effects`        | Signatures and office seals                  | Documents, text            |
+| `annotation`     | What was drawn, in the generator's own terms | The corpus schema          |
 | `layout`         | Placing ink and recording what was placed    | Which document is being made |
 | `templates`      | Measured geometry of one blank form          | Rendering, handwriting     |
 | `scripts`        | The two alphabets and how to convert         | Documents, rendering       |

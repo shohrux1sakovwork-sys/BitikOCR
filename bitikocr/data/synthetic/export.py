@@ -18,11 +18,11 @@ from pathlib import Path
 from typing import Any, cast
 
 from bitikocr import __version__
+from bitikocr.data.synthetic.annotation import DocumentAnnotation
 from bitikocr.data.synthetic.augment import AugmentationReport
 from bitikocr.data.synthetic.facts import build_facts
 from bitikocr.data.synthetic.generators.base import DocumentGenerator
 from bitikocr.data.synthetic.records import DocumentRecord
-from bitikocr.models.annotation import DocumentAnnotation
 from bitikocr.models.schema import (
     AnnotationInfo,
     AnnotationStatus,

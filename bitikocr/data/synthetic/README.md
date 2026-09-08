@@ -98,6 +98,7 @@ it.
 | `system_fonts.py` | Printed fonts for stamps and serial numbers | Handwriting |
 | `templates.py` | The measured geometry of one blank form | Rendering, handwriting |
 | `ink.py` | Measuring the ink a rendered layer carries | Documents, pages |
+| `annotation.py` | What was drawn, in this module's own terms | The corpus schema |
 | `layout.py` | Placing ink and recording what was placed | Which document is being made |
 | `generators/` | Where things go on one kind of document | What it says, how it ages |
 | `augment.py` | Spoiling a finished page like a scan | What the page says |
