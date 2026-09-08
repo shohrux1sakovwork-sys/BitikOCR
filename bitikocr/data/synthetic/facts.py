@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from bitikocr.models.schema import Fact
+from bitikocr.data.models.schema import Fact
 
 __all__ = [
     "CATEGORY_SET_VERSION",

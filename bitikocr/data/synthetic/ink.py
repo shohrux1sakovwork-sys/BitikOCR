@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from PIL import Image
 
-from bitikocr.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import BoundingBox
 
 __all__ = ["alpha_bounding_box"]
 

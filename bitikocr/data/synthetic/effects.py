@@ -14,9 +14,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from bitikocr.data.models.geometry import BoundingBox
 from bitikocr.data.synthetic.ink import alpha_bounding_box
 from bitikocr.data.synthetic.style import Color, PenKind
-from bitikocr.models.geometry import BoundingBox
 
 __all__ = ["SCRIBBLE_WIDTH_RANGE", "draw_round_stamp", "draw_scribble"]
 

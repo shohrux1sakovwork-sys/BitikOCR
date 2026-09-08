@@ -1,10 +1,10 @@
-"""Tests for bitikocr.models.geometry."""
+"""Tests for bitikocr.data.models.geometry."""
 
 from __future__ import annotations
 
 import pytest
 
-from bitikocr.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import BoundingBox
 
 
 def test_dimensions_are_derived_from_the_edges() -> None:

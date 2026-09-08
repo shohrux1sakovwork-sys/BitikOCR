@@ -33,10 +33,10 @@
 │   ├── py.typed                 # Type hinting marker
 │   ├── cli.py                   # Application entry point
 │   ├── config.py                # The only module that reads the environment
-│   ├── models/                  # The vocabulary every document uses
-│   │   ├── geometry.py          # BoundingBox
-│   │   └── schema.py            # The corpus interchange schema
 │   └── data/                    # Everything to do with the corpus
+│       ├── models/              # The vocabulary the corpus is described in
+│       │   ├── geometry.py      # BoundingBox
+│       │   └── schema.py        # The corpus interchange schema
 │       └── synthetic/           # Synthetic training-data generation
 │           ├── README.md        # Developer's guide to this module
 │           ├── fonts.py         # Font discovery, coverage, metrics
@@ -82,22 +82,28 @@ the pipelines that prepare them belong beside `synthetic/` as they arrive.
 |-----------------|---------------------------------------------------------|-----------------------------|
 | `cli`           | Application entry point, CLI setup                      | `config`, `data`            |
 | `config`        | Load and validate configuration from env/files          | (none)                      |
-| `models/`       | The corpus schema and the geometry it uses              | (none)                      |
-| `data/synthetic/` | Synthetic handwritten-document generation             | `config`, `models`          |
+| `data/models/`  | The corpus schema and the geometry it uses              | (none)                      |
+| `data/synthetic/` | Synthetic handwritten-document generation             | `config`, `data/models`     |
 
-The dependency flow is one-way. Nothing in `models/` may import from
-`data/`, and nothing below `cli` may read the environment.
+The dependency flow is one-way. Nothing in `data/models/` may import from a
+producer beside it, and nothing below `cli` may read the environment.
 
 There is no `utils/`. It held one live helper used only by the generator,
 which now sits beside it in `data/synthetic/ink.py`. A package for shared
 helpers is worth adding when something is genuinely shared; kept alive on
 speculation it collects whatever has no other home.
 
-`models/` is held to the same test, so it holds only two things: the corpus
-schema and the geometry it is written in. The schema earns its place by
-being independent of how a document was produced — its `origin` covers real
-scans and augmented copies, its `status` covers human review — so it is the
-contract a recogniser and an annotation tool will meet the generator in.
+`data/models/` is held to the same test, so it holds only two things: the
+corpus schema and the geometry it is written in. It sits under `data/`
+because it describes the corpus rather than any one way of filling it: the
+schema's `origin` covers real scans and augmented copies and its `status`
+covers human review, so `synthetic/` is only its first producer and real
+scans land beside it under the same parent.
+
+Keeping it at the top level would have said the opposite — that these types
+serve the whole application — on the strength of a recogniser that does not
+exist yet. The top-level name is better left free for one, where `models`
+will mean what it usually means in a project like this.
 
 A structure that serves one producer belongs to that producer. The
 generator's own ground truth is `data/synthetic/annotation.py`, not a shared

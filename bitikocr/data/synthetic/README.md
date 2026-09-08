@@ -74,7 +74,7 @@ Which way a page was produced is recorded in the records themselves, as
 `source.origin`, so a corpus that later mixes in real scans can still tell
 them apart.
 
-Both JSON records follow the schema in `bitikocr/models/schema.py`, which is
+Both JSON records follow the schema in `bitikocr/data/models/schema.py`, which is
 the typed definition and the place to look first. Boxes there are
 `[x, y, width, height]`; internally the renderer works in two corners.
 

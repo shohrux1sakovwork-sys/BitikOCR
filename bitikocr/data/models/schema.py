@@ -11,7 +11,7 @@ scan and an augmented copy of one all describe themselves the same way, and
 ``source.origin`` is what tells them apart.
 
 Boxes are ``[x, y, width, height]`` here, not the two-corner spelling the
-renderer works in; see :meth:`~bitikocr.models.geometry.BoundingBox.to_xywh`.
+renderer works in; see :meth:`~bitikocr.data.models.geometry.BoundingBox.to_xywh`.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from bitikocr.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import BoundingBox
 
 __all__ = [
     "AnnotationInfo",

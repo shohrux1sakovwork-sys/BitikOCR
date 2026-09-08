@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from bitikocr.models.schema import (
+from bitikocr.data.models.schema import (
     AnnotationInfo,
     DocumentMetadata,
     Fact,

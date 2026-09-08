@@ -8,7 +8,7 @@ what a reader outside this package consumes.
 
 That translation is the point of keeping the two apart. This structure is
 free to carry whatever the renderer finds useful — a style, a seed, a font
-— while :mod:`bitikocr.models.schema` stays a stable contract that real
+— while :mod:`bitikocr.data.models.schema` stays a stable contract that real
 scans and human annotators describe themselves in too.
 """
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from bitikocr.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import BoundingBox
 
 __all__ = [
     "BlockAnnotation",

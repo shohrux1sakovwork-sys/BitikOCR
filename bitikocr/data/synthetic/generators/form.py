@@ -24,6 +24,7 @@ from typing import Any, ClassVar
 from PIL import Image, ImageDraw
 
 from bitikocr.config import SyntheticConfig
+from bitikocr.data.models.geometry import BoundingBox
 from bitikocr.data.synthetic.effects import draw_round_stamp
 from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
@@ -44,7 +45,6 @@ from bitikocr.data.synthetic.templates import (
     FormTemplate,
     MarkArea,
 )
-from bitikocr.models.geometry import BoundingBox
 
 __all__ = [
     "REGISTRAR_NAME_FIELD",

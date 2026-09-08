@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from bitikocr.data.models.geometry import BoundingBox
 from bitikocr.data.synthetic.annotation import (
     BlockAnnotation,
     DocumentAnnotation,
@@ -18,7 +19,6 @@ from bitikocr.data.synthetic.augment import (
     augment_page,
     rotate_page,
 )
-from bitikocr.models.geometry import BoundingBox
 
 
 @pytest.fixture()

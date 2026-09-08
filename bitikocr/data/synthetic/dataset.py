@@ -22,7 +22,7 @@ Layout on disk::
       index.jsonl            one line per page, tying the three together
 
 Both JSON records follow the corpus schema in
-:mod:`bitikocr.models.schema`, and every file for one document shares its
+:mod:`bitikocr.data.models.schema`, and every file for one document shares its
 id, so a fine-tuning pipeline can pair them without consulting the index.
 The index is there to iterate the set in order and to filter it by era,
 script, font or document type.

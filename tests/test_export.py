@@ -8,6 +8,7 @@ import random
 import pytest
 
 from bitikocr.config import SyntheticConfig
+from bitikocr.data.models.schema import FactsRecord, TranscriptionRecord
 from bitikocr.data.synthetic.augment import AugmentationReport
 from bitikocr.data.synthetic.export import (
     build_facts_record,
@@ -27,7 +28,6 @@ from bitikocr.data.synthetic.records import (
     sample_record,
 )
 from bitikocr.data.synthetic.scripts import Script
-from bitikocr.models.schema import FactsRecord, TranscriptionRecord
 
 #: One page of every document type, plus every further form variant.
 _PAGES: tuple[tuple[str, str | None], ...] = (

@@ -89,7 +89,7 @@ them directly. Use `--id-prefix` to namespace a set if several will be
 merged into one corpus.
 
 Both JSON records follow the corpus schema — see
-`bitikocr/models/schema.py`, which is the typed definition.
+`bitikocr/data/models/schema.py`, which is the typed definition.
 
 An **annotation** is the transcription record: what is written, where, and
 under what conditions the page was captured.

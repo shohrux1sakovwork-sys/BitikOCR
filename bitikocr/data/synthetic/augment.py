@@ -20,12 +20,12 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageFilter
 
+from bitikocr.data.models.geometry import BoundingBox
 from bitikocr.data.synthetic.annotation import (
     BlockAnnotation,
     DocumentAnnotation,
     LineAnnotation,
 )
-from bitikocr.models.geometry import BoundingBox
 
 __all__ = [
     "AugmentationProfile",

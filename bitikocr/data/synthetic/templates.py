@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from bitikocr.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import BoundingBox
 
 __all__ = [
     "MARK_ROLES",
