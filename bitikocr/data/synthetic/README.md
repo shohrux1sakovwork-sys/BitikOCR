@@ -14,15 +14,15 @@ included.
 Generate thirty birth certificates with box overlays to look at:
 
 ```bash
-uv run bitikocr synth generate birth_certificate -n 30 --boxes
+uv run python scripts/data/generate_synth.py generate birth_certificate -n 30 --boxes
 ```
 
 They land in `output/birth_certificate/`, beside this file. To see what is available:
 
 ```bash
-uv run bitikocr synth list-types
-uv run bitikocr synth list-templates
-uv run bitikocr synth list-fonts
+uv run python scripts/data/generate_synth.py list-types
+uv run python scripts/data/generate_synth.py list-templates
+uv run python scripts/data/generate_synth.py list-fonts
 ```
 
 ---
@@ -36,8 +36,8 @@ sample records  ->  facts/*.json  ->  render  ->  images + annotations + facts
 ```
 
 ```bash
-uv run bitikocr synth facts death_certificate -n 30
-uv run bitikocr synth render bitikocr/data/synthetic/output/death_certificate
+uv run python scripts/data/generate_synth.py facts death_certificate -n 30
+uv run python scripts/data/generate_synth.py render bitikocr/data/synthetic/output/death_certificate
 ```
 
 Splitting them means the text can be read, corrected or replaced before the
@@ -190,7 +190,7 @@ Latin-only font never receives a Cyrillic record. Check what it covers with
 1. Put the blank scan in `assets/backgrounds/`.
 2. Put its measured layout in `assets/layouts/<document type>_<variant>.json`.
    The prefix is how a form's variants are found, so keep it.
-3. `uv run bitikocr synth generate death_certificate --template <name>`
+3. `uv run python scripts/data/generate_synth.py generate death_certificate --template <name>`
 
 No code changes, as long as the new form's cells go by the names the
 record sampler already emits — reuse the ids of the existing layout for

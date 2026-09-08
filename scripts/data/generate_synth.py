@@ -1,7 +1,17 @@
-"""Command line entry point.
+"""Generate synthetic training documents.
 
-Configuration is loaded here, at the edge, and passed down explicitly. No
-module below this one reads the environment on its own.
+The entry point for the synthetic data pipeline. Run it from the repository
+root::
+
+    uv run python scripts/data/generate_synth.py generate ariza -n 20
+    uv run python scripts/data/generate_synth.py list-templates
+
+Generation is two stages and they can be run apart — ``facts`` samples what
+each document says, ``render`` draws it — or together with ``generate``.
+
+This is an entry point, not library code: it lives outside the package
+because nothing imports it. Configuration is loaded here, at the edge, and
+passed down explicitly, so no module below reads the environment on its own.
 """
 
 from __future__ import annotations
@@ -50,11 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the command line parser.
 
     Returns:
-        The parser for the ``bitikocr`` executable.
+        The parser for this script.
     """
     parser = argparse.ArgumentParser(
-        prog="bitikocr",
-        description="Uzbek handwritten text recognition toolkit.",
+        prog="generate_synth.py",
+        description="Generate synthetic handwritten Uzbek documents.",
     )
     parser.add_argument(
         "-v",
@@ -63,14 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="log every generated sample",
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    synth = commands.add_parser(
-        "synth", help="generate synthetic training data"
-    ).add_subparsers(dest="synth_command", required=True)
 
-    _add_facts_command(synth)
-    _add_render_command(synth)
-    _add_generate_command(synth)
-    _add_listing_commands(synth)
+    _add_facts_command(commands)
+    _add_render_command(commands)
+    _add_generate_command(commands)
+    _add_listing_commands(commands)
     return parser
 
 
@@ -142,7 +149,7 @@ def _add_render_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "form variant to fill, for document types that use one; "
-            "see 'synth list-templates'. Defaults to the document type's "
+            "see the list-templates command. Defaults to the document type's "
             "own default variant"
         ),
     )
@@ -182,9 +189,9 @@ def _add_render_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_facts_command(synth: argparse._SubParsersAction[Any]) -> None:
-    """Register ``synth facts``."""
-    facts = synth.add_parser(
+def _add_facts_command(commands: argparse._SubParsersAction[Any]) -> None:
+    """Register the ``facts`` command."""
+    facts = commands.add_parser(
         "facts",
         help="sample what each document says, without rendering anything",
     )
@@ -194,9 +201,9 @@ def _add_facts_command(synth: argparse._SubParsersAction[Any]) -> None:
     facts.set_defaults(handler=_run_facts)
 
 
-def _add_render_command(synth: argparse._SubParsersAction[Any]) -> None:
-    """Register ``synth render``."""
-    render = synth.add_parser(
+def _add_render_command(commands: argparse._SubParsersAction[Any]) -> None:
+    """Register the ``render`` command."""
+    render = commands.add_parser(
         "render", help="draw the pages for a dataset that has its facts"
     )
     render.add_argument(
@@ -209,9 +216,9 @@ def _add_render_command(synth: argparse._SubParsersAction[Any]) -> None:
     render.set_defaults(handler=_run_render)
 
 
-def _add_generate_command(synth: argparse._SubParsersAction[Any]) -> None:
-    """Register ``synth generate``, which does both stages at once."""
-    generate = synth.add_parser(
+def _add_generate_command(commands: argparse._SubParsersAction[Any]) -> None:
+    """Register ``generate``, which does both stages at once."""
+    generate = commands.add_parser(
         "generate", help="sample records and render them in one go"
     )
     _add_document_arguments(generate)
@@ -221,9 +228,9 @@ def _add_generate_command(synth: argparse._SubParsersAction[Any]) -> None:
     generate.set_defaults(handler=_run_generate)
 
 
-def _add_listing_commands(synth: argparse._SubParsersAction[Any]) -> None:
+def _add_listing_commands(commands: argparse._SubParsersAction[Any]) -> None:
     """Register the commands that only report what is available."""
-    list_fonts = synth.add_parser(
+    list_fonts = commands.add_parser(
         "list-fonts", help="show the handwriting fonts that will be sampled"
     )
     list_fonts.add_argument(
@@ -231,12 +238,12 @@ def _add_listing_commands(synth: argparse._SubParsersAction[Any]) -> None:
     )
     list_fonts.set_defaults(handler=_run_list_fonts)
 
-    list_types = synth.add_parser(
+    list_types = commands.add_parser(
         "list-types", help="show the document types that can be generated"
     )
     list_types.set_defaults(handler=_run_list_types)
 
-    list_templates = synth.add_parser(
+    list_templates = commands.add_parser(
         "list-templates", help="show the form variants that can be filled"
     )
     list_templates.set_defaults(handler=_run_list_templates)

@@ -32,9 +32,6 @@ dev = [
     "ruff>=0.16.5",
 ]
 
-[project.scripts]
-bitikocr = "bitikocr.cli:main"
-
 [project.optional-dependencies]
 data = [
     "fonttools>=4.63.0",
@@ -49,7 +46,8 @@ target-version = ["py311"]
 [tool.isort]
 profile = "black"
 line_length = 80
-known_first_party = ["bitikocr"]
+# generate_synth is the entry point in scripts/, imported by its test.
+known_first_party = ["bitikocr", "generate_synth"]
 
 [tool.ruff]
 line-length = 80
@@ -63,15 +61,22 @@ ignore = ["E501", "F403", "F405"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 
+[tool.ruff.lint.isort]
+# Kept in step with [tool.isort]; ruff does not read that section.
+known-first-party = ["bitikocr", "generate_synth"]
+
 [tool.mypy]
 # No python_version pin: numpy's bundled stubs need 3.12+ syntax, and the
 # minimum supported version is already enforced by ruff's target-version.
 ignore_missing_imports = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
-files = ["bitikocr", "tests"]
+files = ["bitikocr", "tests", "scripts"]
 
 [tool.pytest.ini_options]
 # Every test lives in tests/ at the repository root, one module per module
 # of the package, sharing the fixtures in tests/conftest.py.
 testpaths = ["tests"]
+# Entry points live in scripts/ rather than in the package, so the suite
+# needs their directory on the path to import one.
+pythonpath = ["scripts/data"]

@@ -28,10 +28,12 @@
 ├── pyproject.toml               # Project config, dependencies, tool settings
 ├── uv.lock                      # Locked dependency versions (committed)
 ├── README.md                    # Project documentation
-├── bitikocr/                    # Main package
+├── scripts/                     # Entry points, grouped by area
+│   └── data/
+│       └── generate_synth.py    # Generate synthetic training documents
+├── bitikocr/                    # Main package: library code only
 │   ├── __init__.py
 │   ├── py.typed                 # Type hinting marker
-│   ├── cli.py                   # Application entry point
 │   ├── config.py                # The only module that reads the environment
 │   └── data/                    # Everything to do with the corpus
 │       ├── models/              # The vocabulary the corpus is described in
@@ -80,13 +82,25 @@ the pipelines that prepare them belong beside `synthetic/` as they arrive.
 
 | Module          | Responsibility                                          | Depends on                  |
 |-----------------|---------------------------------------------------------|-----------------------------|
-| `cli`           | Application entry point, CLI setup                      | `config`, `data`            |
+| `scripts/`      | Entry points: argument parsing, wiring, reporting       | `config`, `data`            |
 | `config`        | Load and validate configuration from env/files          | (none)                      |
 | `data/models/`  | The corpus schema and the geometry it uses              | (none)                      |
 | `data/synthetic/` | Synthetic handwritten-document generation             | `config`, `data/models`     |
 
 The dependency flow is one-way. Nothing in `data/models/` may import from a
-producer beside it, and nothing below `cli` may read the environment.
+producer beside it, and nothing below an entry point may read the
+environment.
+
+### Where entry points go
+
+`scripts/` holds what a person runs, grouped by area: `scripts/data/` for
+the corpus, and a directory of its own for training or evaluation when
+those land. The package holds only library code, so nothing inside it
+parses arguments or prints to a terminal.
+
+The test is whether anything imports it. A module that only ever runs is an
+entry point and belongs in `scripts/`; a module something imports belongs in
+the package, where it can be reused and where a wheel will carry it.
 
 There is no `utils/`. It held one live helper used only by the generator,
 which now sits beside it in `data/synthetic/ink.py`. A package for shared
@@ -222,7 +236,7 @@ Adding a variant of an existing form:
 2. Add its measured layout to `assets/layouts/<document type>_<variant>.json`,
    reusing the field ids of the existing layout wherever both forms have
    the same cell.
-3. `bitikocr synth generate death_certificate --template <name>`.
+3. `uv run python scripts/data/generate_synth.py generate death_certificate --template <name>`.
 
 Adding a new form is the same plus a `FormGenerator` subclass naming it.
 
@@ -260,6 +274,7 @@ typeset with them.
 3. Add a record sampler to `records.py` and register it in
    `RECORD_SAMPLERS`, widening `corpus.py` if it needs new vocabulary.
 4. Add `tests/test_<module>.py`, named after the module it covers.
+5. A command someone runs goes in `scripts/<area>/`, not in the package.
 
 Nothing else changes: the CLI, the registry and the dataset builder pick the
 new type up automatically.
@@ -295,7 +310,7 @@ Configuration is loaded once at startup (in `config.py` or `cli.py`) and passed 
 | Test framework | `pytest` | Industry standard, better than unittest |
 | Docstring format | Google-style | Clear, readable format for APIs |
 | Imaging dependencies | `data` extra | Pillow, numpy and fontTools are only needed to *generate* data, not to consume it |
-| Assets location | Inside the package | `uv run bitikocr` works from any directory, and a wheel ships everything it needs |
+| Assets location | Inside the package | The generator finds them from any working directory, and a wheel ships everything it needs |
 | Style representation | Frozen dataclass | Typed, reproducible and safe to pass around; overrides go through `replace()` |
 | Ground-truth format | One JSON per image | Image and annotation share a file stem; no index to keep in sync |
 

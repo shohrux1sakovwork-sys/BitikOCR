@@ -2,8 +2,8 @@
 # even when the shell's code page is not UTF-8 (Windows).
 export PYTHONUTF8 = 1
 
-# The package and its suite. Everything that is checked, in one place.
-SOURCES = bitikocr tests
+# The package, its entry points and its suite: everything that is checked.
+SOURCES = bitikocr scripts tests
 
 .PHONY: install style style-check lint-check type-check test checks
 

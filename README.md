@@ -22,17 +22,17 @@ Generation is two stages, and they can be run together or apart.
 **Both at once:**
 
 ```bash
-uv run bitikocr synth generate birth_certificate -n 30 --boxes
+uv run python scripts/data/generate_synth.py generate birth_certificate -n 30 --boxes
 ```
 
 **Or separately** — sample the text first, look at it or edit it, then draw:
 
 ```bash
-uv run bitikocr synth facts death_certificate -n 30
+uv run python scripts/data/generate_synth.py facts death_certificate -n 30
 ```
 
 ```bash
-uv run bitikocr synth render bitikocr/data/synthetic/output/death_certificate --boxes
+uv run python scripts/data/generate_synth.py render bitikocr/data/synthetic/output/death_certificate --boxes
 ```
 
 Splitting them means a batch can be re-rendered with different fonts or
@@ -60,15 +60,15 @@ Useful flags:
 To see what is available:
 
 ```bash
-uv run bitikocr synth list-types
+uv run python scripts/data/generate_synth.py list-types
 ```
 
 ```bash
-uv run bitikocr synth list-fonts
+uv run python scripts/data/generate_synth.py list-fonts
 ```
 
 ```bash
-uv run bitikocr synth list-templates
+uv run python scripts/data/generate_synth.py list-templates
 ```
 
 ## Output format
@@ -355,7 +355,7 @@ and the form gives the name a field elsewhere.
 then:
 
 ```bash
-uv run bitikocr synth generate death_certificate --template <name> -n 20 --boxes
+uv run python scripts/data/generate_synth.py generate death_certificate --template <name> -n 20 --boxes
 ```
 
 No code changes are needed, provided the new form's cells reuse the field
