@@ -140,3 +140,21 @@ class SyntheticConfig:
         if not self.layouts_dir.is_dir():
             return ()
         return tuple(sorted(p.stem for p in self.layouts_dir.glob("*.json")))
+
+    def layouts_for(self, document_type: str) -> tuple[str, ...]:
+        """Return the layouts that are variants of one document type.
+
+        Layouts are named ``<document type>_<variant>``, so a form's
+        variants are the layouts sharing its prefix.
+
+        Args:
+            document_type: The document type, e.g. ``death_certificate``.
+
+        Returns:
+            The variant names, sorted; empty for document types that fill
+            no printed form.
+        """
+        prefix = f"{document_type}_"
+        return tuple(
+            name for name in self.available_layouts() if name.startswith(prefix)
+        )

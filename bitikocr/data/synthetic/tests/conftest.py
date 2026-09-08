@@ -66,6 +66,26 @@ def certificate_generator(
     return DeathCertificateGenerator(config, options=FormOptions(scale=1.0))
 
 
+#: The older single-page death certificate, printed in Cyrillic only.
+SINGLE_TEMPLATE = "death_certificate_cyrillic_single"
+
+
+@pytest.fixture(scope="session")
+def single_certificate_fields() -> dict[str, object]:
+    """One sampled death certificate record's fields, in Cyrillic."""
+    return sample_record(
+        "death_certificate", random.Random(14), "cyrillic"
+    ).fields
+
+
+@pytest.fixture(scope="session")
+def single_generator(config: SyntheticConfig) -> DeathCertificateGenerator:
+    """The single-page Cyrillic death certificate, rendered small."""
+    return DeathCertificateGenerator(
+        config, options=FormOptions(template=SINGLE_TEMPLATE, scale=1.0)
+    )
+
+
 @pytest.fixture(scope="session")
 def birth_fields() -> dict[str, object]:
     """One sampled birth certificate record's fields."""

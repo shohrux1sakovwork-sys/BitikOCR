@@ -1,0 +1,419 @@
+{
+  "template_name": "death_certificate_cyrillic_single",
+  "image": "death_certificate_cyrillic_single.png",
+  "width": 1054,
+  "height": 1492,
+  "coordinate_system": "pixels, origin top-left, bbox=[x1,y1,x2,y2]",
+  "baseline_note": "baseline_y is the y of the printed underline (measured). bbox top is the free area below the nearest printed element above (4px margin); bbox bottom = baseline+4 for descenders. Row pitch is 39-50 px and real handwriting is large, often overshooting into the neighbouring row.",
+  "source": "Measured from the printed underlines of the scanned blank single-page Cyrillic form. Field ids follow the bilingual layout so one death-certificate record fills either variant; 'measured_id' keeps the name the measurement used.",
+  "printed_scripts": [
+    "cyrillic"
+  ],
+  "fields": [
+    {
+      "id": "surname",
+      "measured_id": "surname",
+      "baseline_y": 469,
+      "bbox_xyxy": [
+        199,
+        410,
+        941,
+        473
+      ],
+      "label_uz": "Фуқаро ___ (фамилияси,",
+      "text_type": "uzbek_cyrillic_word (surname, capitalized, cursive)",
+      "example": "Раджапова",
+      "notes": "Usually one capitalized word, often written centred. Descenders are blocked only over x 475-582 by the printed sub-label."
+    },
+    {
+      "id": "given_name_patronymic",
+      "measured_id": "given_patronymic",
+      "baseline_y": 515,
+      "bbox_xyxy": [
+        113,
+        494,
+        941,
+        519
+      ],
+      "label_uz": "(исми, отасининг исми)",
+      "text_type": "uzbek_cyrillic_words (given name [+ patronymic])",
+      "example": "Зайнап",
+      "notes": "1-3 words. The free area above is shallow only over the sub-label at x 475-582."
+    },
+    {
+      "id": "death_year",
+      "measured_id": "death_year",
+      "baseline_y": 564,
+      "bbox_xyxy": [
+        114,
+        521,
+        210,
+        568
+      ],
+      "label_uz": "___ йил",
+      "text_type": "digits_4",
+      "example": "2003",
+      "notes": ""
+    },
+    {
+      "id": "death_month",
+      "measured_id": "death_month",
+      "baseline_y": 564,
+      "bbox_xyxy": [
+        263,
+        536,
+        449,
+        568
+      ],
+      "label_uz": "___ ойнинг",
+      "text_type": "uzbek_month_name_cyrillic",
+      "example": "май",
+      "notes": "январ, феврал, март, апрел, май, июн, июл, август, сентябр, октябр, ноябр, декабр"
+    },
+    {
+      "id": "death_day",
+      "measured_id": "death_day",
+      "baseline_y": 564,
+      "bbox_xyxy": [
+        551,
+        539,
+        722,
+        568
+      ],
+      "label_uz": "___ кунида",
+      "text_type": "digits_1_2",
+      "example": "14",
+      "notes": "The measured overflow cell after кунида (x 809-941 on the same rule, 'death_date_words_0') is deliberately left out: the sample leaves it blank and the date in words starts on the next rule."
+    },
+    {
+      "id": "death_year_in_words_line1",
+      "measured_id": "death_date_words_1",
+      "baseline_y": 614,
+      "bbox_xyxy": [
+        113,
+        573,
+        941,
+        618
+      ],
+      "label_uz": "",
+      "text_type": "uzbek_cyrillic_phrase (year written out in words)",
+      "example": "икки минг",
+      "notes": "Line 1 and 2 form one logical multi-line field."
+    },
+    {
+      "id": "death_year_in_words_line2",
+      "measured_id": "death_date_words_2",
+      "baseline_y": 655,
+      "bbox_xyxy": [
+        113,
+        619,
+        941,
+        659
+      ],
+      "label_uz": "(рақам ва хат билан)",
+      "text_type": "uzbek_cyrillic_phrase (continuation)",
+      "example": "учинчи йил",
+      "notes": "Descenders are blocked only over x 443-615 by the printed sub-label."
+    },
+    {
+      "id": "age_at_death",
+      "measured_id": "age",
+      "baseline_y": 701,
+      "bbox_xyxy": [
+        113,
+        660,
+        265,
+        705
+      ],
+      "label_uz": "___ ёшда вафот этди.",
+      "text_type": "digits_1_3",
+      "example": "74",
+      "notes": ""
+    },
+    {
+      "id": "record_year",
+      "measured_id": "reg_year",
+      "baseline_y": 748,
+      "bbox_xyxy": [
+        213,
+        710,
+        381,
+        752
+      ],
+      "label_uz": "Бу ҳақда ___ йил",
+      "text_type": "digits_4",
+      "example": "2003",
+      "notes": ""
+    },
+    {
+      "id": "record_month",
+      "measured_id": "reg_month",
+      "baseline_y": 748,
+      "bbox_xyxy": [
+        433,
+        707,
+        584,
+        752
+      ],
+      "label_uz": "___ ойнинг",
+      "text_type": "uzbek_month_name_cyrillic",
+      "example": "май",
+      "notes": ""
+    },
+    {
+      "id": "record_day",
+      "measured_id": "reg_day",
+      "baseline_y": 748,
+      "bbox_xyxy": [
+        687,
+        660,
+        863,
+        752
+      ],
+      "label_uz": "___ кунида",
+      "text_type": "digits_1_2",
+      "example": "30",
+      "notes": "Nothing is printed above this cell, so the free area reaches up to the previous rule."
+    },
+    {
+      "id": "record_number",
+      "measured_id": "act_number",
+      "baseline_y": 793,
+      "bbox_xyxy": [
+        113,
+        757,
+        400,
+        797
+      ],
+      "label_uz": "___ сон билан далолатнома ёзуви қайд этилди.",
+      "text_type": "digits_1_4",
+      "example": "452",
+      "notes": ""
+    },
+    {
+      "id": "cause_of_death_line1",
+      "measured_id": "cause_1",
+      "baseline_y": 842,
+      "bbox_xyxy": [
+        301,
+        801,
+        941,
+        846
+      ],
+      "label_uz": "Ўлимнинг сабаби ___",
+      "text_type": "uzbek_cyrillic_phrase (medical diagnosis, cursive, multiline)",
+      "example": "Юрак мушаги",
+      "notes": "Lines 1-3 form one logical multi-line field."
+    },
+    {
+      "id": "cause_of_death_line2",
+      "measured_id": "cause_2",
+      "baseline_y": 881,
+      "bbox_xyxy": [
+        113,
+        847,
+        941,
+        885
+      ],
+      "label_uz": "",
+      "text_type": "uzbek_cyrillic_phrase (continuation)",
+      "example": "инфаркти",
+      "notes": ""
+    },
+    {
+      "id": "cause_of_death_line3",
+      "measured_id": "cause_3",
+      "baseline_y": 917,
+      "bbox_xyxy": [
+        113,
+        887,
+        941,
+        921
+      ],
+      "label_uz": "",
+      "text_type": "uzbek_cyrillic_phrase (continuation, optional)",
+      "example": "",
+      "notes": "Empty in the sample."
+    },
+    {
+      "id": "death_place_settlement",
+      "measured_id": "place_city",
+      "baseline_y": 965,
+      "bbox_xyxy": [
+        305,
+        922,
+        789,
+        969
+      ],
+      "label_uz": "Вафот этган жойи: ___ шаҳар, қишлоқ",
+      "text_type": "uzbek_cyrillic_words (city or village name)",
+      "example": "Урганч",
+      "notes": ""
+    },
+    {
+      "id": "death_place_district",
+      "measured_id": "place_district",
+      "baseline_y": 1008,
+      "bbox_xyxy": [
+        113,
+        973,
+        877,
+        1012
+      ],
+      "label_uz": "___ туман",
+      "text_type": "uzbek_cyrillic_word (district name)",
+      "example": "",
+      "notes": "Empty in the sample."
+    },
+    {
+      "id": "death_place_region",
+      "measured_id": "place_region",
+      "baseline_y": 1047,
+      "bbox_xyxy": [
+        113,
+        1013,
+        871,
+        1051
+      ],
+      "label_uz": "___ вилоят",
+      "text_type": "uzbek_cyrillic_word (region name)",
+      "example": "Хоразм",
+      "notes": ""
+    },
+    {
+      "id": "death_place_country",
+      "measured_id": "place_republic",
+      "baseline_y": 1089,
+      "bbox_xyxy": [
+        113,
+        1053,
+        820,
+        1093
+      ],
+      "label_uz": "___ Республика",
+      "text_type": "uzbek_cyrillic_word (country)",
+      "example": "Ўзбекистон",
+      "notes": ""
+    },
+    {
+      "id": "registration_office_line1",
+      "measured_id": "reg_office_1",
+      "baseline_y": 1136,
+      "bbox_xyxy": [
+        288,
+        1097,
+        941,
+        1140
+      ],
+      "label_uz": "Қайд этиш жойи ___ (ФХДЁ органининг номи)",
+      "text_type": "uzbek_cyrillic_phrase (FHDYO office name)",
+      "example": "Урганч шаҳар",
+      "notes": "Descenders are blocked only over x 426-629 by the printed sub-label. Lines 1-2 form one logical multi-line field."
+    },
+    {
+      "id": "registration_office_line2",
+      "measured_id": "reg_office_2",
+      "baseline_y": 1180,
+      "bbox_xyxy": [
+        113,
+        1162,
+        941,
+        1184
+      ],
+      "label_uz": "",
+      "text_type": "uzbek_cyrillic_phrase (continuation)",
+      "example": "ФҲДЁ бўлими",
+      "notes": ""
+    },
+    {
+      "id": "issue_year",
+      "measured_id": "issue_year",
+      "baseline_y": 1223,
+      "bbox_xyxy": [
+        280,
+        1186,
+        438,
+        1227
+      ],
+      "label_uz": "Берилган вақти: ___ йил",
+      "text_type": "digits_4",
+      "example": "2003",
+      "notes": "Sample written as \"2003\" in quotes."
+    },
+    {
+      "id": "issue_day_month",
+      "measured_id": "issue_day_month",
+      "baseline_y": 1223,
+      "bbox_xyxy": [
+        487,
+        1186,
+        941,
+        1227
+      ],
+      "label_uz": "(after йил)",
+      "text_type": "uzbek_cyrillic_day_and_month (day number then month name)",
+      "example": "30 май",
+      "notes": "This form gives the day and month one shared cell after the year, where the bilingual form gives them a cell each."
+    },
+    {
+      "id": "registrar_signature",
+      "measured_id": "signature",
+      "baseline_y": 1296,
+      "bbox_xyxy": [
+        644,
+        1258,
+        941,
+        1300
+      ],
+      "label_uz": "ФХДЁ органи мудири ___",
+      "text_type": "signature (scribble) + optional surname",
+      "example": "<signature>",
+      "notes": "A rule runs through the area, so the registrar's surname is written above it and the signature across it, as on the bilingual form."
+    },
+    {
+      "id": "official_seal",
+      "measured_id": "seal",
+      "baseline_y": null,
+      "bbox_xyxy": [
+        190,
+        1180,
+        410,
+        1400
+      ],
+      "label_uz": "Муҳр",
+      "text_type": "round_stamp (ink seal, ~220px dia, overlaps the issue line and the Муҳр label)",
+      "example": "",
+      "notes": "Circle of radius 110 centred on (300, 1290). In the filled sample the seal overlaps the lower-left quadrant from the Берилган вақти line down to Муҳр."
+    },
+    {
+      "id": "form_series",
+      "measured_id": "series_number",
+      "baseline_y": null,
+      "bbox_xyxy": [
+        380,
+        1345,
+        530,
+        1372
+      ],
+      "label_uz": "",
+      "text_type": "printed_series (typewriter, NOT handwritten)",
+      "example": "II-HR",
+      "notes": "Not present on the clean template; on the real form the series and number are printed centred below the signature line."
+    },
+    {
+      "id": "serial_number",
+      "measured_id": "series_number",
+      "baseline_y": null,
+      "bbox_xyxy": [
+        540,
+        1345,
+        680,
+        1372
+      ],
+      "label_uz": "",
+      "text_type": "printed_digits_7 (typewriter, NOT handwritten)",
+      "example": "0024695",
+      "notes": "Follows the series on the same printed line."
+    }
+  ]
+}

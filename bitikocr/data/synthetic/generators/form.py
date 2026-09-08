@@ -304,8 +304,11 @@ class FormGenerator(DocumentGenerator):
                 style=registrar_style,
                 rng=rng,
             )
+        stamped: dict[str, Any] = {}
         if options.draw_seal and template.seal is not None:
-            self._stamp(page, template.seal, fields, scale_x, scale_y, rng)
+            stamped = self._stamp(
+                page, template.seal, fields, scale_x, scale_y, rng
+            )
 
         printed = {}
         for area in template.printed:
@@ -317,10 +320,13 @@ class FormGenerator(DocumentGenerator):
 
         self._check_keep_out(page, template, scale_x, scale_y)
 
+        # Everything that reached the page, so the facts beside it can be
+        # limited to what a reader would actually find there.
         recorded = dict(values)
         if registrar_name:
             recorded[REGISTRAR_NAME_FIELD] = registrar_name
         recorded.update(printed)
+        recorded.update(stamped)
 
         annotation = page.annotation(
             self.reading_order,
@@ -468,7 +474,7 @@ class FormGenerator(DocumentGenerator):
         scale_x: float,
         scale_y: float,
         rng: random.Random,
-    ) -> None:
+    ) -> dict[str, Any]:
         """Press the round office seal onto its printed area.
 
         Args:
@@ -478,6 +484,10 @@ class FormGenerator(DocumentGenerator):
             scale_x: Native-to-page horizontal scale factor.
             scale_y: Native-to-page vertical scale factor.
             rng: Random source for the press's offset, size and colour.
+
+        Returns:
+            The lettering that was pressed, keyed by the fields it came
+            from, for the page's record of what it carries.
         """
         ring = str(fields.get(SEAL_RING_FIELD) or DEFAULT_SEAL_RING)
         centre_lines = list(
@@ -508,6 +518,7 @@ class FormGenerator(DocumentGenerator):
             rng=rng,
         )
         page.add_block("stamp", f"{ring} / {' '.join(centre_lines)}", box)
+        return {SEAL_RING_FIELD: ring, SEAL_CENTRE_FIELD: centre_lines}
 
     @staticmethod
     def _print_text(

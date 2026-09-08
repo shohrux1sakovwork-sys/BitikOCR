@@ -23,16 +23,24 @@ from bitikocr.data.synthetic.records import (
     available_record_types,
     sample_record,
 )
+from bitikocr.data.synthetic.scripts import Script
+from bitikocr.data.synthetic.tests.conftest import SINGLE_TEMPLATE
 from bitikocr.models.schema import FactsRecord, TranscriptionRecord
 
+#: One page of every document type, plus every further form variant.
+_PAGES: tuple[tuple[str, str | None], ...] = (
+    *((document_type, None) for document_type in available_record_types()),
+    ("death_certificate", SINGLE_TEMPLATE),
+)
 
-@pytest.fixture(params=available_record_types())
+
+@pytest.fixture(params=_PAGES, ids=lambda page: page[1] or page[0])
 def exported(
     request: pytest.FixtureRequest, config: SyntheticConfig
 ) -> tuple[TranscriptionRecord, FactsRecord]:
-    """One document of each type, described in the corpus schema."""
-    document_type = request.param
-    generator = create_generator(document_type, config)
+    """One document of each kind, described in the corpus schema."""
+    document_type, template = request.param
+    generator = create_generator(document_type, config, template=template)
     record = sample_record(document_type, random.Random(21), "cyrillic")
     document = generator.generate(record.fields, seed=record.seed)
 
@@ -45,7 +53,9 @@ def exported(
         collection="test_batch",
         quality=AugmentationReport(blur=True, rotation=-0.4, noise="medium"),
     )
-    facts = build_facts_record(record, "doc_000000", "images/doc_000000.png")
+    facts = build_facts_record(
+        record, "doc_000000", "images/doc_000000.png", document.annotation
+    )
     return transcription, facts
 
 
@@ -165,6 +175,28 @@ def test_a_blank_sheet_reports_only_its_own_alphabet(
     assert metadata["has_printed_text"] is False
 
 
+def test_a_single_script_form_reports_only_the_clerks_alphabet(
+    config: SyntheticConfig,
+) -> None:
+    """The single-page certificate is printed in Cyrillic, so a Cyrillic
+    record puts one alphabet on the page, and a Latin one two."""
+    generator = create_generator(
+        "death_certificate", config, template=SINGLE_TEMPLATE
+    )
+    cases: tuple[tuple[Script, list[str]], ...] = (
+        ("cyrillic", ["cyrillic"]),
+        ("latin", ["latin", "cyrillic"]),
+    )
+    for script, expected in cases:
+        record = sample_record("death_certificate", random.Random(2), script)
+        document = generator.generate(record.fields, seed=record.seed)
+        metadata = build_transcription_record(
+            record, document.annotation, generator, "doc_1", "images/x.png", "b"
+        ).to_dict()["metadata"]
+        assert metadata["scripts"] == expected
+        assert metadata["has_printed_text"] is True
+
+
 def test_marks_are_reported_from_what_was_drawn(
     exported: tuple[TranscriptionRecord, FactsRecord],
 ) -> None:
@@ -257,6 +289,55 @@ def test_every_fact_can_be_traced_back_to_the_page(
             continue
         for word in fact.evidence_text.split():
             assert word in written, f"{fact.field}: {word!r}"
+
+
+def test_facts_describe_only_what_reached_the_page(
+    config: SyntheticConfig,
+) -> None:
+    """A record holds every spelling its variants use. The facts beside a
+    page must not claim the ones this variant had no cell for."""
+    generator = create_generator(
+        "death_certificate", config, template=SINGLE_TEMPLATE
+    )
+    record = sample_record("death_certificate", random.Random(4), "cyrillic")
+    document = generator.generate(record.fields, seed=record.seed)
+    facts = build_facts_record(
+        record, "doc_1", "images/x.png", document.annotation
+    )
+
+    by_field = {fact.field: fact for fact in facts.facts}
+    assert "citizenship" not in by_field
+    assert by_field["issue"].value == record.dates["issue"]
+    assert by_field["issue"].evidence_text == (
+        f"{record.fields['issue_year']} {record.fields['issue_day_month']}"
+    )
+    assert by_field["form_series"].value == record.fields["form_series"]
+    assert by_field["stamp_ring"].category == "stamp_text"
+
+
+def test_the_bilingual_form_keeps_three_cells_of_issue_evidence(
+    config: SyntheticConfig,
+) -> None:
+    generator = create_generator("death_certificate", config)
+    record = sample_record("death_certificate", random.Random(4), "cyrillic")
+    document = generator.generate(record.fields, seed=record.seed)
+    facts = build_facts_record(
+        record, "doc_1", "images/x.png", document.annotation
+    )
+
+    by_field = {fact.field: fact for fact in facts.facts}
+    fields = record.fields
+    assert by_field["issue"].evidence_text == (
+        f"{fields['issue_year']} {fields['issue_month']} {fields['issue_day']}"
+    )
+    assert "form_series" not in by_field
+    assert "citizenship" in by_field
+
+
+def test_without_an_annotation_the_whole_record_is_taken_as_read() -> None:
+    record = sample_record("death_certificate", random.Random(4), "cyrillic")
+    facts = build_facts_record(record, "doc_1", "images/x.png")
+    assert "citizenship" in {fact.field for fact in facts.facts}
 
 
 def test_a_date_spread_over_three_fields_becomes_one_fact() -> None:

@@ -104,6 +104,7 @@ FIELD_FACTS: Mapping[str, Mapping[str, FieldFact]] = {
         "death_place_settlement": _fact("place"),
         "registration_office": _fact("organisation"),
         "registrar_name": _fact("signature_owner"),
+        "form_series": _fact("number", "id"),
         "serial_number": _fact("number", "id"),
         "stamp_ring": _fact("stamp_text"),
     },
@@ -143,11 +144,14 @@ YEAR_IN_WORDS: Mapping[str, Mapping[str, str]] = {
 
 #: Fields that together spell one date, per document type: the note holding
 #: the normalised value, then the fields whose text is the evidence for it.
+#: A group may list more spellings than any one form uses — the death
+#: certificate's issue date is three cells on one variant and two on
+#: another — and the evidence is whichever of them reached the page.
 DATE_GROUPS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "death_certificate": {
         "death": ("death_year", "death_month", "death_day"),
         "record": ("record_year", "record_month", "record_day"),
-        "issue": ("issue_year", "issue_month", "issue_day"),
+        "issue": ("issue_year", "issue_month", "issue_day", "issue_day_month"),
     },
     "birth_certificate": {
         "birth": ("child_birth_date",),

@@ -188,11 +188,29 @@ Latin-only font never receives a Cyrillic record. Check what it covers with
 ### Add a variant of an existing form
 
 1. Put the blank scan in `assets/backgrounds/`.
-2. Put its measured layout in `assets/layouts/<name>.json`.
+2. Put its measured layout in `assets/layouts/<document type>_<variant>.json`.
+   The prefix is how a form's variants are found, so keep it.
 3. `uv run bitikocr synth generate death_certificate --template <name>`
 
-No code changes. The layout's `width`/`height` must match the scan exactly,
-since every coordinate is scaled from them.
+No code changes, as long as the new form's cells go by the names the
+record sampler already emits — reuse the ids of the existing layout for
+that document type wherever the two forms have the same cell. The layout's
+`width`/`height` must match the scan exactly, since every coordinate is
+scaled from them.
+
+A variant may lack a cell the record has, or spell one differently. The
+death certificate ships two:
+
+| Layout | Form | Differs in |
+|---|---|---|
+| `death_certificate_bilingual` | two-page Latin/Cyrillic, the default | — |
+| `death_certificate_cyrillic_single` | older single page, Cyrillic only | no citizenship cell; issue day and month share one cell (`issue_day_month`); a typeset `form_series` beside the serial |
+
+The record is the superset: the sampler emits every spelling any variant
+needs, the template writes the fields it has cells for, and the facts file
+beside a page lists only what reached that page. The bilingual form suits
+either alphabet; the single-page form is printed in Cyrillic, so it is
+usually rendered with `--script cyrillic`.
 
 ### Add a whole new form
 

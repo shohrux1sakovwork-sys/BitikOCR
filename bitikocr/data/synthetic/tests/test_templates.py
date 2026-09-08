@@ -10,6 +10,7 @@ import pytest
 
 from bitikocr.config import SyntheticConfig
 from bitikocr.data.synthetic.templates import FormTemplate
+from bitikocr.data.synthetic.tests.conftest import SINGLE_TEMPLATE
 
 MINIMAL_LAYOUT: dict[str, Any] = {
     "template_name": "toy",
@@ -408,4 +409,153 @@ def test_every_birth_field_stays_inside_the_form(birth: FormTemplate) -> None:
     for field in birth.fields:
         for segment in field.segments:
             assert 0 <= segment.x_start < segment.x_end <= width, field.name
+            assert 0 < segment.baseline_y < height, field.name
+
+
+# -- the single-page cyrillic death certificate ----------------------------
+
+
+@pytest.fixture()
+def single(config: SyntheticConfig) -> FormTemplate:
+    """The measured layout of the single-page Cyrillic certificate."""
+    return FormTemplate.load(config.layout(SINGLE_TEMPLATE))
+
+
+def test_the_single_layout_matches_its_background(
+    single: FormTemplate, config: SyntheticConfig
+) -> None:
+    from PIL import Image
+
+    with Image.open(config.background(single.background)) as background:
+        assert background.size == single.native_size
+
+
+def test_the_single_layout_shares_the_bilingual_field_names(
+    single: FormTemplate, bilingual: FormTemplate
+) -> None:
+    """One death-certificate record fills either variant, so wherever both
+    forms have a cell it must go by the same name."""
+    single_names = set(single.field_names)
+    bilingual_names = set(bilingual.field_names)
+
+    # This form has no citizenship cell and joins the issue day and month.
+    assert bilingual_names - single_names == {
+        "citizenship",
+        "issue_month",
+        "issue_day",
+    }
+    assert single_names - bilingual_names == {"issue_day_month"}
+
+
+def test_the_single_layout_lists_its_fields_in_reading_order(
+    single: FormTemplate,
+) -> None:
+    assert single.field_names == (
+        "surname",
+        "given_name_patronymic",
+        "death_year",
+        "death_month",
+        "death_day",
+        "death_year_in_words",
+        "age_at_death",
+        "record_year",
+        "record_month",
+        "record_day",
+        "record_number",
+        "cause_of_death",
+        "death_place_settlement",
+        "death_place_district",
+        "death_place_region",
+        "death_place_country",
+        "registration_office",
+        "issue_year",
+        "issue_day_month",
+    )
+
+
+def test_the_single_layout_keeps_the_measured_rules(
+    single: FormTemplate,
+) -> None:
+    """Spot-check the rules against the measurement they were taken from."""
+    expected = {
+        "surname": 469,
+        "given_name_patronymic": 515,
+        "death_year": 564,
+        "death_day": 564,
+        "age_at_death": 701,
+        "record_month": 748,
+        "record_number": 793,
+        "death_place_country": 1089,
+        "issue_year": 1223,
+        "issue_day_month": 1223,
+    }
+    for name, baseline in expected.items():
+        assert single.field(name).segments[0].baseline_y == baseline, name
+    assert single.signature is not None
+    assert single.signature.baseline_y == 1296
+
+
+def test_the_single_layout_merges_its_ruled_continuations(
+    single: FormTemplate,
+) -> None:
+    assert len(single.field("cause_of_death").segments) == 3
+    assert len(single.field("death_year_in_words").segments) == 2
+    assert len(single.field("registration_office").segments) == 2
+    assert "cause_of_death_line1" not in single.field_names
+
+
+def test_single_continuations_run_down_the_page(single: FormTemplate) -> None:
+    for field in single.fields:
+        baselines = [segment.baseline_y for segment in field.segments]
+        assert baselines == sorted(baselines), field.name
+
+
+def test_the_single_layout_writes_digits_in_a_digit_hand(
+    single: FormTemplate,
+) -> None:
+    numeric = {field.name for field in single.fields if field.is_numeric}
+    assert numeric == {
+        "death_year",
+        "death_day",
+        "age_at_death",
+        "record_year",
+        "record_day",
+        "record_number",
+        "issue_year",
+    }
+    # The shared day-and-month cell holds a month name, so it is not.
+    assert not single.field("issue_day_month").is_numeric
+
+
+def test_the_single_layout_typesets_a_series_beside_the_serial(
+    single: FormTemplate,
+) -> None:
+    assert single.printed_names == ("form_series", "serial_number")
+
+
+def test_the_single_signature_line_is_also_the_name_line(
+    single: FormTemplate,
+) -> None:
+    assert single.signature is not None
+    assert single.signature.baseline_y is not None
+
+
+def test_the_single_seal_is_the_measured_circle(single: FormTemplate) -> None:
+    assert single.seal is not None
+    assert single.seal.centre == (300, 1290)
+    assert single.seal.radius == 110
+
+
+def test_the_single_layout_is_printed_in_cyrillic_only(
+    single: FormTemplate,
+) -> None:
+    assert single.printed_scripts == ("cyrillic",)
+
+
+def test_every_single_field_stays_inside_the_form(single: FormTemplate) -> None:
+    width, height = single.native_size
+    for field in single.fields:
+        for segment in field.segments:
+            assert 0 <= segment.x_start < segment.x_end <= width, field.name
+            assert 0 < segment.baseline_y < height, field.name
             assert 0 < segment.baseline_y < height, field.name

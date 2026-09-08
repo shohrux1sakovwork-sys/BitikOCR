@@ -202,10 +202,20 @@ default layout.
 Adding a variant of an existing form:
 
 1. Add the blank scan to `assets/backgrounds/`.
-2. Add its measured layout to `assets/layouts/<name>.json`.
+2. Add its measured layout to `assets/layouts/<document type>_<variant>.json`,
+   reusing the field ids of the existing layout wherever both forms have
+   the same cell.
 3. `bitikocr synth generate death_certificate --template <name>`.
 
 Adding a new form is the same plus a `FormGenerator` subclass naming it.
+
+Layouts are named `<document type>_<variant>` and that prefix is how a
+form's variants are found (`SyntheticConfig.layouts_for`). Variants differ
+in more than geometry — the single-page death certificate has no
+citizenship cell and joins the issue day and month into one — so the record
+is the superset: the sampler emits every spelling any variant needs, the
+template writes the fields it has cells for, and the facts file beside a
+page is built from what reached that page, not from the whole record.
 
 A generator opts into templates by overriding
 `DocumentGenerator.with_template`; the base refuses one, so passing a

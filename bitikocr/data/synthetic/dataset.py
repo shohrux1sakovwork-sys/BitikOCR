@@ -383,7 +383,7 @@ def _write_sample(
         encoding="utf-8",
     )
 
-    facts = build_facts_record(record, identifier, relative_image)
+    facts = build_facts_record(record, identifier, relative_image, annotation)
     facts_path.write_text(
         json.dumps(facts.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",

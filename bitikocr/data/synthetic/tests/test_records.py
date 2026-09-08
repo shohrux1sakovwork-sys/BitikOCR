@@ -101,13 +101,30 @@ def test_both_alphabets_appear_when_neither_is_forced() -> None:
 
 
 @pytest.mark.parametrize("document_type", available_record_types())
-def test_every_sampled_field_is_one_the_generator_knows(
+def test_every_sampled_field_is_one_a_generator_knows(
     document_type: str, config: SyntheticConfig
 ) -> None:
-    generator = create_generator(document_type, config)
-    known = set(generator.field_names)
+    """A record carries every spelling its form variants use, so it is
+    checked against the union of what those variants can write."""
+    variants: tuple[str | None, ...] = config.layouts_for(document_type) or (
+        None,
+    )
+    known: set[str] = set()
+    for template in variants:
+        generator = create_generator(document_type, config, template=template)
+        known |= set(generator.field_names)
     for record in sample_records(document_type, 10, random.Random(9)):
         assert set(record.fields) <= known, sorted(set(record.fields) - known)
+
+
+@pytest.mark.parametrize("document_type", available_record_types())
+def test_every_variant_of_a_form_is_named_after_its_document_type(
+    document_type: str, config: SyntheticConfig
+) -> None:
+    """Variants are found by name, so each must start with the type."""
+    for name in config.layouts_for(document_type):
+        assert name.startswith(f"{document_type}_")
+        create_generator(document_type, config, template=name)
 
 
 @pytest.mark.parametrize("document_type", available_record_types())
@@ -155,6 +172,24 @@ def test_a_serial_number_is_seven_digits() -> None:
     for record in sample_records("birth_certificate", 10, random.Random(14)):
         assert record.fields["form_number"].isdigit()
         assert len(record.fields["form_number"]) == 7
+
+
+def test_the_issue_date_is_spelled_both_ways() -> None:
+    """The bilingual form gives the issue day and month a cell each; the
+    single-page form one shared cell. Both spellings must agree."""
+    for record in sample_records("death_certificate", 10, random.Random(16)):
+        fields = record.fields
+        assert fields["issue_day_month"] == (
+            f"{fields['issue_day']} {fields['issue_month']}"
+        )
+
+
+def test_a_death_certificate_carries_a_series_beside_its_serial() -> None:
+    for record in sample_records("death_certificate", 10, random.Random(17)):
+        assert record.fields["serial_number"].isdigit()
+        numeral, letters = record.fields["form_series"].split("-")
+        assert numeral in ("I", "II", "III", "IV", "V")
+        assert len(letters) == 2
 
 
 # -- records on the wire ---------------------------------------------------

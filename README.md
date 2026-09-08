@@ -343,14 +343,24 @@ and the form gives the name a field elsewhere.
 
 **To add a form variant**, drop its scan in
 `bitikocr/data/synthetic/assets/backgrounds/` and its measured layout in
-`bitikocr/data/synthetic/assets/layouts/<name>.json`, then:
+`bitikocr/data/synthetic/assets/layouts/<document type>_<variant>.json`,
+then:
 
 ```bash
 uv run bitikocr synth generate death_certificate --template <name> -n 20 --boxes
 ```
 
-No code changes are needed. The layout's `width`/`height` must match the
-background scan exactly, since every coordinate is scaled from them.
+No code changes are needed, provided the new form's cells reuse the field
+ids of the existing layout for that document type. The layout's
+`width`/`height` must match the background scan exactly, since every
+coordinate is scaled from them.
+
+The death certificate ships two variants: `death_certificate_bilingual`,
+the two-page Latin/Cyrillic form and the default, and
+`death_certificate_cyrillic_single`, the older single-page Cyrillic form.
+One record fills either. Where a variant has no cell for a field, or spells
+one differently, the template writes what it has room for and the facts
+file beside the page lists only what reached it.
 
 **To add a whole new form** — a marriage certificate, a passport page — add
 its layout and a subclass naming the document type and its default

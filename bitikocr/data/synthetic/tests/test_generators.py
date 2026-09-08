@@ -16,10 +16,16 @@ from bitikocr.data.synthetic.generators import (
     BirthCertificateGenerator,
     DeathCertificateGenerator,
     FormGenerator,
+    FormOptions,
     available_document_types,
     create_generator,
 )
+from bitikocr.data.synthetic.generators.form import (
+    DEFAULT_SEAL_CENTRE,
+    DEFAULT_SEAL_RING,
+)
 from bitikocr.data.synthetic.records import sample_record
+from bitikocr.data.synthetic.tests.conftest import SINGLE_TEMPLATE
 from bitikocr.models.annotation import DocumentAnnotation
 
 
@@ -210,11 +216,23 @@ def test_a_partly_filled_certificate_only_reports_what_was_written(
     annotation = certificate_generator.generate(
         {"surname": "Раҳимова", "age_at_death": "71"}, seed=5
     ).annotation
-    assert annotation.metadata["fields"] == {
-        "surname": "Раҳимова",
-        "age_at_death": "71",
-    }
+    written = dict(annotation.metadata["fields"])
+    # The seal is pressed by default, so its lettering is on the page too.
+    assert written.pop("stamp_ring") == DEFAULT_SEAL_RING
+    assert written.pop("stamp_center") == list(DEFAULT_SEAL_CENTRE)
+    assert written == {"surname": "Раҳимова", "age_at_death": "71"}
     assert annotation.text == "Раҳимова\n71"
+
+
+def test_an_unstamped_certificate_reports_no_seal_lettering(
+    config: SyntheticConfig,
+) -> None:
+    generator = DeathCertificateGenerator(
+        config, options=FormOptions(scale=1.0, draw_seal=False)
+    )
+    annotation = generator.generate({"surname": "Раҳимова"}, seed=5).annotation
+    assert annotation.metadata["fields"] == {"surname": "Раҳимова"}
+    assert "stamp" not in {block.kind for block in annotation.blocks}
 
 
 def test_the_annotation_serialises_to_json(
@@ -559,3 +577,117 @@ def test_a_crowded_ariza_keeps_its_signature_block_on_the_page(
         written = {block.kind for block in annotation.blocks if block.bbox}
         assert "phone" in written, f"the phone fell off the page at seed {seed}"
         assert_boxes_are_inside_the_page(annotation)
+
+
+# -- the single-page cyrillic death certificate ----------------------------
+
+
+def test_the_single_form_can_be_chosen_from_the_registry(
+    config: SyntheticConfig,
+) -> None:
+    generator = create_generator(
+        "death_certificate", config, template=SINGLE_TEMPLATE
+    )
+    assert isinstance(generator, DeathCertificateGenerator)
+    assert generator.template.name == SINGLE_TEMPLATE
+    assert generator.registrar_writes_on_signature
+
+
+def test_the_single_form_fills_every_cell_it_has(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    filled = {block.kind for block in annotation.blocks if block.text}
+    assert set(single_generator.template.field_names) <= filled
+    assert {"registrar_name", "form_series", "serial_number"} <= filled
+    # The signature is a scribble, so it is a block with a box but no text.
+    marks = {block.kind for block in annotation.blocks if block.bbox}
+    assert {"stamp", "signature"} <= marks
+
+
+def test_the_single_form_leaves_out_what_it_has_no_cell_for(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    """The record also carries a citizenship and a separate issue day and
+    month; this form has nowhere to write them, and must not claim to."""
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    written = set(annotation.metadata["fields"])
+    assert "issue_day_month" in written
+    assert not {"citizenship", "issue_month", "issue_day"} & written
+    # The seal's two lettering fields are drawn as one stamp block.
+    blocks = {block.kind for block in annotation.blocks}
+    assert blocks == (written - {"stamp_ring", "stamp_center"}) | {
+        "stamp",
+        "signature",
+    }
+
+
+def test_the_single_form_prints_the_series_beside_the_serial(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    printed = {
+        block.kind: block
+        for block in annotation.blocks
+        if block.kind in ("form_series", "serial_number")
+    }
+    assert (
+        printed["form_series"].text == single_certificate_fields["form_series"]
+    )
+    assert printed["serial_number"].text == (
+        single_certificate_fields["serial_number"]
+    )
+    series, serial = printed["form_series"].bbox, printed["serial_number"].bbox
+    assert series is not None and serial is not None
+    assert series.right <= serial.left, "the series must come first"
+
+
+def test_the_single_form_writes_values_on_their_rules(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    assert_values_sit_on_their_rules(
+        single_generator, single_certificate_fields
+    )
+
+
+def test_the_single_form_keeps_every_box_on_the_page(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    for seed in range(4):
+        assert_boxes_are_inside_the_page(
+            single_generator.generate(
+                single_certificate_fields, seed=seed
+            ).annotation
+        )
+
+
+def test_the_single_form_records_one_block_per_field(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    kinds = [block.kind for block in annotation.blocks]
+    assert len(kinds) == len(set(kinds)), "a field was recorded twice"
+
+
+def test_the_single_form_is_reproducible_from_its_seed(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    first = single_generator.generate(single_certificate_fields, seed=7)
+    second = single_generator.generate(single_certificate_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()

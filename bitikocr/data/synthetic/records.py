@@ -248,7 +248,13 @@ def _sample_death_certificate(
         "issue_year": str(reg_year),
         "issue_month": reg_month,
         "issue_day": str(reg_day),
+        # The forms spell the issue date differently: the bilingual one
+        # gives the day and the month a cell each, the single-page one a
+        # shared cell after the year. The record carries both spellings and
+        # a template writes the one it has cells for.
+        "issue_day_month": f"{reg_day} {reg_month}",
         "registrar_name": corpus.sample_person(rng, script).initials(),
+        "form_series": _form_series(rng, script),
         "serial_number": _serial(rng),
         **_seal_text(rng, script),
     }
