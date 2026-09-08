@@ -119,7 +119,7 @@ def build_facts_record(
     record: DocumentRecord,
     document_id: str,
     image_path: str,
-    annotation: DocumentAnnotation | None = None,
+    annotation: DocumentAnnotation,
 ) -> FactsRecord:
     """Read the structured facts off one generated page.
 
@@ -128,10 +128,9 @@ def build_facts_record(
         document_id: The identifier this record shares with the
             transcription.
         image_path: Path to the page, relative to the corpus root.
-        annotation: What was actually drawn. When given, only the fields
-            that reached the page carry facts: a record holds every
-            spelling its form variants use, and one variant may have no
-            cell for some of them.
+        annotation: What was actually drawn. Only the fields that reached
+            the page carry facts: a record holds every spelling its form
+            variants use, and one variant may have no cell for some of them.
 
     Returns:
         The facts record.
@@ -147,15 +146,15 @@ def build_facts_record(
 
 
 def _fields_on_page(
-    record: DocumentRecord, annotation: DocumentAnnotation | None
+    record: DocumentRecord, annotation: DocumentAnnotation
 ) -> Mapping[str, Any]:
     """Return the record's fields that the generator actually drew.
 
     Generators list what they wrote under ``fields`` in the annotation's
-    metadata. Without that, or without an annotation, the whole record is
-    taken to be on the page.
+    metadata. A generator that records nothing there is taken to have
+    written the whole record.
     """
-    drawn = annotation.metadata.get("fields") if annotation else None
+    drawn = annotation.metadata.get("fields")
     if not isinstance(drawn, Mapping):
         return record.fields
     return {

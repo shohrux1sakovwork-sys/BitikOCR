@@ -399,7 +399,7 @@ before changing anything.
 make checks
 ```
 
-Runs isort, black, ruff, mypy and pytest. Tests live beside the code they
-cover — `bitikocr/tests/`, `bitikocr/models/tests/` and
-`bitikocr/data/synthetic/tests/` — so collecting the package finds them all. See [CODING_STYLE.md](CODING_STYLE.md)
+Runs isort, black, ruff, mypy and pytest. Every test lives in `tests/` at
+the repository root, one module per module of the package and named after
+it. See [CODING_STYLE.md](CODING_STYLE.md)
 for the rules and [ARCHITECHTURE.md](ARCHITECHTURE.md) for where new code goes.

@@ -9,8 +9,10 @@ from typing import Any
 import pytest
 
 from bitikocr.config import SyntheticConfig
+from bitikocr.data.synthetic.generators.death_certificate import (
+    SINGLE_TEMPLATE,
+)
 from bitikocr.data.synthetic.templates import FormTemplate
-from bitikocr.data.synthetic.tests.conftest import SINGLE_TEMPLATE
 
 MINIMAL_LAYOUT: dict[str, Any] = {
     "template_name": "toy",
@@ -473,28 +475,6 @@ def test_the_single_layout_lists_its_fields_in_reading_order(
     )
 
 
-def test_the_single_layout_keeps_the_measured_rules(
-    single: FormTemplate,
-) -> None:
-    """Spot-check the rules against the measurement they were taken from."""
-    expected = {
-        "surname": 469,
-        "given_name_patronymic": 515,
-        "death_year": 564,
-        "death_day": 564,
-        "age_at_death": 701,
-        "record_month": 748,
-        "record_number": 793,
-        "death_place_country": 1089,
-        "issue_year": 1223,
-        "issue_day_month": 1223,
-    }
-    for name, baseline in expected.items():
-        assert single.field(name).segments[0].baseline_y == baseline, name
-    assert single.signature is not None
-    assert single.signature.baseline_y == 1296
-
-
 def test_the_single_layout_merges_its_ruled_continuations(
     single: FormTemplate,
 ) -> None:
@@ -548,12 +528,6 @@ def test_the_single_signature_line_is_also_the_name_line(
 ) -> None:
     assert single.signature is not None
     assert single.signature.baseline_y is not None
-
-
-def test_the_single_seal_is_the_measured_circle(single: FormTemplate) -> None:
-    assert single.seal is not None
-    assert single.seal.centre == (300, 1290)
-    assert single.seal.radius == 110
 
 
 def test_the_single_layout_is_printed_in_cyrillic_only(

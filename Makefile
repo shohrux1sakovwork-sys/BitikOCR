@@ -2,21 +2,24 @@
 # even when the shell's code page is not UTF-8 (Windows).
 export PYTHONUTF8 = 1
 
+# The package and its suite. Everything that is checked, in one place.
+SOURCES = bitikocr tests
+
 .PHONY: install style style-check lint-check type-check test checks
 
 install:
 	uv sync --extra data
 
 style:
-	uv run isort bitikocr
-	uv run black bitikocr
+	uv run isort $(SOURCES)
+	uv run black $(SOURCES)
 
 style-check:
-	uv run isort --check-only bitikocr
-	uv run black --check bitikocr
+	uv run isort --check-only $(SOURCES)
+	uv run black --check $(SOURCES)
 
 lint-check:
-	uv run ruff check bitikocr
+	uv run ruff check $(SOURCES)
 
 type-check:
 	uv run mypy

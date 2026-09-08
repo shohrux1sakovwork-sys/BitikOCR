@@ -33,12 +33,10 @@
 │   ├── py.typed                 # Type hinting marker
 │   ├── cli.py                   # Application entry point
 │   ├── config.py                # The only module that reads the environment
-│   ├── tests/                   # Suite for the CLI and configuration
 │   ├── models/                  # Data classes and schemas
 │   │   ├── geometry.py          # BoundingBox
 │   │   ├── annotation.py        # Line / Block / Document annotations
-│   │   ├── schema.py            # The corpus interchange schema
-│   │   └── tests/               # Suite for the above
+│   │   └── schema.py            # The corpus interchange schema
 │   └── data/                    # Everything to do with the corpus
 │       └── synthetic/           # Synthetic training-data generation
 │           ├── README.md        # Developer's guide to this module
@@ -67,8 +65,8 @@
 │           │   ├── fonts/       # Handwriting fonts
 │           │   ├── backgrounds/ # Blank form scans
 │           │   └── layouts/     # Measured field geometry, one per form
-│           ├── tests/           # The generator's own suite
 │           └── output/          # Generated documents; gitignored
+└── tests/                       # The whole suite, one module per module
 ```
 
 Generated documents go to `bitikocr/data/synthetic/output/<type>/`, inside
@@ -242,7 +240,7 @@ typeset with them.
 2. Register it in `GENERATOR_TYPES` in `generators/__init__.py`.
 3. Add a record sampler to `records.py` and register it in
    `RECORD_SAMPLERS`, widening `corpus.py` if it needs new vocabulary.
-4. Add a test module under `tests/`.
+4. Add `tests/test_<module>.py`, named after the module it covers.
 
 Nothing else changes: the CLI, the registry and the dataset builder pick the
 new type up automatically.
@@ -288,21 +286,18 @@ Configuration is loaded once at startup (in `config.py` or `cli.py`) and passed 
 
 ### Where tests go
 
-Tests live beside the code they cover, one suite per layer:
+Every test lives in `tests/` at the repository root, one module per module
+of the package and named after it. The generator's `records.py` is covered
+by `tests/test_records.py`, the CLI by `tests/test_cli.py`.
 
-| Suite | Covers |
-|---|---|
-| `bitikocr/tests/` | The CLI and the configuration it loads |
-| `bitikocr/models/tests/` | The data classes and the corpus schema |
-| `bitikocr/data/synthetic/tests/` | The generator |
+The package therefore holds only shipping code, and the suite is one
+directory a newcomer can read end to end. `tests/conftest.py` holds the
+fixtures, and because there is a single directory every fixture reaches
+every module without being imported.
 
-There is no top-level `tests/`. One rule with no exception means a new
-layer brings its own suite without anyone having to decide where it goes —
-when the recogniser lands, `bitikocr/ocr/tests/` follows from the rule
-rather than from a discussion.
-
-Collecting the package finds every suite, so `pytest` and `mypy` are both
-pointed at `bitikocr` alone. No suite ships in the wheel.
+Module names must stay unique across the suite, since they share one
+namespace. That is what naming each after the module it covers already
+guarantees.
 
 ### Checklist for new modules
 
@@ -310,6 +305,6 @@ pointed at `bitikocr` alone. No suite ships in the wheel.
 - [ ] File and module names use `snake_case`
 - [ ] Module has a docstring at the top explaining its purpose
 - [ ] All public functions/classes have type annotations and docstrings
-- [ ] Corresponding test file beside the layer it covers
+- [ ] Corresponding `tests/test_<module>.py`, named after the new module
 - [ ] No circular imports (follow the dependency flow)
 - [ ] `make checks` passes

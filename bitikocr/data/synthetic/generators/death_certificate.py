@@ -20,9 +20,17 @@ from typing import ClassVar
 
 from bitikocr.data.synthetic.generators.form import FormGenerator
 
-__all__ = ["DEFAULT_TEMPLATE", "DeathCertificateGenerator"]
+__all__ = [
+    "DEFAULT_TEMPLATE",
+    "SINGLE_TEMPLATE",
+    "DeathCertificateGenerator",
+]
 
+#: The two-page bilingual form, filled when no variant is named.
 DEFAULT_TEMPLATE = "death_certificate_bilingual"
+
+#: The older single-page form, printed in Cyrillic only.
+SINGLE_TEMPLATE = "death_certificate_cyrillic_single"
 
 
 class DeathCertificateGenerator(FormGenerator):

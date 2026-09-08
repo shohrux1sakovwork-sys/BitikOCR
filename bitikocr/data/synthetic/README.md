@@ -114,13 +114,12 @@ Inside `generators/`:
 | `birth_certificate.py` | Four lines: a name and a default template |
 | `death_certificate.py` | Likewise |
 
-The module's own tests are in `tests/`, beside the code they cover, so
-everything the generator is and everything that proves it works sits in one
-directory. Every layer of the project is arranged this way. Run just these
-with:
+This module's tests are in `tests/` at the repository root, with the rest of
+the project's suite, one module there per module here. Run the generator's
+own with:
 
 ```bash
-uv run pytest bitikocr/data/synthetic/tests
+uv run pytest tests/test_generators.py tests/test_templates.py
 ```
 
 Assets in `assets/`:

@@ -19,12 +19,14 @@ from bitikocr.data.synthetic.facts import (
     build_facts,
 )
 from bitikocr.data.synthetic.generators import create_generator
+from bitikocr.data.synthetic.generators.death_certificate import (
+    SINGLE_TEMPLATE,
+)
 from bitikocr.data.synthetic.records import (
     available_record_types,
     sample_record,
 )
 from bitikocr.data.synthetic.scripts import Script
-from bitikocr.data.synthetic.tests.conftest import SINGLE_TEMPLATE
 from bitikocr.models.schema import FactsRecord, TranscriptionRecord
 
 #: One page of every document type, plus every further form variant.
@@ -332,12 +334,6 @@ def test_the_bilingual_form_keeps_three_cells_of_issue_evidence(
     )
     assert "form_series" not in by_field
     assert "citizenship" in by_field
-
-
-def test_without_an_annotation_the_whole_record_is_taken_as_read() -> None:
-    record = sample_record("death_certificate", random.Random(4), "cyrillic")
-    facts = build_facts_record(record, "doc_1", "images/x.png")
-    assert "citizenship" in {fact.field for fact in facts.facts}
 
 
 def test_a_date_spread_over_three_fields_becomes_one_fact() -> None:

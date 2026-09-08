@@ -1,7 +1,7 @@
 """Tests for the corpus schema's own record types.
 
 How a generated page is described *in* this schema is covered beside the
-generator, in bitikocr/data/synthetic/tests/test_export.py.
+generator, in tests/test_export.py.
 """
 
 from __future__ import annotations

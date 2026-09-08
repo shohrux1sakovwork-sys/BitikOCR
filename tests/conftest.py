@@ -1,4 +1,8 @@
-"""Shared fixtures for the test suite."""
+"""Shared fixtures for the whole test suite.
+
+Every test module lives in this directory, so every fixture defined here
+reaches all of them without being imported.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +17,9 @@ from bitikocr.data.synthetic.generators import (
     BirthCertificateGenerator,
     DeathCertificateGenerator,
     FormOptions,
+)
+from bitikocr.data.synthetic.generators.death_certificate import (
+    SINGLE_TEMPLATE,
 )
 from bitikocr.data.synthetic.records import sample_record
 from bitikocr.data.synthetic.style import HandwritingStyle, sample_style
@@ -64,10 +71,6 @@ def certificate_generator(
     changing any of the layout logic under test.
     """
     return DeathCertificateGenerator(config, options=FormOptions(scale=1.0))
-
-
-#: The older single-page death certificate, printed in Cyrillic only.
-SINGLE_TEMPLATE = "death_certificate_cyrillic_single"
 
 
 @pytest.fixture(scope="session")

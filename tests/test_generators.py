@@ -20,12 +20,14 @@ from bitikocr.data.synthetic.generators import (
     available_document_types,
     create_generator,
 )
+from bitikocr.data.synthetic.generators.death_certificate import (
+    SINGLE_TEMPLATE,
+)
 from bitikocr.data.synthetic.generators.form import (
     DEFAULT_SEAL_CENTRE,
     DEFAULT_SEAL_RING,
 )
 from bitikocr.data.synthetic.records import sample_record
-from bitikocr.data.synthetic.tests.conftest import SINGLE_TEMPLATE
 from bitikocr.models.annotation import DocumentAnnotation
 
 

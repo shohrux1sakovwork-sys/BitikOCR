@@ -19,13 +19,9 @@ module-root = ""
 # Fonts, blank scans and layouts ship with the package; the documents
 # generated from them do not.
 source-exclude = ["data/synthetic/output"]
-# Nothing generated and no test suite ships; the assets do.
-wheel-exclude = [
-    "data/synthetic/output",
-    "data/synthetic/tests",
-    "models/tests",
-    "tests",
-]
+# Nothing generated ships; the assets do. The suite lives outside the
+# package, in tests/ at the repository root, so it never reaches a wheel.
+wheel-exclude = ["data/synthetic/output"]
 
 [dependency-groups]
 dev = [
@@ -73,9 +69,9 @@ ignore = ["E501", "F403", "F405"]
 ignore_missing_imports = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
-packages = ["bitikocr"]
+files = ["bitikocr", "tests"]
 
 [tool.pytest.ini_options]
-# Tests live beside the code they cover, so collecting the package finds
-# every suite: bitikocr/tests, bitikocr/models/tests, and the generator's.
-testpaths = ["bitikocr"]
+# Every test lives in tests/ at the repository root, one module per module
+# of the package, sharing the fixtures in tests/conftest.py.
+testpaths = ["tests"]
