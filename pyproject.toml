@@ -29,6 +29,16 @@ dev = [
 [project.scripts]
 bitikocr = "bitikocr.cli:main"
 
+[project.optional-dependencies]
+train = [
+    "accelerate>=1.14.0",
+    "qwen-vl-utils>=0.0.14",
+    "torch>=2.14.0",
+    "torchvision>=0.29.0",
+    "transformers>=5.16.1",
+    "ujson>=5.10.0",
+]
+
 [tool.black]
 line-length = 80
 target-version = ["py311"]
