@@ -1,7 +1,11 @@
-"""Everything to do with the training corpus.
+"""Everything to do with the training corpus, on both sides of it.
 
-Today that is the synthetic generator in
-:mod:`bitikocr.data.synthetic`, which produces handwritten Uzbek documents
-together with exact ground truth. Real archive scans and the pipelines that
-prepare them belong beside it as they arrive.
+:mod:`bitikocr.data.synthetic` produces handwritten Uzbek documents together
+with exact ground truth, and :mod:`bitikocr.data.sft_dataset` loads
+image/transcription pairs and collates them into batches for supervised
+training. :mod:`bitikocr.data.models` holds the schema both of them
+describe a document in.
+
+Real archive scans and the pipelines that prepare them belong here too, as
+they arrive.
 """

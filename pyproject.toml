@@ -33,10 +33,20 @@ dev = [
 ]
 
 [project.optional-dependencies]
+# Making training data needs an image stack; consuming it needs a model
+# stack. They are separate extras because most work needs only one of them.
 data = [
     "fonttools>=4.63.0",
     "numpy>=2.4.6",
     "pillow>=12.3.0",
+]
+train = [
+    "accelerate>=1.14.0",
+    "qwen-vl-utils>=0.0.14",
+    "torch>=2.14.0",
+    "torchvision>=0.29.0",
+    "transformers>=5.16.1",
+    "ujson>=5.10.0",
 ]
 
 [tool.black]

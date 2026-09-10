@@ -2,29 +2,34 @@
 # even when the shell's code page is not UTF-8 (Windows).
 export PYTHONUTF8 = 1
 
+# Both halves of the project are checked together, so both extras are
+# needed: the generator draws pages, the training pipeline reads them.
+UV_RUN ?= uv run --locked --extra data --extra train
+
 # The package, its entry points and its suite: everything that is checked.
 SOURCES = bitikocr scripts tests
 
 .PHONY: install style style-check lint-check type-check test checks
 
 install:
-	uv sync --extra data
+	uv sync --extra data --extra train
 
 style:
-	uv run isort $(SOURCES)
-	uv run black $(SOURCES)
+	$(UV_RUN) isort $(SOURCES)
+	$(UV_RUN) black $(SOURCES)
 
 style-check:
-	uv run isort --check-only $(SOURCES)
-	uv run black --check $(SOURCES)
+	$(UV_RUN) isort --check-only $(SOURCES)
+	$(UV_RUN) black --check $(SOURCES)
 
 lint-check:
-	uv run ruff check $(SOURCES)
+	$(UV_RUN) ruff check $(SOURCES)
 
+# No argument: mypy reads the paths from [tool.mypy] in pyproject.toml.
 type-check:
-	uv run mypy
+	$(UV_RUN) mypy
 
 test:
-	uv run pytest
+	$(UV_RUN) python -m pytest -q
 
 checks: style-check lint-check type-check test

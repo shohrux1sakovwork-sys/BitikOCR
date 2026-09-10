@@ -2,18 +2,36 @@
 
 Handwritten text recognition (HTR) for Uzbek documents.
 
-The project currently covers the first stage of the pipeline: generating
-synthetic handwritten pages with pixel-accurate ground truth, so a recogniser
-can be trained before enough real archive scans are transcribed.
+The project covers two stages, and either is usable on its own:
+
+- **Making training data.** `bitikocr/data/synthetic` generates handwritten
+  pages with pixel-accurate ground truth, so a recogniser can be trained
+  before enough real archive scans have been transcribed.
+- **Training on it.** `bitikocr/data/sft_dataset` loads image/transcription
+  pairs and collates them into batches for a Qwen vision-language model. It
+  reads records that already exist; it does not collect or annotate them.
 
 ## Setup
+
+Python 3.11 or newer. The two stages have separate extras, so most work
+needs only one of them:
 
 ```bash
 uv sync --extra data
 ```
 
-The `data` extra pulls in Pillow, NumPy and fontTools, which are needed to
-*generate* training data but not to consume it.
+```bash
+uv sync --locked --extra train
+```
+
+The `data` extra pulls in Pillow, NumPy and fontTools, which *generate*
+training data. The `train` extra pulls in Torch, Transformers and the Qwen
+helpers, which *consume* it. To work on both at once, or to run the whole
+suite, install them together:
+
+```bash
+uv sync --extra data --extra train
+```
 
 ## Generating synthetic data
 
@@ -387,6 +405,71 @@ environment variables.
 Only a font that can render every character of a page is used, so adding a
 Latin-only font will not break Cyrillic documents.
 
+## Training data
+
+Supply a JSON array, a JSONL file (one record per line), or a Python list to
+`SupervisedDataset`. Each record must contain an image path and its exact text:
+
+```json
+{"image": "page-001.png", "text": "The transcription of this page."}
+```
+
+Additional metadata is preserved in the source records and is not sent to the
+model. Relative image paths are resolved under `image_folder` when configured,
+otherwise under the working directory. Absolute paths are used directly.
+
+```python
+from torch.utils.data import DataLoader
+from transformers import AutoProcessor
+
+from bitikocr.data.sft_dataset import make_supervised_data_module
+from bitikocr.params import DataArguments, ModelArguments
+
+model_id = ModelArguments().model_id
+processor = AutoProcessor.from_pretrained(model_id)
+data_args = DataArguments(
+    data_path="sample_data/train.jsonl",
+    image_folder="sample_data/images",
+)
+data_module = make_supervised_data_module(model_id, processor, data_args)
+loader = DataLoader(
+    dataset=data_module["dataset"],
+    collate_fn=data_module["data_collator"],
+    batch_size=2,
+    shuffle=True,
+)
+batch = next(iter(loader))
+```
+
+The default model is `Qwen/Qwen2.5-VL-7B-Instruct`. Loading its processor and
+configuration may download files from Hugging Face on first use. This example
+prepares a batch without loading model weights or starting training.
+
+## What is the data collator?
+
+`SupervisedDataset` prepares one image and its transcription at a time.
+`DataCollatorForSupervisedDataset` combines those examples into a batch:
+
+- Pads token sequences on the right to the longest sequence in that batch.
+- Pads attention masks with zero, preserving every real token's visibility.
+- Uses `-100` labels for the prompt and padding so only the transcription and
+  answer ending contribute to the training loss.
+- Preserves modality IDs and concatenates image patches and image grids in
+  the same order as the text examples.
+
+For example, sequences with lengths 120 and 90 produce a `[2, 120]` token tensor.
+The second sequence receives 30 padding positions with attention mask `0` and
+label `-100`. Image patches are concatenated because different image sizes can
+produce different patch counts. See the
+[Transformers data collator documentation](https://huggingface.co/docs/transformers/main_classes/data_collator)
+for the general batching concept.
+
+`make_supervised_data_module` returns `dataset` and `data_collator`. When using
+Transformers `Trainer`, pass these explicitly as `train_dataset` and
+`data_collator`. No evaluation split or training loop is provided yet. Sequence
+length is not truncated; choose image limits and batch sizes for the model's
+context window and available memory. Sample data and notebooks stay local.
+
 ## Going further
 
 [`bitikocr/data/synthetic/README.md`](bitikocr/data/synthetic/README.md) is the
@@ -400,7 +483,10 @@ before changing anything.
 make checks
 ```
 
-Runs isort, black, ruff, mypy and pytest. Every test lives in `tests/` at
-the repository root, one module per module of the package and named after
-it. See [CODING_STYLE.md](CODING_STYLE.md)
-for the rules and [ARCHITECHTURE.md](ARCHITECHTURE.md) for where new code goes.
+Runs isort, black, ruff, mypy and pytest over both halves. Every test lives
+in `tests/` at the repository root, one module per module of the package and
+named after it. The suite is offline: it needs both extras installed but no
+pretrained weights, and it downloads nothing.
+
+See [CODING_STYLE.md](CODING_STYLE.md) for the rules and
+[ARCHITECHTURE.md](ARCHITECHTURE.md) for where new code goes.
