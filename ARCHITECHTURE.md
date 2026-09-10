@@ -26,8 +26,16 @@
 ├── pyproject.toml           # Project config, dependencies, tool settings
 ├── uv.lock                  # Locked dependency versions (committed)
 ├── README.md                # Project documentation
+├── Makefile                 # Formatting, lint, type, and test commands
+├── tests/                   # Offline data preparation regression tests
 └── bitikocr/                # Main package directory
     ├── __init__.py          # Package initialization
+    ├── params.py            # Model and data argument dataclasses
+    ├── data/
+    │   ├── __init__.py      # Data package
+    │   ├── constants.py     # Qwen conversation tokens and ignored label
+    │   ├── data_utils.py    # Image preparation and model settings
+    │   └── sft_dataset.py   # OCR dataset, collator, and data module factory
     └── py.typed             # Type hinting marker
 ```
 
@@ -37,11 +45,17 @@
 
 | Module        | Responsibility                                     | Depends on           |
 |---------------|----------------------------------------------------|-----------------------|
+| `params`      | Model selection and image/data preparation arguments | (none)              |
+| `data/`       | Load image/text records, build supervised examples, batch tensors | `params`, PyTorch, Transformers, Qwen utilities |
 | `cli`         | Application entry point, CLI setup                 | `config`, `core`      |
 | `config`      | Load and validate configuration from env/files     | (none)                |
 | `models/`     | Data classes, schemas, type definitions            | (none)                |
 | `core/`       | Core OCR business logic and image processing       | `models`, `utils`     |
 | `utils/`      | Pure helper functions, no business logic           | (none)                |
+
+`params` and `data/` are implemented. The `cli`, `config`, `models/`, `core/`,
+and `utils/` rows describe planned modules. The data factory returns a dataset
+and collator; evaluation splitting and the training loop remain future work.
 
 
 ---
