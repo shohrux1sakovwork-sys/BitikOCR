@@ -38,10 +38,13 @@ _MAX_SEED = 2**31
 MODERN_FROM = 2000
 
 #: Share of records written in Latin when no script is forced. The archive
-#: holds both alphabets, but the font library is overwhelmingly Cyrillic, so
-#: Latin records would otherwise be drawn by the same handful of hands over
-#: and over. Raise this as Latin fonts are added.
-DEFAULT_LATIN_SHARE = 0.2
+#: holds both alphabets, but the font library is not evenly split, so this
+#: is set to spread the work across the hands rather than to mirror the
+#: archive: seven fonts can write Latin against seventeen for Cyrillic, and
+#: 0.3 gives each font of either alphabet roughly the same number of pages.
+#: Move it as fonts are added, or override it per batch with
+#: ``--latin-share``.
+DEFAULT_LATIN_SHARE = 0.3
 
 _ARIZA_SUBJECTS: tuple[str, ...] = (
     "yashab turgan turar joyimga egalik huquqini belgilab berishingizni",

@@ -214,10 +214,11 @@ records are sampled in either unless `--script` forces one. The vocabulary
 lives in `corpus.py` in Latin and is transliterated on demand; widen those
 lists to widen the data.
 
-The default mix is **80% Cyrillic**, because the font library is: fourteen
-Cyrillic hands against one Latin one, so Latin pages would otherwise be
-drawn by the same few fonts over and over. Raise `--latin-share` as Latin
-fonts are added.
+The default mix is **70% Cyrillic**, set from the font library rather than
+from the archive: seven fonts can write Latin against seventeen for
+Cyrillic, so 0.3 gives each font of either alphabet roughly the same number
+of pages. An even split would lean the Latin half on too few hands. Move
+`--latin-share` as fonts are added.
 
 Records are internally consistent — a death is registered after it happened,
 a family shares a surname, an age matches the year — because inconsistent

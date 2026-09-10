@@ -188,7 +188,7 @@ slant, line slope and scan skew.
 | Flag | Stage | What it does |
 |---|---|---|
 | `--script` | facts | Force `latin` or `cyrillic` for the whole batch |
-| `--latin-share` | facts | Share written in Latin when neither is forced (default 0.2) |
+| `--latin-share` | facts | Share written in Latin when neither is forced (default 0.3) |
 | `--seed` | facts | Make the whole run reproducible |
 | `--id-prefix` | both | What documents are called (default `doc`) |
 | `--template` | render | Which form variant to fill |
@@ -198,9 +198,10 @@ slant, line slope and scan skew.
 | `--augment` | render | How hard to spoil each page; `0` disables it |
 | `--boxes` | render | Also write a box overlay per page |
 
-`--latin-share` is low because the font library is mostly Cyrillic — an even
-split would draw every Latin page with the same few hands. Raise it as Latin
-fonts are added.
+`--latin-share` is set from the font library rather than from the archive:
+seven fonts can write Latin against seventeen for Cyrillic, and 0.3 gives
+each font of either alphabet roughly the same number of pages. An even split
+would lean the Latin half on too few hands. Move it as fonts are added.
 
 `--ink` exists because the shipped hands vary a lot in stroke weight and the
 thinnest wrote too faintly to read once a page had been aged. Raise it if a
