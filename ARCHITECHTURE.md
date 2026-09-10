@@ -248,8 +248,16 @@ Letters have the same shape of split without the measuring. Nothing about a
 blank sheet can be read off a scan, so `LetterGenerator` arranges the page
 itself — addressee block, title, body, signature — and each letter subclass
 adds only its foot: an ariza carries the receiving office's registration
-marks, a consent letter the mahalla's attestation and seal. A new kind of
-letter is a subclass and a sampler, with no asset at all.
+marks, a consent letter whatever attested to it. A new kind of letter is a
+subclass and a sampler, with no asset at all.
+
+What reaches a page can depend on facts about the document that are never
+written on it. A consent letter is sealed only by an author who has a seal —
+an organisation always, a citizen never, and the official who certified a
+citizen's signature on their behalf. The sampler decides that once and
+records it as `notes.author_kind`; the generator reads only the fields, so
+it stays a question of what the record says rather than of who is drawing
+it.
 
 Layouts are named `<document type>_<variant>` and that prefix is how a
 form's variants are found (`SyntheticConfig.layouts_for`). Variants differ

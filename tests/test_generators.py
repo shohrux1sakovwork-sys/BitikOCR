@@ -751,18 +751,66 @@ def test_a_consent_letter_writes_the_whole_letter(
     assert "signature_name" in written
 
 
-def test_a_consent_letter_is_certified_and_sealed(
+def test_a_certified_letter_is_attested_and_sealed(
     consent_generator: ConsentLetterGenerator,
     consent_fields: dict[str, Any],
 ) -> None:
-    """A consent letter is not filed with an office, it is attested to, and
-    the attestation is what makes it worth anything."""
+    """When a citizen has their signature attested to, the official signs
+    beside it and presses their own seal over the block."""
     annotation = consent_generator.generate(consent_fields, seed=5).annotation
     kinds = {block.kind for block in annotation.blocks if block.bbox}
     assert "certifier_note" in kinds
     assert "certifier_name" in kinds
     assert "stamp" in kinds
     assert CERTIFICATION_SIGNATURE_BLOCK in kinds
+
+
+def test_an_uncertified_citizens_letter_carries_no_seal(
+    consent_generator: ConsentLetterGenerator,
+    consent_plain_fields: dict[str, Any],
+) -> None:
+    """A private citizen has no seal of their own. Their letter is their
+    signature and nothing more, and stamping one would be a forgery."""
+    document = consent_generator.generate(consent_plain_fields, seed=5)
+    kinds = {block.kind for block in document.annotation.blocks}
+    assert "signature" in kinds, "the author still signs"
+    assert "stamp" not in kinds
+    assert CERTIFICATION_SIGNATURE_BLOCK not in kinds
+    assert not {"certifier_note", "certifier_role", "certifier_name"} & kinds
+    assert_boxes_are_inside_the_page(document.annotation)
+
+
+def test_an_organisations_letter_is_always_sealed(
+    consent_generator: ConsentLetterGenerator,
+    consent_organisation_fields: dict[str, Any],
+) -> None:
+    """A legal entity is required to seal what it signs, and the seal is
+    its own rather than a witness's."""
+    document = consent_generator.generate(consent_organisation_fields, seed=5)
+    kinds = {block.kind for block in document.annotation.blocks}
+    assert "stamp" in kinds
+    assert "signature" in kinds
+    # Nobody certifies an entity's own letter.
+    assert not {"certifier_note", "certifier_name"} & kinds
+    assert_boxes_are_inside_the_page(document.annotation)
+
+
+def test_a_citizen_writes_their_passport_and_phone_in_the_header(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+    consent_organisation_fields: dict[str, Any],
+) -> None:
+    """The sender's block has to identify a person well enough to act on;
+    an organisation identifies itself by its name instead."""
+    citizen = consent_generator.generate(consent_fields, seed=5).annotation
+    blocks = {block.kind: block.text for block in citizen.blocks}
+    assert blocks["passport"] == consent_fields["passport"]
+    assert blocks["phone"] == consent_fields["phone"]
+
+    entity = consent_generator.generate(
+        consent_organisation_fields, seed=5
+    ).annotation
+    assert "passport" not in {block.kind for block in entity.blocks}
 
 
 def test_the_two_signatures_are_told_apart(

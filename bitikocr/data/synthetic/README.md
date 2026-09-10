@@ -113,7 +113,7 @@ Inside `generators/`:
 | `form.py` | `FormGenerator`: filling any pre-printed form |
 | `letter.py` | `LetterGenerator`: writing any letter on a blank sheet |
 | `ariza.py` | An application letter: a letter plus the office's marks |
-| `consent_letter.py` | A consent letter: a letter plus a certification and a seal |
+| `consent_letter.py` | A consent letter: a letter plus whatever attests to it |
 | `birth_certificate.py` | Four lines: a name and a default template |
 | `death_certificate.py` | Likewise |
 
@@ -122,8 +122,30 @@ a **printed form** whose cells were measured, so `FormGenerator` reads where
 everything goes from a layout. A letter is written on a **blank sheet**, so
 `LetterGenerator` arranges it instead: addressee block top-right, centred
 title, wrapped body, signature, shrinking the hand until it fits. What each
-letter adds is its foot — an ariza is registered by the office that receives
-it, a consent letter is certified by the mahalla and sealed.
+letter adds is its foot — an ariza carries the receiving office's
+registration marks, a consent letter whatever attests to it.
+
+### Who may seal a consent letter
+
+A seal is not decoration, and it is not on every page. Who wrote the letter
+decides whether one appears at all:
+
+| Author | Signs | Seal |
+|---|---|---|
+| A citizen, uncertified | Themselves | **None.** A private person has no seal |
+| A citizen, certified | Themselves, then the official | The **official's** — a notary's or the mahalla's |
+| An organisation | Its head | **Always**, and it is the organisation's own |
+
+A citizen also identifies themselves by passport and telephone in the
+sender's block; an organisation identifies itself by name and the post its
+signatory holds, and carries neither. The subjects follow from the same
+split: a citizen consents about a boundary, a privatisation or a housing
+claim, while an organisation consents in the plural to work being done or
+its premises being used.
+
+Which sort of author wrote a page is recorded on the record as
+`notes.author_kind`. It is never written on the page, so it is a label to
+filter a corpus by, not something a recogniser is asked to read.
 
 This module's tests are in `tests/` at the repository root, with the rest of
 the project's suite, one module there per module here. Run the generator's

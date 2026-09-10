@@ -19,12 +19,14 @@ from bitikocr.data.synthetic.scripts import Bilingual, Script, in_script
 __all__ = [
     "DISTRICTS",
     "MONTHS",
+    "ORGANISATION_ROLES",
     "STREETS",
     "Address",
     "Person",
     "sample_address",
     "sample_mahalla",
     "sample_office",
+    "sample_organisation",
     "sample_person",
     "sample_place",
 ]
@@ -217,6 +219,44 @@ STREETS: tuple[str, ...] = (
     "Bog'bon",
     "Tinchlik",
     "Gulzor",
+)
+
+#: Organisations that write letters of their own. A legal entity writes on
+#: its own letterhead and seals what it signs, unlike a private citizen.
+_ORGANISATION_NAMES: tuple[str, ...] = (
+    "Gulzor",
+    "Navro'z",
+    "Sharq",
+    "Zamin",
+    "Oltin vodiy",
+    "Yangi asr",
+    "Baraka",
+    "Nurafshon",
+)
+
+#: Legal forms an Uzbek company takes, and the institutions that are not
+#: companies at all but still write and seal letters.
+_ORGANISATION_FORMS: tuple[str, ...] = (
+    "MChJ",
+    "OAJ",
+    "XK",
+    "QK",
+)
+
+_INSTITUTIONS: tuple[str, ...] = (
+    "umumta'lim maktabi",
+    "bolalar bog'chasi",
+    "tibbiyot birlashmasi",
+    "kasb-hunar kolleji",
+    "madaniyat markazi",
+)
+
+#: What the person who signs for an organisation is called.
+ORGANISATION_ROLES: tuple[str, ...] = (
+    "direktori",
+    "raisi",
+    "boshlig'i",
+    "mudiri",
 )
 
 #: Names a neighbourhood committee — the mahalla — goes by. Its seal is what
@@ -428,6 +468,23 @@ def sample_address(
 def sample_mahalla(rng: random.Random, script: Script) -> str:
     """Sample the name of a neighbourhood committee."""
     return in_script(rng.choice(_MAHALLAS), script)
+
+
+def sample_organisation(rng: random.Random, script: Script) -> str:
+    """Sample the name of a legal entity, as its letterhead writes it.
+
+    Args:
+        rng: Random source.
+        script: Alphabet to write the name in.
+
+    Returns:
+        A company such as ``"Gulzor" MChJ``, or an institution such as
+        ``Navro'z umumta'lim maktabi``.
+    """
+    name = rng.choice(_ORGANISATION_NAMES)
+    if rng.random() < 0.5:
+        return in_script(f'"{name}" {rng.choice(_ORGANISATION_FORMS)}', script)
+    return in_script(f"{name} {rng.choice(_INSTITUTIONS)}", script)
 
 
 def sample_office(rng: random.Random, script: Script) -> str:

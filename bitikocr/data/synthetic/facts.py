@@ -92,7 +92,11 @@ FIELD_FACTS: Mapping[str, Mapping[str, FieldFact]] = {
     },
     "consent_letter": {
         "recipient": _fact("person_name"),
+        # The sender's block: an address for a citizen, a name and a post
+        # for an organisation. Either way it says who the letter is from.
         "applicant": _fact("address"),
+        "passport": _fact("number", "id"),
+        "phone": _fact("number", "phone"),
         "body": _fact("subject"),
         "signature_name": _fact("signature_owner"),
         "certifier_role": _fact("organisation"),

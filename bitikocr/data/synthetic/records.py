@@ -63,14 +63,41 @@ _ARIZA_OPENINGS: tuple[str, ...] = (
 
 _TITLES: tuple[str, ...] = ("Ariza",)
 
-#: What a consent letter consents to. Each is a template filled from the
-#: sampled people and addresses; between them they cover the three subjects
-#: the scanned letters carry — a shared boundary, a privatisation, and a
-#: neighbour's housing claim.
-_CONSENT_SUBJECTS: tuple[str, ...] = ("boundary", "privatisation", "housing")
+#: What a citizen consents to. Between them these cover the three
+#: subjects the scanned letters carry — a shared boundary, a
+#: privatisation, and a neighbour's housing claim.
+_INDIVIDUAL_SUBJECTS: tuple[str, ...] = (
+    "boundary",
+    "privatisation",
+    "housing",
+)
+
+#: What an organisation consents to. An entity has no courtyard and no
+#: family, so it consents to work being done and to its premises being
+#: used, and it says so in the first person plural.
+_ORGANISATION_SUBJECTS: tuple[str, ...] = ("works", "premises")
 
 #: How a letter opens when it states the consent directly.
 _CONSENT_OPENING = "Beraman ushbu rozilik xatini shu haqdakim"
+
+#: Who is writing. A private citizen signs for themselves and carries no
+#: seal of their own; an organisation writes on its own letterhead and seals
+#: what its head signs. That difference is what decides whether a seal
+#: appears on the page at all.
+_CONSENT_AUTHORS: tuple[str, ...] = ("individual", "organisation")
+
+#: Share of letters written by a private citizen rather than an
+#: organisation. Most consents in an archive are personal.
+_INDIVIDUAL_SHARE = 0.75
+
+#: Share of a citizen's letters that were taken to be certified. An
+#: uncertified one carries a signature and nothing else.
+_CERTIFIED_SHARE = 0.6
+
+#: Who certifies a citizen's signature, and whose seal therefore lands on
+#: the page. A notary is required for the weightier consents; for the rest
+#: the mahalla chairman does it.
+_CERTIFIERS: tuple[str, ...] = ("notary", "mahalla")
 
 #: What the certifying official writes above their signature.
 _CERTIFIER_NOTES: tuple[str, ...] = (
@@ -79,11 +106,17 @@ _CERTIFIER_NOTES: tuple[str, ...] = (
     "Imzosini tasdiqlayman",
 )
 
-#: Who certifies the signature. The mahalla chairman does it most often.
-_CERTIFIER_ROLES: tuple[str, ...] = (
+#: What the mahalla's certifier is called.
+_MAHALLA_ROLES: tuple[str, ...] = (
     "MFY raisi",
     "Mahalla raisi",
     "MFY kotibi",
+)
+
+#: What a notary is called.
+_NOTARY_ROLES: tuple[str, ...] = (
+    "Notarius",
+    "Davlat notariusi",
 )
 
 
@@ -95,11 +128,15 @@ class SampledContent:
         fields: The field values, as they will be written on the page.
         year: The year the document is dated, for balancing the corpus.
         dates: Normalised ``YYYY-MM-DD`` dates for its date groups.
+        notes: What the sampler knows that the page does not say, such as
+            whether a citizen or an organisation wrote it. It reaches the
+            record's notes, never its text.
     """
 
     fields: dict[str, Any]
     year: int
     dates: dict[str, str] = field(default_factory=dict)
+    notes: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -194,10 +231,6 @@ def _seal_text(rng: random.Random, script: Script) -> dict[str, Any]:
 def _mahalla_seal_text(rng: random.Random, script: Script) -> dict[str, Any]:
     """Sample the lettering pressed into a neighbourhood committee's seal.
 
-    A resident's signature is certified by their mahalla, not by the
-    registry, so a consent letter carries that seal rather than the
-    registry's.
-
     Args:
         rng: Random source.
         script: Alphabet the lettering is written in.
@@ -213,10 +246,79 @@ def _mahalla_seal_text(rng: random.Random, script: Script) -> dict[str, Any]:
         f"O'zbekiston Respublikasi * {region} viloyati {district} shahar "
         f"{mahalla} mahalla fuqarolar yig'ini *"
     )
+    return _seal_fields(ring, [mahalla], script)
+
+
+def _notary_seal_text(rng: random.Random, script: Script) -> dict[str, Any]:
+    """Sample the lettering pressed into a notary's seal."""
+    region = rng.choice(list(corpus.DISTRICTS))
+    district = rng.choice(corpus.DISTRICTS[region])
+    ring = (
+        f"O'zbekiston Respublikasi * {region} viloyati {district} shahar "
+        f"davlat notarial idorasi *"
+    )
+    return _seal_fields(ring, ["Notarius"], script)
+
+
+def _organisation_seal_text(
+    rng: random.Random, script: Script, organisation: str
+) -> dict[str, Any]:
+    """Sample the lettering pressed into an organisation's own seal.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the lettering is written in.
+        organisation: The entity's name, already written in ``script``.
+
+    Returns:
+        The ring text and the centre lines.
+    """
+    region = rng.choice(list(corpus.DISTRICTS))
+    ring = in_script(f"O'zbekiston Respublikasi * {region} viloyati *", script)
+    # The name is already in the record's alphabet, so it is spliced in
+    # rather than transliterated a second time.
+    return {
+        "stamp_ring": f"{ring} {organisation}".upper(),
+        "stamp_center": [organisation],
+    }
+
+
+def _seal_fields(
+    ring: str, centre: list[str], script: Script
+) -> dict[str, Any]:
+    """Write one seal's Latin lettering into the record's own alphabet."""
     return {
         "stamp_ring": in_script(ring, script).upper(),
-        "stamp_center": [in_script(mahalla, script)],
+        "stamp_center": [in_script(line, script) for line in centre],
     }
+
+
+def _passport(rng: random.Random, script: Script) -> str:
+    """Sample a passport series and number.
+
+    The series is two letters, and a clerk writes them in the alphabet the
+    rest of the page uses.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the letters are drawn from.
+
+    Returns:
+        A passport such as "AB 1234567".
+    """
+    alphabet = (
+        "ABCDEFGHIKLMNOPRSTUVXYZ"
+        if script == "latin"
+        else "АБВГДЕЖЗИКЛМНОПРСТУФХЧШЮЯ"
+    )
+    letters = "".join(rng.choice(alphabet) for _ in range(2))
+    return f"{letters} {rng.randrange(10**7):07d}"
+
+
+def _phone(rng: random.Random) -> str:
+    """Sample a mobile number as a letter's header writes it."""
+    code = rng.choice(("90", "91", "93", "94", "97", "99", "88"))
+    return f"+998 {code} {rng.randint(100, 999)} {rng.randint(10, 99)} {rng.randint(10, 99)}"
 
 
 def _serial(rng: random.Random) -> str:
@@ -504,7 +606,8 @@ def _consent_body(
     Args:
         rng: Random source for the other parties and their addresses.
         script: Alphabet the fixed words are written in.
-        subject: One of :data:`_CONSENT_SUBJECTS`.
+        subject: One of :data:`_INDIVIDUAL_SUBJECTS` or
+            :data:`_ORGANISATION_SUBJECTS`.
         home: The author's own address.
         city: The city every party in the letter lives in.
 
@@ -513,6 +616,28 @@ def _consent_body(
     """
     opening = in_script(_CONSENT_OPENING, script)
     mine = home.short(script)
+
+    if subject == "works":
+        # An organisation consents on behalf of itself, in the plural.
+        site = corpus.sample_address(rng, script, city)
+        ours = in_script("Bizning tashkilotimiz", script)
+        at_site = in_script("manzilida olib borilayotgan", script)
+        works = in_script("qurilish ishlariga hech qanday", script)
+        no_objection = in_script("e'tirozimiz yo'qligini bildiramiz", script)
+        return (
+            f"{ours} {site.short(script)} {at_site} " f"{works} {no_objection}."
+        )
+
+    if subject == "premises":
+        neighbour = corpus.sample_person(rng, script)
+        site = corpus.sample_address(rng, script, city)
+        premises = in_script("manzilidagi binodan", script)
+        usage = in_script("foydalanishiga roziligimizni", script)
+        state = in_script("bildiramiz", script)
+        return (
+            f"{site.short(script)} {premises} {neighbour.surname} "
+            f"{neighbour.given_name} {usage} {state}."
+        )
 
     if subject == "boundary":
         # A shared courtyard boundary, agreed to carry no dispute.
@@ -577,13 +702,91 @@ def _consent_body(
     )
 
 
+def _consent_author(
+    rng: random.Random, script: Script, city: str, home: corpus.Address
+) -> tuple[str, dict[str, Any]]:
+    """Sample who is writing the letter, and what that puts on the page.
+
+    A private citizen identifies themselves by passport and address and
+    signs for themselves. An organisation writes as an entity: its name, the
+    post its signatory holds, and its own round seal, which it is required
+    to press on anything it signs.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the text is written in.
+        city: The city the letter is written in.
+        home: The citizen's address, used only when a citizen is writing.
+
+    Returns:
+        ``(kind, fields)``: which sort of author this is, and their fields,
+        carrying a seal only when the author has one of their own.
+    """
+    person = corpus.sample_person(rng, script)
+    kind = "individual" if rng.random() < _INDIVIDUAL_SHARE else "organisation"
+
+    if kind == "organisation":
+        organisation = corpus.sample_organisation(rng, script)
+        role = in_script(rng.choice(corpus.ORGANISATION_ROLES), script)
+        by_suffix = in_script("tomonidan", script)
+        return kind, {
+            "applicant": (
+                f"{organisation} {role} {person.surname} "
+                f"{person.given_name} {by_suffix}"
+            ),
+            "signature_name": f"{person.surname} {person.given_name[0]}.",
+            # A legal entity seals what it signs, so this letter always
+            # carries one, and it is the entity's own.
+            **_organisation_seal_text(rng, script, organisation),
+        }
+
+    resident = in_script("da yashovchi fuqaro", script)
+    by_suffix = in_script("tomonidan", script)
+    return kind, {
+        "applicant": (
+            f"{home.line(script)}{resident} {person.surname} "
+            f"{person.given_name} {person.patronymic} {by_suffix}"
+        ),
+        "passport": _passport(rng, script),
+        "phone": _phone(rng),
+        "signature_name": f"{person.surname} {person.given_name}",
+    }
+
+
+def _consent_certification(
+    rng: random.Random, script: Script
+) -> dict[str, Any]:
+    """Sample the official who attests to a citizen's signature.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the text is written in.
+
+    Returns:
+        The certifier's fields together with their seal — a notary's or the
+        mahalla's, never the citizen's, who has none.
+    """
+    official = corpus.sample_person(rng, script, is_female=False)
+    kind = rng.choice(_CERTIFIERS)
+    roles = _NOTARY_ROLES if kind == "notary" else _MAHALLA_ROLES
+    seal = (
+        _notary_seal_text(rng, script)
+        if kind == "notary"
+        else _mahalla_seal_text(rng, script)
+    )
+    return {
+        "certifier_note": in_script(rng.choice(_CERTIFIER_NOTES), script),
+        "certifier_role": in_script(rng.choice(roles), script),
+        "certifier_name": f"{official.surname} {official.given_name[0]}.",
+        **seal,
+    }
+
+
 def _sample_consent_letter(
     rng: random.Random, script: Script
 ) -> SampledContent:
     """Sample the content of one consent letter."""
     official = corpus.sample_person(rng, script, is_female=False)
-    author = corpus.sample_person(rng, script)
-    certifier = corpus.sample_person(rng, script, is_female=False)
 
     region = rng.choice(list(corpus.DISTRICTS))
     district = rng.choice(corpus.DISTRICTS[region])
@@ -591,46 +794,44 @@ def _sample_consent_letter(
     home = corpus.sample_address(rng, script, city)
 
     mayor = in_script("hokimi", script)
-    resident = in_script("da yashovchi fuqaro", script)
     to_suffix = in_script("ga", script)
-    by_suffix = in_script("tomonidan", script)
+    title = in_script("Rozilik xati", script)
 
-    recipient = f"{city} {mayor} {official.initials()}{to_suffix}"
-    applicant = (
-        f"{home.line(script)}{resident} "
-        f"{author.surname} {author.given_name} {by_suffix}"
+    author_kind, author = _consent_author(rng, script, city, home)
+    subject = rng.choice(
+        _INDIVIDUAL_SUBJECTS
+        if author_kind == "individual"
+        else _ORGANISATION_SUBJECTS
     )
-
-    subject = rng.choice(_CONSENT_SUBJECTS)
     year = rng.randint(1995, 2024)
     month = rng.randint(1, 12)
     day = rng.randint(1, 28)
 
     fields: dict[str, Any] = {
-        "recipient": recipient,
-        "applicant": applicant,
-        "title": in_script("Rozilik xati", script),
+        "recipient": f"{city} {mayor} {official.initials()}{to_suffix}",
+        # Typed letters set the title in capitals; a hand usually does not.
+        "title": title.upper() if rng.random() < 0.3 else title,
         "body": _consent_body(rng, script, subject, home, city),
-        "signature_name": f"{author.surname} {author.given_name}",
-        "certifier_note": in_script(rng.choice(_CERTIFIER_NOTES), script),
-        "certifier_role": in_script(rng.choice(_CERTIFIER_ROLES), script),
-        "certifier_name": f"{certifier.surname} {certifier.given_name[0]}.",
         "page_number": str(rng.randint(1, 450)),
-        **_mahalla_seal_text(rng, script),
+        **author,
     }
 
-    # Only some letters are dated in the author's own hand, the archive
-    # numbers only some pages, and the certifier does not always write
-    # their office beside their name.
+    # Only a citizen needs someone else to vouch for their signature, and
+    # only then does a seal reach the page. An organisation has already
+    # sealed its own letter.
+    if author_kind == "individual" and rng.random() < _CERTIFIED_SHARE:
+        fields.update(_consent_certification(rng, script))
+
     if rng.random() < 0.45:
         fields["date"] = f"{day:02d}.{month:02d}.{year}"
     if rng.random() < 0.25:
         fields.pop("page_number")
-    if rng.random() < 0.3:
-        fields.pop("certifier_role")
 
     return SampledContent(
-        fields=fields, year=year, dates={"filed": _iso(year, month, day)}
+        fields=fields,
+        year=year,
+        dates={"filed": _iso(year, month, day)},
+        notes={"author_kind": author_kind},
     )
 
 
@@ -697,6 +898,7 @@ def sample_record(
             "year_approx": content.year,
             "era": "modern" if content.year >= MODERN_FROM else "old",
             "dates": content.dates,
+            **content.notes,
         },
     )
 

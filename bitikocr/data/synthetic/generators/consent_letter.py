@@ -93,13 +93,15 @@ class ConsentLetterGenerator(LetterGenerator):
     # body is fitted into a shorter page than an ariza's.
     foot_allowance: ClassVar[float] = 9.5
 
-    # A certified letter carries a seal, which is printed matter pressed onto
-    # a handwritten page.
-    has_printed_text: ClassVar[bool] = True
+    # The spec puts the date at the foot on the left, with the signature
+    # opposite it on the right.
+    date_x: ClassVar[tuple[float, float]] = (0.12, 0.24)
 
     FIELD_NAMES: ClassVar[tuple[str, ...]] = (
         "recipient",
         "applicant",
+        "passport",
+        "phone",
         "body",
         "title",
         "signature_name",
@@ -116,6 +118,8 @@ class ConsentLetterGenerator(LetterGenerator):
         "page_number",
         "recipient",
         "applicant",
+        "passport",
+        "phone",
         "title",
         "body",
         "signature_name",
@@ -135,6 +139,26 @@ class ConsentLetterGenerator(LetterGenerator):
         """Blocks in the order a human reads the finished letter."""
         return self.READING_ORDER
 
+    def _header_extra(self, fields: FieldValues) -> list[tuple[str, str]]:
+        """Identify a private citizen by passport and telephone.
+
+        A letter from a citizen has to say who they are well enough to be
+        acted on, so the sender's block carries their passport and a number
+        to reach them on. An organisation identifies itself by its name and
+        carries neither.
+
+        Args:
+            fields: The record's field values.
+
+        Returns:
+            The passport and telephone lines that are present.
+        """
+        return [
+            (name, str(fields[name]))
+            for name in ("passport", "phone")
+            if fields.get(name)
+        ]
+
     def _second_hand_text(self, fields: FieldValues) -> str:
         """Return what the certifying official writes, not the author."""
         return " ".join(
@@ -152,7 +176,13 @@ class ConsentLetterGenerator(LetterGenerator):
         style: HandwritingStyle,
         y: int,
     ) -> None:
-        """Certify the letter: attest to it, sign it and press the seal.
+        """Attest to the letter, sign the attestation and press the seal.
+
+        The two are independent, because who signs and who seals depends on
+        who wrote the letter. A citizen's letter is attested to by an
+        official, and the seal that follows is that official's. An
+        organisation attests to nothing — it signs its own letter and seals
+        it, so the page gets a seal and no attestation at all.
 
         The official's name may share the attesting line or take one of its
         own. Which it is follows the record: a letter that names the office
@@ -170,8 +200,6 @@ class ConsentLetterGenerator(LetterGenerator):
         note = str(fields.get("certifier_note") or "")
         role = str(fields.get("certifier_role") or "")
         name = str(fields.get("certifier_name") or "")
-        if not (note or name):
-            return
 
         width, height = self.page_size
         font_size = style.font_size
@@ -181,6 +209,12 @@ class ConsentLetterGenerator(LetterGenerator):
             y + int(font_size * rng.uniform(*_CERTIFICATION_GAP)),
             last_baseline,
         )
+        if not (note or name):
+            # Nobody attested to this one. Whatever seal it carries is the
+            # author's own, and it goes where the attestation would have.
+            self._stamp(page, fields, rng, font_size, y)
+            return
+
         if note:
             page.put_lines(
                 "certifier_note",

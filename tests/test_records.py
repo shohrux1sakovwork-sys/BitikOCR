@@ -227,25 +227,94 @@ def test_a_year_outside_the_supported_range_is_rejected() -> None:
         corpus.year_in_words(1500, "latin")
 
 
-def test_a_consent_letter_names_both_parties_and_its_certifier() -> None:
-    """The letter is worthless without someone attesting to the signature,
-    so the sampler must always produce one."""
-    for record in sample_records("consent_letter", 20, random.Random(18)):
+def test_only_an_author_with_a_seal_of_their_own_puts_one_on_the_page() -> None:
+    """This is the rule the whole document type turns on.
+
+    A private citizen has no seal. Their letter carries their signature and
+    nothing more, unless they took it to a notary or the mahalla, whose
+    seal it then is. A legal entity has a seal and is required to press it
+    on anything it signs, so its letters always carry one.
+    """
+    records = sample_records("consent_letter", 120, random.Random(18))
+    seen = set()
+
+    for record in records:
+        kind = record.notes["author_kind"]
+        certified = bool(record.fields.get("certifier_name"))
+        sealed = bool(record.fields.get("stamp_ring"))
+        seen.add((kind, certified))
+
+        if kind == "organisation":
+            assert sealed, "a legal entity must seal what it signs"
+            assert not certified, "an entity does not certify its own letter"
+        else:
+            assert (
+                sealed == certified
+            ), "a citizen's letter is sealed only by whoever certified it"
+
+    assert ("individual", False) in seen, "no plain citizen's letter was drawn"
+    assert ("individual", True) in seen, "no certified letter was drawn"
+    assert ("organisation", False) in seen, "no entity's letter was drawn"
+
+
+def test_a_citizen_identifies_themselves_by_passport_and_phone() -> None:
+    """A letter acted on by an office has to say who wrote it."""
+    for record in sample_records("consent_letter", 60, random.Random(24)):
         fields = record.fields
-        assert fields["signature_name"]
-        assert fields["certifier_note"]
-        assert fields["certifier_name"]
-        assert fields["stamp_ring"]
-        assert fields["title"] in ("Rozilik xati", "Розилик хати")
+        if record.notes["author_kind"] != "individual":
+            continue
+        assert fields["passport"]
+        assert fields["phone"].startswith("+998")
+        series, number = fields["passport"].split()
+        assert len(series) == 2 and series.isalpha()
+        assert len(number) == 7 and number.isdigit()
+
+
+def test_an_organisation_carries_no_passport() -> None:
+    """A legal entity is not a person; it has a name and a seal instead."""
+    for record in sample_records("consent_letter", 60, random.Random(25)):
+        if record.notes["author_kind"] != "organisation":
+            continue
+        assert "passport" not in record.fields
+        assert "phone" not in record.fields
+        assert record.fields["stamp_ring"]
+
+
+def test_every_consent_letter_is_signed() -> None:
+    for record in sample_records("consent_letter", 30, random.Random(26)):
+        assert record.fields["signature_name"]
+        assert record.fields["title"].lower() in (
+            "rozilik xati",
+            "розилик хати",
+        )
+
+
+def test_an_organisation_consents_to_what_an_organisation_can() -> None:
+    """An entity has no courtyard and no family. It consents in the plural,
+    to work being done and to its premises being used."""
+    records = sample_records("consent_letter", 90, random.Random(27), "latin")
+    subjects = set()
+    for record in records:
+        body = record.fields["body"]
+        if record.notes["author_kind"] != "organisation":
+            continue
+        assert "Menga tegishli" not in body, "an entity claimed a home"
+        assert "hovlim" not in body, "an entity claimed a courtyard"
+        assert "bildiramiz" in body or "beramiz" in body, body
+        if "qurilish ishlariga" in body:
+            subjects.add("works")
+        if "binodan" in body:
+            subjects.add("premises")
+    assert subjects == {"works", "premises"}, subjects
 
 
 def test_a_consent_letter_consents_to_something() -> None:
-    """Each of the three subjects the scans carry has to be reachable, and
-    each has to name the address it is about."""
+    """Each of the subjects the scans carry has to be reachable, and each
+    has to name the address it is about."""
     bodies = [
         record.fields["body"]
         for record in sample_records(
-            "consent_letter", 60, random.Random(19), "latin"
+            "consent_letter", 90, random.Random(19), "latin"
         )
     ]
     assert all(body.endswith(".") for body in bodies)
@@ -256,12 +325,14 @@ def test_a_consent_letter_consents_to_something() -> None:
     assert any("turar joy" in body for body in bodies), "no housing letter"
 
 
-def test_a_consent_letter_says_where_everyone_lives() -> None:
+def test_a_citizens_letter_says_where_everyone_lives() -> None:
     """A consent about a boundary is meaningless without the address, and
     both parties are in the same city."""
     for record in sample_records(
-        "consent_letter", 20, random.Random(20), "latin"
+        "consent_letter", 30, random.Random(20), "latin"
     ):
+        if record.notes["author_kind"] != "individual":
+            continue
         applicant = record.fields["applicant"]
         assert "ko'chasi" in applicant
         assert "yashovchi" in applicant
@@ -269,18 +340,31 @@ def test_a_consent_letter_says_where_everyone_lives() -> None:
         assert city in record.fields["body"], record.fields["body"]
 
 
-def test_the_mahalla_seal_names_the_mahalla_it_belongs_to() -> None:
-    """A consent letter is certified by a neighbourhood, not by a registry,
-    so it carries the neighbourhood's seal."""
+def test_a_seal_names_whoever_it_belongs_to() -> None:
+    """Whose seal it is follows from who put it there — a notary, a
+    neighbourhood, or the entity that wrote the letter. It is never the
+    civil registry's, which has nothing to do with a consent."""
+    kinds = set()
     for record in sample_records(
-        "consent_letter", 20, random.Random(21), "latin"
+        "consent_letter", 80, random.Random(21), "latin"
     ):
-        ring = record.fields["stamp_ring"]
+        ring = record.fields.get("stamp_ring")
+        if not ring:
+            continue
         centre = record.fields["stamp_center"]
-        assert "MAHALLA FUQAROLAR YIG'INI" in ring
-        assert "FHDYO" not in ring
-        assert len(centre) == 1
-        assert centre[0].upper() in ring
+        assert "FHDYO" not in ring, "a registry seal has no place on a consent"
+        assert len(centre) == 1 and centre[0]
+
+        if "MAHALLA FUQAROLAR YIG'INI" in ring:
+            kinds.add("mahalla")
+            # A neighbourhood's seal names the neighbourhood twice over.
+            assert centre[0].upper() in ring
+        elif "NOTARIAL" in ring:
+            kinds.add("notary")
+        else:
+            kinds.add("organisation")
+            assert centre[0].upper() in ring
+    assert kinds == {"mahalla", "notary", "organisation"}, kinds
 
 
 def test_an_address_names_a_street_and_a_house() -> None:

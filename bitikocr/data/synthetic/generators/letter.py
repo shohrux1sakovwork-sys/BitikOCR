@@ -70,6 +70,9 @@ class LetterGenerator(DocumentGenerator):
     #: sizes. A letter whose foot carries more than a signature needs more.
     foot_allowance: ClassVar[float] = 6.5
 
+    #: Where the date goes, as a share of the page width.
+    date_x: ClassVar[tuple[float, float]] = (0.55, 0.78)
+
     def __init__(
         self,
         config: SyntheticConfig,
@@ -95,8 +98,13 @@ class LetterGenerator(DocumentGenerator):
         title = str(fields.get("title") or self.default_title)
         signature_name = fields.get("signature_name")
         date = fields.get("date")
-        phone = fields.get("phone")
         page_number = fields.get("page_number")
+        extra = self._header_extra(fields)
+        # A letter that identifies its sender in the header has
+        # already written these; drawing one again below would put
+        # the same block on the page twice.
+        claimed = {block for block, _ in extra}
+        phone = None if "phone" in claimed else fields.get("phone")
 
         main_info, style = self._sample_style(
             rng, self._collect_text({**fields, "title": title}), style_overrides
@@ -106,8 +114,9 @@ class LetterGenerator(DocumentGenerator):
         )
 
         width, height = self.page_size
+        header = "\n".join([recipient, applicant, *(text for _, text in extra)])
         style, body_hand, head_hand, title_hand = self._fit_to_page(
-            style, main_info, rng, recipient, applicant, body
+            style, main_info, rng, header, body
         )
         font_size = style.font_size
 
@@ -132,7 +141,15 @@ class LetterGenerator(DocumentGenerator):
             )
 
         y = self._put_header(
-            page, recipient, applicant, head_hand, rng, style, width, height
+            page,
+            extra,
+            recipient,
+            applicant,
+            head_hand,
+            rng,
+            style,
+            width,
+            height,
         )
         y = self._put_title(page, title, title_hand, rng, style, width, y)
         y = self._put_body(page, body, body_hand, rng, style, width, y)
@@ -167,6 +184,21 @@ class LetterGenerator(DocumentGenerator):
         return SyntheticDocument(image=page.render(), annotation=annotation)
 
     # -- hooks -------------------------------------------------------------
+
+    def _header_extra(self, fields: FieldValues) -> list[tuple[str, str]]:
+        """Return further lines of the sender's block, in writing order.
+
+        A letter that identifies its sender by more than a name — a
+        passport, a telephone — writes each on its own line under the
+        address. The base letter has none.
+
+        Args:
+            fields: The record's field values.
+
+        Returns:
+            ``(block name, text)`` pairs, empty when there is nothing more.
+        """
+        return []
 
     def _second_hand_text(self, fields: FieldValues) -> str:
         """Return everything the second hand will write.
@@ -212,8 +244,7 @@ class LetterGenerator(DocumentGenerator):
         style: HandwritingStyle,
         main_info: FontInfo,
         rng: random.Random,
-        recipient: str,
-        applicant: str,
+        header: str,
         body: str,
     ) -> tuple[HandwritingStyle, Hand, Hand, Hand]:
         """Shrink the nominal font size until the estimated layout fits.
@@ -223,8 +254,8 @@ class LetterGenerator(DocumentGenerator):
                 point.
             main_info: Font the body is written in.
             rng: Random source, passed on to every hand created here.
-            recipient: Addressee block text.
-            applicant: Applicant block text.
+            header: Every line of the top-right block, newline
+                separated, the sender's own lines included.
             body: Body text.
 
         Returns:
@@ -245,7 +276,7 @@ class LetterGenerator(DocumentGenerator):
 
             header_lines = len(
                 wrap_text(
-                    f"{recipient}\n{applicant}",
+                    header,
                     head_hand,
                     int(width * 0.955 - width * style.header_x),
                 )
@@ -307,6 +338,7 @@ class LetterGenerator(DocumentGenerator):
     def _put_header(
         self,
         page: Page,
+        extra: list[tuple[str, str]],
         recipient: str,
         applicant: str,
         hand: Hand,
@@ -315,7 +347,7 @@ class LetterGenerator(DocumentGenerator):
         width: int,
         height: int,
     ) -> int:
-        """Write the addressee and applicant block in the top-right area."""
+        """Write the addressee and sender block in the top-right area."""
         left = int(width * style.header_x)
         max_width = int(width * 0.955) - left
 
@@ -324,9 +356,15 @@ class LetterGenerator(DocumentGenerator):
             "recipient", wrap_text(recipient, hand, max_width), hand, left, y
         )
         y += int(hand.size * rng.uniform(0.0, 0.5))
-        return page.put_lines(
+        y = page.put_lines(
             "applicant", wrap_text(applicant, hand, max_width), hand, left, y
         )
+
+        for block, text in extra:
+            y = page.put_lines(
+                block, wrap_text(text, hand, max_width), hand, left, y
+            )
+        return y
 
     def _put_title(
         self,
@@ -423,7 +461,7 @@ class LetterGenerator(DocumentGenerator):
                 "date",
                 [str(date)],
                 hand,
-                int(width * rng.uniform(0.55, 0.78)),
+                int(width * rng.uniform(*self.date_x)),
                 min(y + int(font_size * rng.uniform(1.7, 2.3)), last_baseline),
             )
 

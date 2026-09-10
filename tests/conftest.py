@@ -90,10 +90,45 @@ def single_generator(config: SyntheticConfig) -> DeathCertificateGenerator:
     )
 
 
+def _consent_record(kind: str, certified: bool) -> dict[str, object]:
+    """Sample the first consent letter of one shape.
+
+    Who writes a consent letter decides what reaches the page, so the three
+    shapes are drawn out by searching rather than by a lucky seed.
+
+    Args:
+        kind: ``individual`` or ``organisation``.
+        certified: Whether an official attested to the signature. Only a
+            citizen's letter is ever certified.
+
+    Returns:
+        That letter's field values.
+    """
+    rng = random.Random(15)
+    for _ in range(200):
+        record = sample_record("consent_letter", rng, "cyrillic")
+        sealed = bool(record.fields.get("certifier_name"))
+        if record.notes["author_kind"] == kind and sealed == certified:
+            return record.fields
+    raise AssertionError(f"no {kind} letter, certified={certified}, was drawn")
+
+
 @pytest.fixture(scope="session")
 def consent_fields() -> dict[str, object]:
-    """One sampled consent letter record's fields."""
-    return sample_record("consent_letter", random.Random(15), "cyrillic").fields
+    """A citizen's consent letter, certified by an official."""
+    return _consent_record("individual", certified=True)
+
+
+@pytest.fixture(scope="session")
+def consent_plain_fields() -> dict[str, object]:
+    """A citizen's consent letter that nobody certified."""
+    return _consent_record("individual", certified=False)
+
+
+@pytest.fixture(scope="session")
+def consent_organisation_fields() -> dict[str, object]:
+    """A consent letter written and sealed by a legal entity."""
+    return _consent_record("organisation", certified=False)
 
 
 @pytest.fixture(scope="session")
