@@ -90,6 +90,16 @@ FIELD_FACTS: Mapping[str, Mapping[str, FieldFact]] = {
         "reg_date": _fact("date"),
         "page_number": _fact("number", "reference"),
     },
+    "consent_letter": {
+        "recipient": _fact("person_name"),
+        "applicant": _fact("address"),
+        "body": _fact("subject"),
+        "signature_name": _fact("signature_owner"),
+        "certifier_role": _fact("organisation"),
+        "certifier_name": _fact("signature_owner"),
+        "page_number": _fact("number", "reference"),
+        "stamp_ring": _fact("stamp_text"),
+    },
     "death_certificate": {
         "surname": _fact("person_name"),
         "given_name_patronymic": _fact("person_name"),
@@ -140,6 +150,7 @@ YEAR_IN_WORDS: Mapping[str, Mapping[str, str]] = {
     "death_certificate": {"death_year_in_words": "death"},
     "birth_certificate": {"child_birth_year_words": "birth"},
     "ariza": {},
+    "consent_letter": {},
 }
 
 #: Fields that together spell one date, per document type: the note holding
@@ -159,6 +170,7 @@ DATE_GROUPS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "issue": ("issue_year", "issue_month", "issue_day"),
     },
     "ariza": {"filed": ("date",)},
+    "consent_letter": {"filed": ("date",)},
 }
 
 

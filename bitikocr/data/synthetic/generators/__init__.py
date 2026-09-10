@@ -5,7 +5,9 @@ Adding a document type means adding a module here and one entry in
 
 Documents that fill a pre-printed form share :class:`FormGenerator` and
 differ only in which measured layout they fill, so a new certificate is
-usually a layout asset plus a four-line subclass.
+usually a layout asset plus a four-line subclass. Letters written on a
+blank sheet share :class:`LetterGenerator` the same way, and differ in what
+they carry at the foot of the page.
 """
 
 from __future__ import annotations
@@ -23,21 +25,27 @@ from bitikocr.data.synthetic.generators.base import (
 from bitikocr.data.synthetic.generators.birth_certificate import (
     BirthCertificateGenerator,
 )
+from bitikocr.data.synthetic.generators.consent_letter import (
+    ConsentLetterGenerator,
+)
 from bitikocr.data.synthetic.generators.death_certificate import (
     DeathCertificateGenerator,
 )
 from bitikocr.data.synthetic.generators.form import FormGenerator, FormOptions
+from bitikocr.data.synthetic.generators.letter import LetterGenerator
 
 __all__ = [
     "DEFAULT_INK_STRENGTH",
     "GENERATOR_TYPES",
     "ArizaGenerator",
     "BirthCertificateGenerator",
+    "ConsentLetterGenerator",
     "DeathCertificateGenerator",
     "DocumentGenerator",
     "FieldValues",
     "FormGenerator",
     "FormOptions",
+    "LetterGenerator",
     "SyntheticDocument",
     "available_document_types",
     "create_generator",
@@ -46,6 +54,7 @@ __all__ = [
 GENERATOR_TYPES: dict[str, type[DocumentGenerator]] = {
     ArizaGenerator.name: ArizaGenerator,
     BirthCertificateGenerator.name: BirthCertificateGenerator,
+    ConsentLetterGenerator.name: ConsentLetterGenerator,
     DeathCertificateGenerator.name: DeathCertificateGenerator,
 }
 

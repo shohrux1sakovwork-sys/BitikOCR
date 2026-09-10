@@ -63,6 +63,29 @@ _ARIZA_OPENINGS: tuple[str, ...] = (
 
 _TITLES: tuple[str, ...] = ("Ariza",)
 
+#: What a consent letter consents to. Each is a template filled from the
+#: sampled people and addresses; between them they cover the three subjects
+#: the scanned letters carry — a shared boundary, a privatisation, and a
+#: neighbour's housing claim.
+_CONSENT_SUBJECTS: tuple[str, ...] = ("boundary", "privatisation", "housing")
+
+#: How a letter opens when it states the consent directly.
+_CONSENT_OPENING = "Beraman ushbu rozilik xatini shu haqdakim"
+
+#: What the certifying official writes above their signature.
+_CERTIFIER_NOTES: tuple[str, ...] = (
+    "Tasdiqlayman",
+    "Imzoni tasdiqlayman",
+    "Imzosini tasdiqlayman",
+)
+
+#: Who certifies the signature. The mahalla chairman does it most often.
+_CERTIFIER_ROLES: tuple[str, ...] = (
+    "MFY raisi",
+    "Mahalla raisi",
+    "MFY kotibi",
+)
+
 
 @dataclass(frozen=True)
 class SampledContent:
@@ -165,6 +188,34 @@ def _seal_text(rng: random.Random, script: Script) -> dict[str, Any]:
     return {
         "stamp_ring": in_script(ring, script).upper(),
         "stamp_center": [in_script("FHDYO", script)],
+    }
+
+
+def _mahalla_seal_text(rng: random.Random, script: Script) -> dict[str, Any]:
+    """Sample the lettering pressed into a neighbourhood committee's seal.
+
+    A resident's signature is certified by their mahalla, not by the
+    registry, so a consent letter carries that seal rather than the
+    registry's.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the lettering is written in.
+
+    Returns:
+        The ring text and the centre lines, keyed as the generator's seal
+        fields.
+    """
+    region = rng.choice(list(corpus.DISTRICTS))
+    district = rng.choice(corpus.DISTRICTS[region])
+    mahalla = corpus.sample_mahalla(rng, "latin")
+    ring = (
+        f"O'zbekiston Respublikasi * {region} viloyati {district} shahar "
+        f"{mahalla} mahalla fuqarolar yig'ini *"
+    )
+    return {
+        "stamp_ring": in_script(ring, script).upper(),
+        "stamp_center": [in_script(mahalla, script)],
     }
 
 
@@ -434,6 +485,155 @@ def _sample_ariza(rng: random.Random, script: Script) -> SampledContent:
     )
 
 
+# -- consent letter --------------------------------------------------------
+
+
+def _consent_body(
+    rng: random.Random,
+    script: Script,
+    subject: str,
+    home: corpus.Address,
+    city: str,
+) -> str:
+    """Write the sentence a consent letter consents with.
+
+    Every phrase is transliterated once into a local name before being
+    interpolated: a backslash inside an f-string expression only became
+    legal in Python 3.12, and we support 3.11.
+
+    Args:
+        rng: Random source for the other parties and their addresses.
+        script: Alphabet the fixed words are written in.
+        subject: One of :data:`_CONSENT_SUBJECTS`.
+        home: The author's own address.
+        city: The city every party in the letter lives in.
+
+    Returns:
+        The body paragraph, in ``script``.
+    """
+    opening = in_script(_CONSENT_OPENING, script)
+    mine = home.short(script)
+
+    if subject == "boundary":
+        # A shared courtyard boundary, agreed to carry no dispute.
+        neighbour = corpus.sample_person(rng, script)
+        theirs = corpus.sample_address(rng, script, city)
+        adjoining = in_script("mening hovlim bilan chegaradosh", script)
+        next_door = in_script("bo'lgan yon qo'shnim", script)
+        about = in_script("uyning chegarasi to'g'risida", script)
+        no_quarrel = in_script("hech qanday davo janjalim yo'q", script)
+        return (
+            f"{opening} {adjoining} {next_door} "
+            f"{neighbour.surname} {neighbour.given_name} "
+            f"{theirs.short(script)} {about} {no_quarrel}."
+        )
+
+    if subject == "privatisation":
+        beneficiary = corpus.sample_person(rng, script)
+        house_word = in_script("uy", script)
+        dwelling = (
+            f"{home.short(script)} {house_word} {home.flat} "
+            f"{in_script('xonadonni', script)}"
+            if home.flat
+            else f"{home.short(script)} {in_script('uy-joyni', script)}"
+        )
+        agree = in_script("nomiga xususiylashtirishga roziman", script)
+        line = (
+            f"{opening}, {dwelling} {beneficiary.surname} "
+            f"{beneficiary.full_given_name()} {agree}."
+        )
+        # A minor in the household consents through their parent.
+        if rng.random() < 0.5:
+            child = corpus.sample_person(rng, script)
+            relation = in_script(
+                "qizining" if child.is_female else "o'g'lining", script
+            )
+            minor = in_script("Shuningdek voyaga yetmagan", script)
+            born_word = in_script("yil tug'ilgan", script)
+            also = in_script("ham roziligini bildiraman", script)
+            born = rng.randint(1998, 2015)
+            line += (
+                f" {minor} {born} {born_word} {child.surname} "
+                f"{child.given_name} {relation} {also}."
+            )
+        return line
+
+    # A neighbour's house, confirmed not to cross the author's boundary.
+    others = corpus.sample_address(rng, script, city)
+    first = corpus.sample_person(rng, script)
+    second = corpus.sample_person(rng, script)
+    belongs = in_script("Menga tegishli bo'lgan", script)
+    not_crossing = in_script("uyim chegarasidan o'tmagan", script)
+    housing = in_script("turar joy masalasi haqida", script)
+    residents = in_script("uyda yashovchilar", script)
+    conjunction = in_script("va", script)
+    no_claim = in_script("larga hech qanday davoim yo'qligi haqida", script)
+    closing = in_script("rozilik xati beraman", script)
+    return (
+        f"{belongs} {mine} {not_crossing}, {housing} "
+        f"{others.short(script)} {residents} "
+        f"{first.surname} {first.given_name} {conjunction} "
+        f"{second.surname} {second.given_name}{no_claim} {closing}."
+    )
+
+
+def _sample_consent_letter(
+    rng: random.Random, script: Script
+) -> SampledContent:
+    """Sample the content of one consent letter."""
+    official = corpus.sample_person(rng, script, is_female=False)
+    author = corpus.sample_person(rng, script)
+    certifier = corpus.sample_person(rng, script, is_female=False)
+
+    region = rng.choice(list(corpus.DISTRICTS))
+    district = rng.choice(corpus.DISTRICTS[region])
+    city = in_script(f"{district} shahar", script)
+    home = corpus.sample_address(rng, script, city)
+
+    mayor = in_script("hokimi", script)
+    resident = in_script("da yashovchi fuqaro", script)
+    to_suffix = in_script("ga", script)
+    by_suffix = in_script("tomonidan", script)
+
+    recipient = f"{city} {mayor} {official.initials()}{to_suffix}"
+    applicant = (
+        f"{home.line(script)}{resident} "
+        f"{author.surname} {author.given_name} {by_suffix}"
+    )
+
+    subject = rng.choice(_CONSENT_SUBJECTS)
+    year = rng.randint(1995, 2024)
+    month = rng.randint(1, 12)
+    day = rng.randint(1, 28)
+
+    fields: dict[str, Any] = {
+        "recipient": recipient,
+        "applicant": applicant,
+        "title": in_script("Rozilik xati", script),
+        "body": _consent_body(rng, script, subject, home, city),
+        "signature_name": f"{author.surname} {author.given_name}",
+        "certifier_note": in_script(rng.choice(_CERTIFIER_NOTES), script),
+        "certifier_role": in_script(rng.choice(_CERTIFIER_ROLES), script),
+        "certifier_name": f"{certifier.surname} {certifier.given_name[0]}.",
+        "page_number": str(rng.randint(1, 450)),
+        **_mahalla_seal_text(rng, script),
+    }
+
+    # Only some letters are dated in the author's own hand, the archive
+    # numbers only some pages, and the certifier does not always write
+    # their office beside their name.
+    if rng.random() < 0.45:
+        fields["date"] = f"{day:02d}.{month:02d}.{year}"
+    if rng.random() < 0.25:
+        fields.pop("page_number")
+    if rng.random() < 0.3:
+        fields.pop("certifier_role")
+
+    return SampledContent(
+        fields=fields, year=year, dates={"filed": _iso(year, month, day)}
+    )
+
+
 def _iso(year: int, month: int, day: int) -> str:
     """Format a date the way the facts records normalise them."""
     return f"{year:04d}-{month:02d}-{day:02d}"
@@ -445,6 +645,7 @@ RECORD_SAMPLERS: dict[
 ] = {
     "ariza": _sample_ariza,
     "birth_certificate": _sample_birth_certificate,
+    "consent_letter": _sample_consent_letter,
     "death_certificate": _sample_death_certificate,
 }
 

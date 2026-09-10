@@ -60,7 +60,9 @@
 │           ├── generators/      # One module per document type
 │           │   ├── base.py      # DocumentGenerator contract
 │           │   ├── form.py      # FormGenerator: filling any printed form
+│           │   ├── letter.py    # LetterGenerator: writing on a blank sheet
 │           │   ├── ariza.py
+│           │   ├── consent_letter.py
 │           │   ├── birth_certificate.py
 │           │   └── death_certificate.py
 │           ├── assets/          # Shipped with the package
@@ -147,6 +149,8 @@ ground truth. It is layered so each piece has exactly one job:
 | `facts`          | Which values are of which kind               | How anything is drawn      |
 | `export`         | Mapping internals onto the corpus schema     | How anything is drawn      |
 | `generators/`    | Where things go on one kind of document      | What it says, how it ages  |
+| `generators/form`| How a clerk fills a measured printed form    | Where the cells are        |
+| `generators/letter` | How a letter is arranged on a blank sheet | Which letter is being written |
 | `augment`        | Spoiling a finished page                     | What the page says         |
 | `dataset`        | Batches, file names, on-disk format          | Layout, rendering          |
 
@@ -239,6 +243,13 @@ Adding a variant of an existing form:
 3. `uv run python scripts/data/generate_synth.py generate death_certificate --template <name>`.
 
 Adding a new form is the same plus a `FormGenerator` subclass naming it.
+
+Letters have the same shape of split without the measuring. Nothing about a
+blank sheet can be read off a scan, so `LetterGenerator` arranges the page
+itself — addressee block, title, body, signature — and each letter subclass
+adds only its foot: an ariza carries the receiving office's registration
+marks, a consent letter the mahalla's attestation and seal. A new kind of
+letter is a subclass and a sampler, with no asset at all.
 
 Layouts are named `<document type>_<variant>` and that prefix is how a
 form's variants are found (`SyntheticConfig.layouts_for`). Variants differ

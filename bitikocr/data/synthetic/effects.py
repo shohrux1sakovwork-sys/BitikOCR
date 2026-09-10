@@ -18,7 +18,26 @@ from bitikocr.data.models.geometry import BoundingBox
 from bitikocr.data.synthetic.ink import alpha_bounding_box
 from bitikocr.data.synthetic.style import Color, PenKind
 
-__all__ = ["SCRIBBLE_WIDTH_RANGE", "draw_round_stamp", "draw_scribble"]
+__all__ = [
+    "SCRIBBLE_WIDTH_RANGE",
+    "SEAL_COLORS",
+    "STAMP_REACH",
+    "draw_round_stamp",
+    "draw_scribble",
+]
+
+#: How far a seal's ink reaches from its centre, as a multiple of the
+#: ring radius. The curved lettering sits outside the ring, so a caller
+#: placing a seal has to leave this much room, not just the radius.
+STAMP_REACH = 1.3
+
+#: Stamp-pad inks an office seal is pressed in. Uzbek civil seals are
+#: violet or blue, never black.
+SEAL_COLORS: tuple[Color, ...] = (
+    (70, 40, 150),
+    (40, 60, 170),
+    (60, 30, 130),
+)
 
 _SCRIBBLE_MARGIN = 20
 
@@ -141,7 +160,7 @@ def draw_round_stamp(
         the ring to leave room for the curved lettering, so its canvas would
         overstate what the seal covers.
     """
-    size = int(radius * 2.6)
+    size = int(radius * STAMP_REACH * 2)
     layer = Image.new("L", (size, size), 0)
     draw = ImageDraw.Draw(layer)
     middle = size // 2

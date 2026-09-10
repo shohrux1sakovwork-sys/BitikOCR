@@ -19,7 +19,11 @@ from bitikocr.data.synthetic.scripts import Bilingual, Script, in_script
 __all__ = [
     "DISTRICTS",
     "MONTHS",
+    "STREETS",
+    "Address",
     "Person",
+    "sample_address",
+    "sample_mahalla",
     "sample_office",
     "sample_person",
     "sample_place",
@@ -191,6 +195,45 @@ DISTRICTS: dict[str, tuple[str, ...]] = {
     "Jizzax": ("Jizzax", "Gagarin", "Zomin", "G'allaorol", "Paxtakor"),
 }
 
+#: Street names, as an Uzbek address writes them. Most streets are named
+#: after a writer, a poet or an idea rather than numbered, so the list is
+#: names rather than a pattern.
+STREETS: tuple[str, ...] = (
+    "A. Qodiriy",
+    "Alisher Navoiy",
+    "Mustaqillik",
+    "Amir Temur",
+    "Bobur",
+    "Ibn Sino",
+    "Al-Xorazmiy",
+    "Zulfiya",
+    "Cho'lpon",
+    "Fitrat",
+    "Sh. Rashidov",
+    "J. Ataniyazov",
+    "Ulug'bek",
+    "O'zbekiston ovozi",
+    "Do'stlik",
+    "Bog'bon",
+    "Tinchlik",
+    "Gulzor",
+)
+
+#: Names a neighbourhood committee — the mahalla — goes by. Its seal is what
+#: certifies a resident's signature.
+_MAHALLAS: tuple[str, ...] = (
+    "Gulzor",
+    "Do'stlik",
+    "Bog'bon",
+    "Navro'z",
+    "Chorbog'",
+    "Yangiobod",
+    "Bahor",
+    "Mustaqillik",
+    "Guliston",
+    "Obod",
+)
+
 _CAUSES_OF_DEATH: tuple[str, ...] = (
     "yurak ishemik kasalligi",
     "o'pka arteriyasi tromboemboliyasi",
@@ -301,6 +344,90 @@ def sample_place(rng: random.Random, script: Script) -> dict[str, str]:
             district if is_city else f"{district} shaharchasi", script
         ),
     }
+
+
+@dataclass(frozen=True)
+class Address:
+    """A home address, as a letter's header block writes it.
+
+    Args:
+        city: The city or district the street is in.
+        street: Street name, without the word "street".
+        house: House number, which may carry a letter such as "7a".
+        flat: Flat or entrance number, empty when the home is a house.
+    """
+
+    city: str
+    street: str
+    house: str
+    flat: str = ""
+
+    def short(self, script: Script) -> str:
+        """Return the address up to the house number, naming no dwelling.
+
+        A sentence usually has to inflect the word for the dwelling —
+        "uyning chegarasi", "uyim chegarasidan" — so it takes the address
+        this far and supplies that word itself.
+
+        Args:
+            script: Alphabet to write the fixed words in.
+
+        Returns:
+            The address, e.g. "Urganch shahar A. Qodiriy ko'chasi 11".
+        """
+        street_word = in_script("ko'chasi", script)
+        return f"{self.city} {self.street} {street_word} {self.house}"
+
+    def line(self, script: Script) -> str:
+        """Return the address as a header block writes it.
+
+        Args:
+            script: Alphabet to write the fixed words in.
+
+        Returns:
+            The address, e.g. "Urganch shahar A. Qodiriy ko'chasi 11 uy".
+        """
+        parts = [self.short(script), in_script("uy", script)]
+        if self.flat:
+            parts.append(f"{self.flat} {in_script('xonadon', script)}")
+        return " ".join(parts)
+
+
+def sample_address(
+    rng: random.Random, script: Script, city: str | None = None
+) -> Address:
+    """Sample a home address.
+
+    Args:
+        rng: Random source.
+        script: Alphabet to write the names in.
+        city: Keep an already-sampled city instead of drawing one, so that
+            neighbours in the same letter share it.
+
+    Returns:
+        The address, already written in ``script``.
+    """
+    if city is None:
+        region = rng.choice(list(DISTRICTS))
+        district = rng.choice(DISTRICTS[region])
+        city = in_script(f"{district} shahar", script)
+
+    house = str(rng.randint(1, 120))
+    # A few houses on a street carry a letter rather than a plain number.
+    if rng.random() < 0.15:
+        house += in_script(rng.choice("abv"), script)
+
+    return Address(
+        city=city,
+        street=in_script(rng.choice(STREETS), script),
+        house=house,
+        flat=str(rng.randint(1, 60)) if rng.random() < 0.35 else "",
+    )
+
+
+def sample_mahalla(rng: random.Random, script: Script) -> str:
+    """Sample the name of a neighbourhood committee."""
+    return in_script(rng.choice(_MAHALLAS), script)
 
 
 def sample_office(rng: random.Random, script: Script) -> str:

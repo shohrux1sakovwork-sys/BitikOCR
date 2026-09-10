@@ -16,6 +16,7 @@ def test_listing_document_types(capsys: pytest.CaptureFixture[str]) -> None:
     assert capsys.readouterr().out.split() == [
         "ariza",
         "birth_certificate",
+        "consent_letter",
         "death_certificate",
     ]
 

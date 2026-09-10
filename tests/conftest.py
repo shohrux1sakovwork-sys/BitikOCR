@@ -15,6 +15,7 @@ from bitikocr.data.synthetic.fonts import FontLibrary
 from bitikocr.data.synthetic.generators import (
     ArizaGenerator,
     BirthCertificateGenerator,
+    ConsentLetterGenerator,
     DeathCertificateGenerator,
     FormOptions,
 )
@@ -87,6 +88,18 @@ def single_generator(config: SyntheticConfig) -> DeathCertificateGenerator:
     return DeathCertificateGenerator(
         config, options=FormOptions(template=SINGLE_TEMPLATE, scale=1.0)
     )
+
+
+@pytest.fixture(scope="session")
+def consent_fields() -> dict[str, object]:
+    """One sampled consent letter record's fields."""
+    return sample_record("consent_letter", random.Random(15), "cyrillic").fields
+
+
+@pytest.fixture(scope="session")
+def consent_generator(config: SyntheticConfig) -> ConsentLetterGenerator:
+    """A consent letter generator using the packaged assets."""
+    return ConsentLetterGenerator(config)
 
 
 @pytest.fixture(scope="session")

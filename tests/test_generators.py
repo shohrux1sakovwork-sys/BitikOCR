@@ -15,11 +15,16 @@ from bitikocr.data.synthetic.annotation import DocumentAnnotation
 from bitikocr.data.synthetic.generators import (
     ArizaGenerator,
     BirthCertificateGenerator,
+    ConsentLetterGenerator,
     DeathCertificateGenerator,
     FormGenerator,
     FormOptions,
+    LetterGenerator,
     available_document_types,
     create_generator,
+)
+from bitikocr.data.synthetic.generators.consent_letter import (
+    CERTIFICATION_SIGNATURE_BLOCK,
 )
 from bitikocr.data.synthetic.generators.death_certificate import (
     SINGLE_TEMPLATE,
@@ -78,6 +83,7 @@ def test_every_document_type_is_registered() -> None:
     assert available_document_types() == (
         "ariza",
         "birth_certificate",
+        "consent_letter",
         "death_certificate",
     )
 
@@ -730,3 +736,159 @@ def test_the_single_form_is_reproducible_from_its_seed(
     second = single_generator.generate(single_certificate_fields, seed=7)
     assert first.image.tobytes() == second.image.tobytes()
     assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+# -- consent letter ---------------------------------------------------------
+
+
+def test_a_consent_letter_writes_the_whole_letter(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    annotation = consent_generator.generate(consent_fields, seed=5).annotation
+    written = {block.kind for block in annotation.blocks if block.text}
+    assert {"recipient", "applicant", "title", "body"} <= written
+    assert "signature_name" in written
+
+
+def test_a_consent_letter_is_certified_and_sealed(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """A consent letter is not filed with an office, it is attested to, and
+    the attestation is what makes it worth anything."""
+    annotation = consent_generator.generate(consent_fields, seed=5).annotation
+    kinds = {block.kind for block in annotation.blocks if block.bbox}
+    assert "certifier_note" in kinds
+    assert "certifier_name" in kinds
+    assert "stamp" in kinds
+    assert CERTIFICATION_SIGNATURE_BLOCK in kinds
+
+
+def test_the_two_signatures_are_told_apart(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """The author signs and so does the official who certifies them. Two
+    blocks of one name would leave the ground truth unable to say whose
+    hand signed where."""
+    annotation = consent_generator.generate(consent_fields, seed=5).annotation
+    kinds = [block.kind for block in annotation.blocks]
+    assert len(kinds) == len(set(kinds)), "a block was recorded twice"
+    assert "signature" in kinds
+    assert CERTIFICATION_SIGNATURE_BLOCK in kinds
+
+
+def test_a_named_office_moves_the_certifier_to_a_second_line(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """With an office named there is too much for one line, so the scans
+    put the name under the attesting phrase; without one it sits beside it."""
+    with_role = {**consent_fields, "certifier_role": "МФЙ раиси"}
+    without_role = {
+        name: value
+        for name, value in consent_fields.items()
+        if name != "certifier_role"
+    }
+
+    for seed in range(4):
+        boxes = {
+            block.kind: block.bbox
+            for block in consent_generator.generate(
+                with_role, seed=seed
+            ).annotation.blocks
+        }
+        assert boxes["certifier_role"] is not None
+        assert boxes["certifier_name"] is not None
+        assert boxes["certifier_note"] is not None
+        assert boxes["certifier_name"].top > boxes["certifier_note"].top
+
+        flat = {
+            block.kind: block.bbox
+            for block in consent_generator.generate(
+                without_role, seed=seed
+            ).annotation.blocks
+        }
+        assert "certifier_role" not in flat
+        assert flat["certifier_name"] is not None
+        assert flat["certifier_note"] is not None
+        # One line: the name sits to the right of the phrase, not below it.
+        assert flat["certifier_name"].left > flat["certifier_note"].right
+
+
+def test_the_seal_is_pressed_over_the_certification(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """It is the mahalla's seal on the mahalla's attestation, so it lands on
+    that block rather than anywhere on the page."""
+    for seed in range(6):
+        annotation = consent_generator.generate(
+            consent_fields, seed=seed
+        ).annotation
+        boxes = {block.kind: block.bbox for block in annotation.blocks}
+        stamp, note = boxes["stamp"], boxes["certifier_note"]
+        assert stamp is not None and note is not None
+        assert (
+            stamp.bottom > note.top
+        ), f"seal sits above the note (seed {seed})"
+        assert stamp.top < note.bottom + stamp.height
+
+
+def test_a_consent_letter_keeps_every_box_on_the_page(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    for seed in range(6):
+        document = consent_generator.generate(consent_fields, seed=seed)
+        annotation = document.annotation
+        assert_boxes_are_inside_the_page(annotation)
+
+        width, height = annotation.size
+        for block in annotation.blocks:
+            if block.bbox is None:
+                continue
+            assert block.bbox.left >= 0 and block.bbox.top >= 0, block.kind
+            assert block.bbox.right <= width, block.kind
+            assert block.bbox.bottom <= height, block.kind
+
+
+def test_a_consent_letter_without_a_certifier_still_renders(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """An uncertified copy is still a letter, so a missing attestation must
+    not take the page down with it."""
+    bare = {
+        name: value
+        for name, value in consent_fields.items()
+        if not name.startswith("certifier")
+    }
+    annotation = consent_generator.generate(bare, seed=5).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert "body" in kinds
+    assert not {"certifier_note", "certifier_name"} & kinds
+    assert_boxes_are_inside_the_page(annotation)
+
+
+def test_a_consent_letter_is_reproducible_from_its_seed(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    first = consent_generator.generate(consent_fields, seed=7)
+    second = consent_generator.generate(consent_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_both_letters_share_one_engine(
+    ariza_generator: ArizaGenerator,
+    consent_generator: ConsentLetterGenerator,
+) -> None:
+    """A letter on a blank sheet is laid out one way, whatever it says."""
+    assert isinstance(ariza_generator, LetterGenerator)
+    assert isinstance(consent_generator, LetterGenerator)
+    assert (
+        type(ariza_generator)._put_foot is not type(consent_generator)._put_foot
+    )

@@ -111,9 +111,19 @@ Inside `generators/`:
 |---|---|
 | `base.py` | The `DocumentGenerator` contract every type implements |
 | `form.py` | `FormGenerator`: filling any pre-printed form |
-| `ariza.py` | A handwritten application letter on blank paper |
+| `letter.py` | `LetterGenerator`: writing any letter on a blank sheet |
+| `ariza.py` | An application letter: a letter plus the office's marks |
+| `consent_letter.py` | A consent letter: a letter plus a certification and a seal |
 | `birth_certificate.py` | Four lines: a name and a default template |
 | `death_certificate.py` | Likewise |
+
+There are two engines because there are two kinds of page. A certificate is
+a **printed form** whose cells were measured, so `FormGenerator` reads where
+everything goes from a layout. A letter is written on a **blank sheet**, so
+`LetterGenerator` arranges it instead: addressee block top-right, centred
+title, wrapped body, signature, shrinking the hand until it fits. What each
+letter adds is its foot — an ariza is registered by the office that receives
+it, a consent letter is certified by the mahalla and sealed.
 
 This module's tests are in `tests/` at the repository root, with the rest of
 the project's suite, one module there per module here. Run the generator's
@@ -224,6 +234,27 @@ class MarriageCertificateGenerator(FormGenerator):
 
 Register it in `GENERATOR_TYPES`, add a record sampler to `records.py`, and
 add its field categories to `FIELD_FACTS` in `facts.py`.
+
+### Add a new kind of letter
+
+A letter has no form to measure, so there is no layout to add. Subclass
+`LetterGenerator`, name the document type and the title, and write what goes
+below the signature:
+
+```python
+class ComplaintLetterGenerator(LetterGenerator):
+    name = "complaint_letter"
+    default_title = "Shikoyat xati"
+
+    def _put_foot(self, page, fields, second_hand, rng, style, y):
+        ...
+```
+
+Then the same three steps: register it in `GENERATOR_TYPES`, add a sampler
+to `records.py`, and map its fields in `FIELD_FACTS`. Declare `FIELD_NAMES`
+and `READING_ORDER` on the class — the reading order is the order the
+transcription comes out in, so it should be the order a person reads the
+page.
 
 ### Widen the text
 

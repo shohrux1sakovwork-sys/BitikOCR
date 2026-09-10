@@ -45,6 +45,7 @@ def test_every_document_type_can_be_sampled() -> None:
     assert available_record_types() == (
         "ariza",
         "birth_certificate",
+        "consent_letter",
         "death_certificate",
     )
 
@@ -224,3 +225,77 @@ def test_years_are_spelled_out_in_uzbek(year: int, expected: str) -> None:
 def test_a_year_outside_the_supported_range_is_rejected() -> None:
     with pytest.raises(ValueError, match="Cannot spell"):
         corpus.year_in_words(1500, "latin")
+
+
+def test_a_consent_letter_names_both_parties_and_its_certifier() -> None:
+    """The letter is worthless without someone attesting to the signature,
+    so the sampler must always produce one."""
+    for record in sample_records("consent_letter", 20, random.Random(18)):
+        fields = record.fields
+        assert fields["signature_name"]
+        assert fields["certifier_note"]
+        assert fields["certifier_name"]
+        assert fields["stamp_ring"]
+        assert fields["title"] in ("Rozilik xati", "Розилик хати")
+
+
+def test_a_consent_letter_consents_to_something() -> None:
+    """Each of the three subjects the scans carry has to be reachable, and
+    each has to name the address it is about."""
+    bodies = [
+        record.fields["body"]
+        for record in sample_records(
+            "consent_letter", 60, random.Random(19), "latin"
+        )
+    ]
+    assert all(body.endswith(".") for body in bodies)
+    assert any("chegarasi" in body for body in bodies), "no boundary letter"
+    assert any(
+        "xususiylashtirishga" in body for body in bodies
+    ), "none privatise"
+    assert any("turar joy" in body for body in bodies), "no housing letter"
+
+
+def test_a_consent_letter_says_where_everyone_lives() -> None:
+    """A consent about a boundary is meaningless without the address, and
+    both parties are in the same city."""
+    for record in sample_records(
+        "consent_letter", 20, random.Random(20), "latin"
+    ):
+        applicant = record.fields["applicant"]
+        assert "ko'chasi" in applicant
+        assert "yashovchi" in applicant
+        city = applicant.split(" shahar")[0]
+        assert city in record.fields["body"], record.fields["body"]
+
+
+def test_the_mahalla_seal_names_the_mahalla_it_belongs_to() -> None:
+    """A consent letter is certified by a neighbourhood, not by a registry,
+    so it carries the neighbourhood's seal."""
+    for record in sample_records(
+        "consent_letter", 20, random.Random(21), "latin"
+    ):
+        ring = record.fields["stamp_ring"]
+        centre = record.fields["stamp_center"]
+        assert "MAHALLA FUQAROLAR YIG'INI" in ring
+        assert "FHDYO" not in ring
+        assert len(centre) == 1
+        assert centre[0].upper() in ring
+
+
+def test_an_address_names_a_street_and_a_house() -> None:
+    latin = corpus.sample_address(random.Random(22), "latin")
+    assert latin.street in corpus.STREETS
+    assert latin.house
+    # The short form stops before the dwelling word so a sentence can
+    # inflect it; the header's form does not.
+    assert latin.short("latin").endswith(latin.house)
+    assert latin.line("latin").startswith(latin.short("latin"))
+    assert " uy" in latin.line("latin")
+
+
+def test_neighbours_in_one_letter_share_a_city() -> None:
+    rng = random.Random(23)
+    mine = corpus.sample_address(rng, "latin")
+    theirs = corpus.sample_address(rng, "latin", mine.city)
+    assert theirs.city == mine.city

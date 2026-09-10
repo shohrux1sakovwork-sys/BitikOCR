@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw
 
 from bitikocr.config import SyntheticConfig
 from bitikocr.data.models.geometry import BoundingBox
-from bitikocr.data.synthetic.effects import draw_round_stamp
+from bitikocr.data.synthetic.effects import SEAL_COLORS, draw_round_stamp
 from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
     DocumentGenerator,
@@ -68,12 +68,6 @@ DEFAULT_SEAL_RING = (
     "YOZISH BO'LIMI *"
 )
 DEFAULT_SEAL_CENTRE = ("FHDYO",)
-
-_SEAL_COLORS: tuple[Color, ...] = (
-    (70, 40, 150),
-    (40, 60, 170),
-    (60, 30, 130),
-)
 
 # The seal is pressed by hand onto a page that is already written on. It
 # lands off-centre — usually a little left of the printed circle, and high or
@@ -517,7 +511,7 @@ class FormGenerator(DocumentGenerator):
             radius=radius,
             ring_text=ring,
             centre_lines=centre_lines,
-            color=rng.choice(_SEAL_COLORS),
+            color=rng.choice(SEAL_COLORS),
             font_path=find_print_font(self.library),
             rng=rng,
         )
