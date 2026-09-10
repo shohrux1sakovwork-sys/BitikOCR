@@ -26,6 +26,9 @@ UZBEK_TEXT = "Ҳақиқий ўзбек ёзуви ғалаба қилди"
 #: here.
 TITLE_PIXEL_SIZE = 110
 
+#: One title per alphabet, so a font can be tested in the one it writes.
+TITLE_SAMPLES = ("Розилик хати", "Rozilik xati")
+
 
 def _ink(rendered: Image.Image) -> float:
     """Return the total opacity of a rendered line."""
@@ -146,13 +149,20 @@ def test_the_pen_never_eats_more_than_half_a_hands_ink(
 
     The size matters: erosion is measured in pixels, so the fault only
     shows at the large sizes a title is written in.
+
+    Every shipped font is checked, in whichever alphabet it writes. A
+    Latin-only hand skipped over a Cyrillic sample would never be tested at
+    all, which is exactly the hand a new font is most likely to be.
     """
-    text = "Розилик хати"
     style = sample_style(random.Random(7), library).replace(ink_strength=1.4)
+    checked = []
 
     for font in library:
-        if not font.can_render(text):
-            continue
+        text = next(
+            (line for line in TITLE_SAMPLES if font.can_render(line)), None
+        )
+        assert text is not None, f"{font.name} can write neither alphabet"
+
         hand = Hand(
             font,
             TITLE_PIXEL_SIZE,
@@ -166,6 +176,9 @@ def test_the_pen_never_eats_more_than_half_a_hands_ink(
 
         kept = _ink(drawn) / _ink(untouched)
         assert kept >= 0.5, f"{font.name} lost {(1 - kept):.0%} of its ink"
+        checked.append(font.name)
+
+    assert len(checked) == len(library.fonts), "a font went unchecked"
 
 
 def test_a_high_contrast_font_is_measured_by_its_typical_stroke(
