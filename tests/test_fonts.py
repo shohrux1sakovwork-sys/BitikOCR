@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
+from unittest.mock import patch
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from bitikocr.data.synthetic.fonts import (
     FALLBACK_BASE,
@@ -13,8 +16,20 @@ from bitikocr.data.synthetic.fonts import (
     FontLibrary,
     pixel_size_for,
 )
+from bitikocr.data.synthetic.hand import Hand
+from bitikocr.data.synthetic.style import sample_style
 
 UZBEK_TEXT = "Ҳақиқий ўзбек ёзуви ғалаба қилди"
+
+#: A title is the largest thing written on a page, and erosion is counted in
+#: pixels, so a stroke that survives at body size can still be eroded away
+#: here.
+TITLE_PIXEL_SIZE = 110
+
+
+def _ink(rendered: Image.Image) -> float:
+    """Return the total opacity of a rendered line."""
+    return float(np.asarray(rendered.getchannel("A")).astype(float).sum())
 
 
 def test_packaged_fonts_are_discovered(library: FontLibrary) -> None:
@@ -116,3 +131,51 @@ def test_latin_only_fonts_are_measured_on_latin_glyphs(
     assert latin_only, "expected at least one Latin-only packaged font"
     for font in latin_only:
         assert font.stroke_ratio < 0.3, font.name
+
+
+def test_the_pen_never_eats_more_than_half_a_hands_ink(
+    library: FontLibrary,
+) -> None:
+    """A stroke width read off the heaviest downstrokes shreds a hand.
+
+    A cursive font is not one width: it has thick downstrokes and hairline
+    joins. Measuring until the ink was gone reported the thickest stroke,
+    the renderer then thinned the hand by more than the joins could take,
+    and a title came out as disconnected fragments while its ground truth
+    still claimed a readable line. MixHand02 lost 72% of its ink that way.
+
+    The size matters: erosion is measured in pixels, so the fault only
+    shows at the large sizes a title is written in.
+    """
+    text = "Розилик хати"
+    style = sample_style(random.Random(7), library).replace(ink_strength=1.4)
+
+    for font in library:
+        if not font.can_render(text):
+            continue
+        hand = Hand(
+            font,
+            TITLE_PIXEL_SIZE,
+            style.replace(font=font.name),
+            random.Random(7),
+        )
+        drawn, _ = hand.render_line(text, style.ink)
+
+        with patch.object(Hand, "_erode", lambda self, ink, passes: ink):
+            untouched, _ = hand.render_line(text, style.ink)
+
+        kept = _ink(drawn) / _ink(untouched)
+        assert kept >= 0.5, f"{font.name} lost {(1 - kept):.0%} of its ink"
+
+
+def test_a_high_contrast_font_is_measured_by_its_typical_stroke(
+    library: FontLibrary,
+) -> None:
+    """MixHand02 is the library's most contrasted hand, so it is the one
+    that shows whether the measurement follows the heavy strokes."""
+    font = library.by_name("MixHand02")
+    assert font is not None
+    assert font.stroke_ratio <= 0.05, (
+        "measured on the heaviest strokes again; the thin joins will be "
+        "eroded away"
+    )

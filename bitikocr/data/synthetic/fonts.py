@@ -68,6 +68,14 @@ TARGET_WIDTH = 0.46
 _METRIC_SIZE = 100
 _MAX_EROSION_PASSES = 30
 
+#: Share of a sample's ink that must be gone before its stroke is called
+#: measured. A cursive hand is not one width: it has thick downstrokes and
+#: hairline joins, and eroding until *all* of the ink has gone reports the
+#: thickest stroke rather than a typical one. The renderer then thins the
+#: hand by more than the hairlines can survive and the line falls apart, so
+#: the measurement stops around the middle of the ink instead.
+_TYPICAL_STROKE_INK = 0.35
+
 _DEFAULT_METRICS = (0.45, 0.46, 0.08)
 
 # Reference glyphs the measurements are taken on, per script. A font is
@@ -113,10 +121,12 @@ def _reference_glyphs(codepoints: frozenset[int]) -> _ReferenceGlyphs | None:
 
 
 def _stroke_width(font: ImageFont.FreeTypeFont, text: str) -> float:
-    """Estimate a font's stroke width in pixels.
+    """Estimate a font's typical stroke width in pixels.
 
-    The glyph mask is eroded one pass at a time until almost no ink is left;
-    each pass removes roughly two pixels of width.
+    The glyph mask is eroded one pass at a time — each removes roughly two
+    pixels of width — until enough of the ink has gone that what is left is
+    only the font's heaviest strokes. See :data:`_TYPICAL_STROKE_INK` for
+    why the measurement stops there rather than at a bare mask.
 
     Args:
         font: An already opened font.
@@ -134,7 +144,7 @@ def _stroke_width(font: ImageFont.FreeTypeFont, text: str) -> float:
     while passes < _MAX_EROSION_PASSES:
         mask = mask.filter(ImageFilter.MinFilter(3))
         passes += 1
-        if np.asarray(mask).sum() < total_ink * 0.05:
+        if np.asarray(mask).sum() < total_ink * _TYPICAL_STROKE_INK:
             break
     return 2.0 * passes
 
