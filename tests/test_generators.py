@@ -1,0 +1,1036 @@
+"""Tests for the document generators and the generator registry."""
+
+from __future__ import annotations
+
+import itertools
+import json
+import random
+import statistics
+from typing import Any
+
+import pytest
+
+from bitikocr.config import SyntheticConfig
+from bitikocr.data.synthetic.annotation import DocumentAnnotation
+from bitikocr.data.synthetic.generators import (
+    ArizaGenerator,
+    BirthCertificateGenerator,
+    ConsentLetterGenerator,
+    DeathCertificateGenerator,
+    ExplanatoryLetterGenerator,
+    FormGenerator,
+    FormOptions,
+    LetterGenerator,
+    available_document_types,
+    create_generator,
+)
+from bitikocr.data.synthetic.generators.consent_letter import (
+    CERTIFICATION_SIGNATURE_BLOCK,
+)
+from bitikocr.data.synthetic.generators.death_certificate import (
+    SINGLE_TEMPLATE,
+)
+from bitikocr.data.synthetic.generators.form import (
+    DEFAULT_SEAL_CENTRE,
+    DEFAULT_SEAL_RING,
+)
+from bitikocr.data.synthetic.records import sample_record
+
+
+def assert_boxes_are_inside_the_page(annotation: DocumentAnnotation) -> None:
+    """Every recorded box must lie within the page it was drawn on."""
+    width, height = annotation.size
+    for line in annotation.lines:
+        assert line.bbox is not None, f"{line.block} has no box"
+        assert line.bbox.left >= 0 and line.bbox.top >= 0
+        assert line.bbox.right <= width and line.bbox.bottom <= height
+
+
+def assert_values_sit_on_their_rules(
+    generator: FormGenerator, fields: dict[str, Any], seeds: range = range(6)
+) -> None:
+    """Every line's ink must sit on the rule its own segment measured.
+
+    The layouts note that handwriting rises above the line and may spill a
+    little past its right end, so the tolerances are one-sided.
+    """
+    template = generator.template
+    for seed in seeds:
+        annotation = generator.generate(fields, seed=seed).annotation
+
+        by_block: dict[str, list[Any]] = {}
+        for line in annotation.lines:
+            by_block.setdefault(line.block, []).append(line)
+
+        for block, lines in by_block.items():
+            try:
+                geometry = template.field(block)
+            except KeyError:
+                continue
+            for line, segment in zip(lines, geometry.segments):
+                assert line.bbox is not None
+                where = f"{block}={line.text!r} (seed {seed})"
+                # Sits on the rule: not far above it, never dropped below.
+                assert -12 <= line.bbox.bottom - segment.baseline_y <= 40, where
+                # Starts at the rule's left end, barely overruns its right.
+                assert line.bbox.left >= segment.x_start - 5, where
+                assert line.bbox.right <= segment.x_end + 25, where
+
+
+# -- registry --------------------------------------------------------------
+
+
+def test_every_document_type_is_registered() -> None:
+    assert available_document_types() == (
+        "ariza",
+        "birth_certificate",
+        "consent_letter",
+        "death_certificate",
+        "explanatory_letter",
+    )
+
+
+def test_a_generator_is_built_from_its_name(config: SyntheticConfig) -> None:
+    assert isinstance(create_generator("ariza", config), ArizaGenerator)
+
+
+def test_an_unknown_document_type_is_rejected(
+    config: SyntheticConfig,
+) -> None:
+    with pytest.raises(KeyError, match="Unknown document type"):
+        create_generator("passport", config)
+
+
+# -- ariza -----------------------------------------------------------------
+
+
+def test_an_ariza_renders_at_the_requested_size(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    document = ariza_generator.generate(ariza_fields, seed=11)
+    assert document.image.size == ariza_generator.page_size
+    assert document.annotation.size == ariza_generator.page_size
+
+
+def test_an_ariza_is_reproducible_from_its_seed(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    first = ariza_generator.generate(ariza_fields, seed=11)
+    second = ariza_generator.generate(ariza_fields, seed=11)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_an_ariza_records_the_seed_it_used(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    assert ariza_generator.generate(ariza_fields).seed is not None
+
+
+def test_an_ariza_transcribes_every_field_it_was_given(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    annotation = ariza_generator.generate(ariza_fields, seed=11).annotation
+    written = {block.kind for block in annotation.blocks if block.text}
+    assert {"recipient", "applicant", "body", "title"} <= written
+
+
+def test_an_ariza_keeps_every_box_on_the_page(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    assert_boxes_are_inside_the_page(
+        ariza_generator.generate(ariza_fields, seed=11).annotation
+    )
+
+
+def test_a_style_override_reaches_the_rendered_page(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    document = ariza_generator.generate(
+        ariza_fields, seed=11, style_overrides={"pen": "soft"}
+    )
+    assert document.annotation.metadata["style"]["pen"] == "soft"
+
+
+def test_an_unknown_style_override_is_rejected(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    with pytest.raises(ValueError, match="Unknown style fields"):
+        ariza_generator.generate(ariza_fields, style_overrides={"nope": 1})
+
+
+def test_a_long_body_is_shrunk_to_fit_the_page(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    crowded = {**ariza_fields, "body": ariza_fields["body"] * 6}
+    roomy = ariza_generator.generate(ariza_fields, seed=11)
+    tight = ariza_generator.generate(crowded, seed=11)
+
+    assert (
+        tight.annotation.metadata["style"]["font_size"]
+        < roomy.annotation.metadata["style"]["font_size"]
+    )
+    assert_boxes_are_inside_the_page(tight.annotation)
+
+
+# -- death certificate -----------------------------------------------------
+
+
+def test_a_certificate_fills_every_given_field(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    filled = {block.kind for block in annotation.blocks if block.text}
+    assert "surname" in filled
+    assert "registrar_name" in filled
+    assert "serial_number" in filled
+
+
+def test_a_certificate_records_one_block_per_field(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    kinds = [block.kind for block in annotation.blocks]
+    assert len(kinds) == len(set(kinds)), "a field was recorded twice"
+
+
+def test_a_certificate_stamps_and_signs(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert {"stamp", "signature"} <= kinds
+
+
+def test_a_certificate_keeps_every_box_on_the_page(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    assert_boxes_are_inside_the_page(
+        certificate_generator.generate(certificate_fields, seed=5).annotation
+    )
+
+
+def test_a_partly_filled_certificate_only_reports_what_was_written(
+    certificate_generator: DeathCertificateGenerator,
+) -> None:
+    annotation = certificate_generator.generate(
+        {"surname": "Раҳимова", "age_at_death": "71"}, seed=5
+    ).annotation
+    written = dict(annotation.metadata["fields"])
+    # The seal is pressed by default, so its lettering is on the page too.
+    assert written.pop("stamp_ring") == DEFAULT_SEAL_RING
+    assert written.pop("stamp_center") == list(DEFAULT_SEAL_CENTRE)
+    assert written == {"surname": "Раҳимова", "age_at_death": "71"}
+    assert annotation.text == "Раҳимова\n71"
+
+
+def test_an_unstamped_certificate_reports_no_seal_lettering(
+    config: SyntheticConfig,
+) -> None:
+    generator = DeathCertificateGenerator(
+        config, options=FormOptions(scale=1.0, draw_seal=False)
+    )
+    annotation = generator.generate({"surname": "Раҳимова"}, seed=5).annotation
+    assert annotation.metadata["fields"] == {"surname": "Раҳимова"}
+    assert "stamp" not in {block.kind for block in annotation.blocks}
+
+
+def test_the_annotation_serialises_to_json(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    payload = json.loads(json.dumps(annotation.to_dict(), ensure_ascii=False))
+    assert payload["document_type"] == "death_certificate"
+    assert payload["size"] == list(annotation.size)
+    assert payload["blocks"][0]["type"] == annotation.blocks[0].kind
+
+
+def test_every_written_value_lands_on_its_printed_rule(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    assert_values_sit_on_their_rules(certificate_generator, certificate_fields)
+
+
+def test_lines_of_a_double_ruled_field_do_not_collide(
+    certificate_generator: DeathCertificateGenerator,
+) -> None:
+    """The two 'cause of death' rules are 20px apart; the hand must compress."""
+    long_cause = (
+        "Miya qon aylanishining o'tkir buzilishi va yurak ishemik "
+        "kasalligi asoratlari"
+    )
+    annotation = certificate_generator.generate(
+        {"cause_of_death": long_cause}, seed=3
+    ).annotation
+    boxes = [
+        line.bbox for line in annotation.lines if line.block == "cause_of_death"
+    ]
+    for upper, lower in itertools.pairwise(boxes):
+        assert upper is not None and lower is not None
+        assert upper.bottom <= lower.bottom, "lines must run top-down"
+
+
+def test_the_template_name_is_recorded(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    assert annotation.metadata["template"] == "death_certificate_bilingual"
+
+
+def test_a_template_can_be_chosen_by_name(config: SyntheticConfig) -> None:
+    generator = create_generator(
+        "death_certificate", config, template="death_certificate_bilingual"
+    )
+    assert isinstance(generator, DeathCertificateGenerator)
+    assert generator.template.name == "death_certificate_bilingual"
+
+
+def test_an_unknown_template_is_reported(config: SyntheticConfig) -> None:
+    with pytest.raises(FileNotFoundError, match="Layout 'nope' not found"):
+        create_generator("death_certificate", config, template="nope")
+
+
+def test_a_template_is_rejected_for_a_free_layout_document(
+    config: SyntheticConfig,
+) -> None:
+    with pytest.raises(ValueError, match="does not use form templates"):
+        create_generator("ariza", config, template="anything")
+
+
+# -- birth certificate -----------------------------------------------------
+
+
+def test_a_birth_certificate_fills_child_parents_and_office(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    filled = {block.kind for block in annotation.blocks if block.text}
+    assert {"child_surname", "child_given_name"} <= filled
+    assert {"father_surname", "mother_surname"} <= filled
+    assert {"registry_office", "registry_head_name"} <= filled
+
+
+def test_a_birth_certificate_prints_both_series_and_number(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """This form typesets a series beside the number, not one serial."""
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    printed = {
+        block.kind: block.text
+        for block in annotation.blocks
+        if block.kind in ("form_series", "form_number")
+    }
+    assert printed == {
+        "form_series": birth_fields["form_series"],
+        "form_number": birth_fields["form_number"],
+    }
+
+
+def test_a_birth_certificate_stamps_and_signs(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert {"stamp", "signature"} <= kinds
+
+
+def test_the_head_of_office_is_a_field_not_a_signature_caption(
+    birth_generator: BirthCertificateGenerator,
+) -> None:
+    """The birth form gives the name its own rule, unlike the death form."""
+    assert not birth_generator.registrar_writes_on_signature
+    assert "registrar_name" not in birth_generator.field_names
+    assert "registry_head_name" in birth_generator.field_names
+
+
+def test_a_birth_certificate_is_reproducible_from_its_seed(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    first = birth_generator.generate(birth_fields, seed=7)
+    second = birth_generator.generate(birth_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_a_birth_certificate_keeps_every_box_on_the_page(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    assert_boxes_are_inside_the_page(
+        birth_generator.generate(birth_fields, seed=5).annotation
+    )
+
+
+def test_every_birth_value_lands_on_its_printed_rule(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    assert_values_sit_on_their_rules(birth_generator, birth_fields)
+
+
+def test_nothing_is_drawn_over_the_printed_qr_code(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """The blank form already carries a QR; ink there would ruin both."""
+    template = birth_generator.template
+    assert template.keep_out, "expected the layout to reserve the QR region"
+
+    for seed in range(8):
+        annotation = birth_generator.generate(
+            birth_fields, seed=seed
+        ).annotation
+        for area in template.keep_out:
+            for block in annotation.blocks:
+                if block.bbox is None:
+                    continue
+                overlaps = (
+                    block.bbox.left < area.bbox.right
+                    and area.bbox.left < block.bbox.right
+                    and block.bbox.top < area.bbox.bottom
+                    and area.bbox.top < block.bbox.bottom
+                )
+                assert (
+                    not overlaps
+                ), f"{block.kind} overlaps {area.name} at seed {seed}"
+
+
+def test_both_certificates_share_one_generator(
+    config: SyntheticConfig,
+) -> None:
+    """Certificates differ by template, not by rendering code."""
+    birth = create_generator("birth_certificate", config)
+    death = create_generator("death_certificate", config)
+    assert isinstance(birth, FormGenerator)
+    assert isinstance(death, FormGenerator)
+    assert type(birth).generate is type(death).generate
+    assert birth.template.name != death.template.name
+
+
+# -- placement inside a form's cells ----------------------------------------
+
+
+def measure_off_centre(
+    generator: FormGenerator, fields: dict[str, Any], seeds: range = range(10)
+) -> list[float]:
+    """Return how far each value sits from the middle of its cell.
+
+    The result is normalised against the slack around the value: 0.0 is
+    dead centre and ±1.0 is flush against one end. Only single-line fields
+    with real room to move are measured.
+    """
+    template = generator.template
+    offsets: list[float] = []
+    for seed in seeds:
+        annotation = generator.generate(fields, seed=seed).annotation
+        for line in annotation.lines:
+            try:
+                geometry = template.field(line.block)
+            except KeyError:
+                continue
+            if len(geometry.segments) != 1 or line.bbox is None:
+                continue
+            segment = geometry.segments[0]
+            slack = segment.width - line.bbox.width
+            if slack < 60:
+                continue
+            cell_centre = (segment.x_start + segment.x_end) / 2
+            ink_centre = (line.bbox.left + line.bbox.right) / 2
+            offsets.append((ink_centre - cell_centre) / (slack / 2))
+    return offsets
+
+
+@pytest.mark.parametrize(
+    "generator_fixture", ["birth_generator", "certificate_generator"]
+)
+def test_values_sit_around_the_middle_of_their_cell(
+    generator_fixture: str,
+    request: pytest.FixtureRequest,
+    birth_fields: dict[str, Any],
+    certificate_fields: dict[str, Any],
+) -> None:
+    """A clerk aims for the middle of the space, not its left edge."""
+    generator = request.getfixturevalue(generator_fixture)
+    fields = (
+        birth_fields
+        if generator_fixture == "birth_generator"
+        else certificate_fields
+    )
+    offsets = measure_off_centre(generator, fields)
+
+    assert offsets, "expected fields with room to move"
+    assert abs(statistics.mean(offsets)) < 0.2, "values drift off centre"
+    assert (
+        max(abs(offset) for offset in offsets) < 0.8
+    ), "a value was written flush against one end of its cell"
+
+
+def test_values_are_not_centred_to_the_pixel(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """Perfect centring reads as typeset; a hand never lands twice alike."""
+    offsets = measure_off_centre(birth_generator, birth_fields)
+    assert statistics.pstdev(offsets) > 0.05
+
+
+# -- the office seal --------------------------------------------------------
+
+
+def seal_centres(
+    generator: FormGenerator, fields: dict[str, Any], seeds: range = range(20)
+) -> list[tuple[float, float]]:
+    """Return where the seal's ink landed on each generated page."""
+    centres: list[tuple[float, float]] = []
+    for seed in seeds:
+        annotation = generator.generate(fields, seed=seed).annotation
+        box = next(
+            block.bbox for block in annotation.blocks if block.kind == "stamp"
+        )
+        assert box is not None
+        centres.append(((box.left + box.right) / 2, (box.top + box.bottom) / 2))
+    return centres
+
+
+def test_the_seal_is_pressed_off_centre_every_time(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """A hand-pressed seal never lands in the same place twice."""
+    centres = seal_centres(birth_generator, birth_fields)
+    assert len({round(x) for x, _ in centres}) > 5
+    assert len({round(y) for _, y in centres}) > 5
+
+
+def test_the_seal_leans_left_of_its_printed_circle(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    centres = seal_centres(birth_generator, birth_fields)
+    area = birth_generator.template.seal
+    assert area is not None
+    assert statistics.mean(x for x, _ in centres) < area.centre[0]
+
+
+def test_the_seal_stays_on_the_page_wherever_it_lands(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    width, height = birth_generator.template.native_size
+    for seed in range(20):
+        annotation = birth_generator.generate(
+            birth_fields, seed=seed
+        ).annotation
+        box = next(
+            block.bbox for block in annotation.blocks if block.kind == "stamp"
+        )
+        assert box is not None
+        assert 0 <= box.left and box.right <= width, seed
+        assert 0 <= box.top and box.bottom <= height, seed
+
+
+def test_the_seal_box_measures_its_ink_not_its_canvas(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    """The stamp layer is padded for its curved lettering; the box is not."""
+    annotation = birth_generator.generate(birth_fields, seed=5).annotation
+    box = next(
+        block.bbox for block in annotation.blocks if block.kind == "stamp"
+    )
+    area = birth_generator.template.seal
+    assert box is not None and area is not None
+
+    canvas = area.radius * 2 * 1.35 * 2.6  # widest radius, padded layer
+    assert box.width < canvas
+    assert box.width > area.radius  # but it did draw a seal
+
+
+def test_a_crowded_ariza_keeps_its_signature_block_on_the_page(
+    ariza_generator: ArizaGenerator,
+) -> None:
+    """A full page must not push the footer past the paper.
+
+    Ink drawn off the edge is clipped, so a box for it would promise a
+    transcription the image does not show.
+    """
+    for seed in range(40):
+        fields = sample_record("ariza", random.Random(seed), "cyrillic").fields
+        crowded = {
+            **fields,
+            "body": str(fields["body"]) * 4,
+            "phone": "998901234567",
+        }
+        annotation = ariza_generator.generate(crowded, seed=seed).annotation
+
+        written = {block.kind for block in annotation.blocks if block.bbox}
+        assert "phone" in written, f"the phone fell off the page at seed {seed}"
+        assert_boxes_are_inside_the_page(annotation)
+
+
+# -- the single-page cyrillic death certificate ----------------------------
+
+
+def test_the_single_form_can_be_chosen_from_the_registry(
+    config: SyntheticConfig,
+) -> None:
+    generator = create_generator(
+        "death_certificate", config, template=SINGLE_TEMPLATE
+    )
+    assert isinstance(generator, DeathCertificateGenerator)
+    assert generator.template.name == SINGLE_TEMPLATE
+    assert generator.registrar_writes_on_signature
+
+
+def test_the_single_form_fills_every_cell_it_has(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    filled = {block.kind for block in annotation.blocks if block.text}
+    assert set(single_generator.template.field_names) <= filled
+    assert {"registrar_name", "form_series", "serial_number"} <= filled
+    # The signature is a scribble, so it is a block with a box but no text.
+    marks = {block.kind for block in annotation.blocks if block.bbox}
+    assert {"stamp", "signature"} <= marks
+
+
+def test_the_single_form_leaves_out_what_it_has_no_cell_for(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    """The record also carries a citizenship and a separate issue day and
+    month; this form has nowhere to write them, and must not claim to."""
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    written = set(annotation.metadata["fields"])
+    assert "issue_day_month" in written
+    assert not {"citizenship", "issue_month", "issue_day"} & written
+    # The seal's two lettering fields are drawn as one stamp block.
+    blocks = {block.kind for block in annotation.blocks}
+    assert blocks == (written - {"stamp_ring", "stamp_center"}) | {
+        "stamp",
+        "signature",
+    }
+
+
+def test_the_single_form_prints_the_series_beside_the_serial(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    printed = {
+        block.kind: block
+        for block in annotation.blocks
+        if block.kind in ("form_series", "serial_number")
+    }
+    assert (
+        printed["form_series"].text == single_certificate_fields["form_series"]
+    )
+    # This blank form prints no № of its own, so it is typeset with the
+    # digits, reading "II-HR № 0024695" as the real document does.
+    assert printed["serial_number"].text == (
+        f"№ {single_certificate_fields['serial_number']}"
+    )
+    series, serial = printed["form_series"].bbox, printed["serial_number"].bbox
+    assert series is not None and serial is not None
+    assert series.right <= serial.left, "the series must come first"
+
+
+def test_the_bilingual_form_prints_the_serial_without_a_sign(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    """Its blank already prints "I-HR №", so printing another would put two
+    signs on the page."""
+    annotation = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation
+    serial = next(
+        block for block in annotation.blocks if block.kind == "serial_number"
+    )
+    assert serial.text == certificate_fields["serial_number"]
+
+
+def test_printed_text_stays_inside_the_area_it_was_measured_in(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    """The series and the serial sit side by side, so type that overran its
+    area would collide with its neighbour."""
+    template = single_generator.template
+    scale = single_generator.options.scale
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+
+    boxes = {block.kind: block.bbox for block in annotation.blocks}
+    for area in template.printed:
+        box = boxes[area.name]
+        assert box is not None
+        assert box.left >= area.bbox.left * scale, area.name
+        assert box.right <= area.bbox.right * scale, area.name
+
+
+def test_the_single_form_writes_values_on_their_rules(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    assert_values_sit_on_their_rules(
+        single_generator, single_certificate_fields
+    )
+
+
+def test_the_single_form_keeps_every_box_on_the_page(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    for seed in range(4):
+        assert_boxes_are_inside_the_page(
+            single_generator.generate(
+                single_certificate_fields, seed=seed
+            ).annotation
+        )
+
+
+def test_the_single_form_records_one_block_per_field(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    annotation = single_generator.generate(
+        single_certificate_fields, seed=5
+    ).annotation
+    kinds = [block.kind for block in annotation.blocks]
+    assert len(kinds) == len(set(kinds)), "a field was recorded twice"
+
+
+def test_the_single_form_is_reproducible_from_its_seed(
+    single_generator: DeathCertificateGenerator,
+    single_certificate_fields: dict[str, Any],
+) -> None:
+    first = single_generator.generate(single_certificate_fields, seed=7)
+    second = single_generator.generate(single_certificate_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+# -- consent letter ---------------------------------------------------------
+
+
+def test_a_consent_letter_writes_the_whole_letter(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    annotation = consent_generator.generate(consent_fields, seed=5).annotation
+    written = {block.kind for block in annotation.blocks if block.text}
+    assert {"recipient", "applicant", "title", "body"} <= written
+    assert "signature_name" in written
+
+
+def test_a_certified_letter_is_attested_and_sealed(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """When a citizen has their signature attested to, the official signs
+    beside it and presses their own seal over the block."""
+    annotation = consent_generator.generate(consent_fields, seed=5).annotation
+    kinds = {block.kind for block in annotation.blocks if block.bbox}
+    assert "certifier_note" in kinds
+    assert "certifier_name" in kinds
+    assert "stamp" in kinds
+    assert CERTIFICATION_SIGNATURE_BLOCK in kinds
+
+
+def test_an_uncertified_citizens_letter_carries_no_seal(
+    consent_generator: ConsentLetterGenerator,
+    consent_plain_fields: dict[str, Any],
+) -> None:
+    """A private citizen has no seal of their own. Their letter is their
+    signature and nothing more, and stamping one would be a forgery."""
+    document = consent_generator.generate(consent_plain_fields, seed=5)
+    kinds = {block.kind for block in document.annotation.blocks}
+    assert "signature" in kinds, "the author still signs"
+    assert "stamp" not in kinds
+    assert CERTIFICATION_SIGNATURE_BLOCK not in kinds
+    assert not {"certifier_note", "certifier_role", "certifier_name"} & kinds
+    assert_boxes_are_inside_the_page(document.annotation)
+
+
+def test_an_organisations_letter_is_always_sealed(
+    consent_generator: ConsentLetterGenerator,
+    consent_organisation_fields: dict[str, Any],
+) -> None:
+    """A legal entity is required to seal what it signs, and the seal is
+    its own rather than a witness's."""
+    document = consent_generator.generate(consent_organisation_fields, seed=5)
+    kinds = {block.kind for block in document.annotation.blocks}
+    assert "stamp" in kinds
+    assert "signature" in kinds
+    # Nobody certifies an entity's own letter.
+    assert not {"certifier_note", "certifier_name"} & kinds
+    assert_boxes_are_inside_the_page(document.annotation)
+
+
+def test_a_citizen_writes_their_passport_and_phone_in_the_header(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+    consent_organisation_fields: dict[str, Any],
+) -> None:
+    """The sender's block has to identify a person well enough to act on;
+    an organisation identifies itself by its name instead."""
+    citizen = consent_generator.generate(consent_fields, seed=5).annotation
+    blocks = {block.kind: block.text for block in citizen.blocks}
+    assert blocks["passport"] == consent_fields["passport"]
+    assert blocks["phone"] == consent_fields["phone"]
+
+    entity = consent_generator.generate(
+        consent_organisation_fields, seed=5
+    ).annotation
+    assert "passport" not in {block.kind for block in entity.blocks}
+
+
+def test_the_two_signatures_are_told_apart(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """The author signs and so does the official who certifies them. Two
+    blocks of one name would leave the ground truth unable to say whose
+    hand signed where."""
+    annotation = consent_generator.generate(consent_fields, seed=5).annotation
+    kinds = [block.kind for block in annotation.blocks]
+    assert len(kinds) == len(set(kinds)), "a block was recorded twice"
+    assert "signature" in kinds
+    assert CERTIFICATION_SIGNATURE_BLOCK in kinds
+
+
+def test_a_named_office_moves_the_certifier_to_a_second_line(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """With an office named there is too much for one line, so the scans
+    put the name under the attesting phrase; without one it sits beside it."""
+    with_role = {**consent_fields, "certifier_role": "МФЙ раиси"}
+    without_role = {
+        name: value
+        for name, value in consent_fields.items()
+        if name != "certifier_role"
+    }
+
+    for seed in range(4):
+        boxes = {
+            block.kind: block.bbox
+            for block in consent_generator.generate(
+                with_role, seed=seed
+            ).annotation.blocks
+        }
+        assert boxes["certifier_role"] is not None
+        assert boxes["certifier_name"] is not None
+        assert boxes["certifier_note"] is not None
+        assert boxes["certifier_name"].top > boxes["certifier_note"].top
+
+        flat = {
+            block.kind: block.bbox
+            for block in consent_generator.generate(
+                without_role, seed=seed
+            ).annotation.blocks
+        }
+        assert "certifier_role" not in flat
+        assert flat["certifier_name"] is not None
+        assert flat["certifier_note"] is not None
+        # One line: the name sits to the right of the phrase, not below it.
+        assert flat["certifier_name"].left > flat["certifier_note"].right
+
+
+def test_the_seal_is_pressed_over_the_certification(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """It is the mahalla's seal on the mahalla's attestation, so it lands on
+    that block rather than anywhere on the page."""
+    for seed in range(6):
+        annotation = consent_generator.generate(
+            consent_fields, seed=seed
+        ).annotation
+        boxes = {block.kind: block.bbox for block in annotation.blocks}
+        stamp, note = boxes["stamp"], boxes["certifier_note"]
+        assert stamp is not None and note is not None
+        assert (
+            stamp.bottom > note.top
+        ), f"seal sits above the note (seed {seed})"
+        assert stamp.top < note.bottom + stamp.height
+
+
+def test_a_consent_letter_keeps_every_box_on_the_page(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    for seed in range(6):
+        document = consent_generator.generate(consent_fields, seed=seed)
+        annotation = document.annotation
+        assert_boxes_are_inside_the_page(annotation)
+
+        width, height = annotation.size
+        for block in annotation.blocks:
+            if block.bbox is None:
+                continue
+            assert block.bbox.left >= 0 and block.bbox.top >= 0, block.kind
+            assert block.bbox.right <= width, block.kind
+            assert block.bbox.bottom <= height, block.kind
+
+
+def test_a_consent_letter_without_a_certifier_still_renders(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    """An uncertified copy is still a letter, so a missing attestation must
+    not take the page down with it."""
+    bare = {
+        name: value
+        for name, value in consent_fields.items()
+        if not name.startswith("certifier")
+    }
+    annotation = consent_generator.generate(bare, seed=5).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert "body" in kinds
+    assert not {"certifier_note", "certifier_name"} & kinds
+    assert_boxes_are_inside_the_page(annotation)
+
+
+def test_a_consent_letter_is_reproducible_from_its_seed(
+    consent_generator: ConsentLetterGenerator,
+    consent_fields: dict[str, Any],
+) -> None:
+    first = consent_generator.generate(consent_fields, seed=7)
+    second = consent_generator.generate(consent_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_both_letters_share_one_engine(
+    ariza_generator: ArizaGenerator,
+    consent_generator: ConsentLetterGenerator,
+) -> None:
+    """A letter on a blank sheet is laid out one way, whatever it says."""
+    assert isinstance(ariza_generator, LetterGenerator)
+    assert isinstance(consent_generator, LetterGenerator)
+    assert (
+        type(ariza_generator)._put_foot is not type(consent_generator)._put_foot
+    )
+
+
+# -- explanatory letter -----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "fixture", ["citizen_explanation_fields", "employee_explanation_fields"]
+)
+def test_an_explanation_writes_the_whole_letter(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    fixture: str,
+    request: pytest.FixtureRequest,
+) -> None:
+    fields = request.getfixturevalue(fixture)
+    for seed in range(4):
+        annotation = explanatory_generator.generate(
+            fields, seed=seed
+        ).annotation
+        written = {block.kind for block in annotation.blocks if block.text}
+        assert {"recipient", "applicant", "body"} <= written
+        assert_boxes_are_inside_the_page(annotation)
+
+
+def test_an_explanation_is_neither_sealed_nor_registered(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    citizen_explanation_fields: dict[str, Any],
+) -> None:
+    """It is the writer's own account: nobody certifies or files it."""
+    annotation = explanatory_generator.generate(
+        citizen_explanation_fields, seed=5
+    ).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert not {"stamp", "registration", "certifier_note"} & kinds
+
+
+def test_an_explanation_is_numbered_at_the_foot(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    ariza_generator: ArizaGenerator,
+    citizen_explanation_fields: dict[str, Any],
+    ariza_fields: dict[str, Any],
+) -> None:
+    """The scanned ones carry their archive number bottom-right, where an
+    ariza's is at the head."""
+    fields = {**citizen_explanation_fields, "page_number": "186"}
+    annotation = explanatory_generator.generate(fields, seed=5).annotation
+    boxes = {block.kind: block.bbox for block in annotation.blocks}
+    number, body = boxes["page_number"], boxes["body"]
+    assert number is not None and body is not None
+    assert number.top > body.bottom
+    assert number.top > annotation.size[1] * 0.85
+
+    ariza = ariza_generator.generate(
+        {**ariza_fields, "page_number": "12"}, seed=5
+    ).annotation
+    head = next(b.bbox for b in ariza.blocks if b.kind == "page_number")
+    assert head is not None and head.bottom < ariza.size[1] * 0.15
+
+
+def test_a_title_run_into_the_header_gets_no_line_of_its_own(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    citizen_explanation_fields: dict[str, Any],
+) -> None:
+    """Some hands finish the sender's block with the words "tushuntirish
+    xati" instead of writing a title under it. An empty title says so, and
+    must not fall back to the default."""
+    merged = {**citizen_explanation_fields, "title": ""}
+    annotation = explanatory_generator.generate(merged, seed=5).annotation
+    assert "title" not in {block.kind for block in annotation.blocks}
+
+    unnamed = {
+        name: value
+        for name, value in citizen_explanation_fields.items()
+        if name != "title"
+    }
+    annotation = explanatory_generator.generate(unnamed, seed=5).annotation
+    title = next(b for b in annotation.blocks if b.kind == "title")
+    assert title.text == "Тушунтириш хати"
+
+
+def test_an_explanation_is_reproducible_from_its_seed(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    employee_explanation_fields: dict[str, Any],
+) -> None:
+    first = explanatory_generator.generate(employee_explanation_fields, seed=7)
+    second = explanatory_generator.generate(employee_explanation_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_every_letter_shares_the_letter_engine(config: SyntheticConfig) -> None:
+    for name in ("ariza", "consent_letter", "explanatory_letter"):
+        assert isinstance(create_generator(name, config), LetterGenerator)

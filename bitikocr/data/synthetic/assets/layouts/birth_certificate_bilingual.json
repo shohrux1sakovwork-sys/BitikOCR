@@ -1,0 +1,412 @@
+{
+  "template_name": "birth_certificate_bilingual",
+  "image": "birth_certificate_bilingual.png",
+  "width": 1466,
+  "height": 1073,
+  "coordinate_system": "pixels, origin top-left",
+  "fields": [
+    {
+      "id": "child_surname",
+      "description": "Child's surname",
+      "text_type": "surname_uppercase_latin",
+      "underline_y": 329,
+      "bbox": {
+        "x1": 59,
+        "y1": 295,
+        "x2": 643,
+        "y2": 327
+      },
+      "baseline_y": 325
+    },
+    {
+      "id": "child_given_name",
+      "description": "Child's given name + patronymic (e.g. NAME FATHERNAME O'G'LI/QIZI)",
+      "text_type": "given_name_patronymic",
+      "underline_y": 389,
+      "bbox": {
+        "x1": 60,
+        "y1": 355,
+        "x2": 643,
+        "y2": 387
+      },
+      "baseline_y": 385
+    },
+    {
+      "id": "child_birth_date",
+      "description": "Date of birth",
+      "text_type": "date: YYYY YIL MONTHNAME DD",
+      "underline_y": 449,
+      "bbox": {
+        "x1": 209,
+        "y1": 415,
+        "x2": 643,
+        "y2": 447
+      },
+      "baseline_y": 445
+    },
+    {
+      "id": "child_birth_year_words",
+      "description": "Year of birth in words",
+      "text_type": "year_in_words_uzbek",
+      "underline_y": 508,
+      "bbox": {
+        "x1": 61,
+        "y1": 474,
+        "x2": 643,
+        "y2": 506
+      },
+      "baseline_y": 504
+    },
+    {
+      "id": "birth_country",
+      "description": "Place of birth – country",
+      "text_type": "country_name",
+      "underline_y": 568,
+      "bbox": {
+        "x1": 195,
+        "y1": 534,
+        "x2": 643,
+        "y2": 566
+      },
+      "baseline_y": 564
+    },
+    {
+      "id": "birth_region",
+      "description": "Place of birth – region (viloyat)",
+      "text_type": "region_name (… VILOYATI)",
+      "underline_y": 628,
+      "bbox": {
+        "x1": 62,
+        "y1": 594,
+        "x2": 643,
+        "y2": 626
+      },
+      "baseline_y": 624
+    },
+    {
+      "id": "birth_district",
+      "description": "Place of birth – district/city",
+      "text_type": "district_or_city (… TUMANI / SHAHRI)",
+      "underline_y": 688,
+      "bbox": {
+        "x1": 62,
+        "y1": 654,
+        "x2": 643,
+        "y2": 686
+      },
+      "baseline_y": 684
+    },
+    {
+      "id": "birth_settlement",
+      "description": "Place of birth – town/settlement/village",
+      "text_type": "settlement_name (often empty)",
+      "underline_y": 749,
+      "bbox": {
+        "x1": 63,
+        "y1": 715,
+        "x2": 643,
+        "y2": 747
+      },
+      "baseline_y": 745
+    },
+    {
+      "id": "record_year",
+      "description": "Record date – year",
+      "text_type": "year_4digit",
+      "underline_y": 824,
+      "bbox": {
+        "x1": 161,
+        "y1": 792,
+        "x2": 240,
+        "y2": 822
+      },
+      "baseline_y": 820
+    },
+    {
+      "id": "record_month",
+      "description": "Record date – month",
+      "text_type": "month_name_uzbek",
+      "underline_y": 824,
+      "bbox": {
+        "x1": 274,
+        "y1": 792,
+        "x2": 443,
+        "y2": 822
+      },
+      "baseline_y": 820
+    },
+    {
+      "id": "record_day",
+      "description": "Record date – day",
+      "text_type": "day_2digit",
+      "underline_y": 824,
+      "bbox": {
+        "x1": 519,
+        "y1": 792,
+        "x2": 580,
+        "y2": 822
+      },
+      "baseline_y": 820
+    },
+    {
+      "id": "record_number",
+      "description": "Civil record number",
+      "text_type": "record_no (e.g. 1-2108-20-T-003 pattern)",
+      "underline_y": 883,
+      "bbox": {
+        "x1": 63,
+        "y1": 851,
+        "x2": 269,
+        "y2": 881
+      },
+      "baseline_y": 879
+    },
+    {
+      "id": "father_surname",
+      "description": "Father – surname",
+      "text_type": "surname_uppercase_latin",
+      "underline_y": 131,
+      "bbox": {
+        "x1": 833,
+        "y1": 97,
+        "x2": 1374,
+        "y2": 129
+      },
+      "baseline_y": 127
+    },
+    {
+      "id": "father_given_name",
+      "description": "Father – given name (+ patronymic)",
+      "text_type": "given_name",
+      "underline_y": 183,
+      "bbox": {
+        "x1": 781,
+        "y1": 149,
+        "x2": 1374,
+        "y2": 181
+      },
+      "baseline_y": 179
+    },
+    {
+      "id": "father_nationality",
+      "description": "Father – nationality",
+      "text_type": "nationality (e.g. O'ZBEK)",
+      "underline_y": 234,
+      "bbox": {
+        "x1": 843,
+        "y1": 200,
+        "x2": 1374,
+        "y2": 232
+      },
+      "baseline_y": 230
+    },
+    {
+      "id": "father_citizenship",
+      "description": "Father – citizenship",
+      "text_type": "citizenship (O'ZBEKISTON / empty)",
+      "underline_y": 285,
+      "bbox": {
+        "x1": 873,
+        "y1": 251,
+        "x2": 1374,
+        "y2": 283
+      },
+      "baseline_y": 281
+    },
+    {
+      "id": "mother_surname",
+      "description": "Mother – surname",
+      "text_type": "surname_uppercase_latin",
+      "underline_y": 337,
+      "bbox": {
+        "x1": 836,
+        "y1": 303,
+        "x2": 1373,
+        "y2": 335
+      },
+      "baseline_y": 333
+    },
+    {
+      "id": "mother_given_name",
+      "description": "Mother – given name (+ patronymic)",
+      "text_type": "given_name",
+      "underline_y": 389,
+      "bbox": {
+        "x1": 780,
+        "y1": 355,
+        "x2": 1373,
+        "y2": 387
+      },
+      "baseline_y": 385
+    },
+    {
+      "id": "mother_nationality",
+      "description": "Mother – nationality",
+      "text_type": "nationality",
+      "underline_y": 440,
+      "bbox": {
+        "x1": 841,
+        "y1": 406,
+        "x2": 1372,
+        "y2": 438
+      },
+      "baseline_y": 436
+    },
+    {
+      "id": "mother_citizenship",
+      "description": "Mother – citizenship",
+      "text_type": "citizenship",
+      "underline_y": 492,
+      "bbox": {
+        "x1": 873,
+        "y1": 458,
+        "x2": 1371,
+        "y2": 490
+      },
+      "baseline_y": 488
+    },
+    {
+      "id": "registry_office_line1",
+      "description": "Registration office name, line 1",
+      "text_type": "office_name (… TUMANI FHDYO)",
+      "underline_y": 542,
+      "bbox": {
+        "x1": 913,
+        "y1": 508,
+        "x2": 1371,
+        "y2": 540
+      },
+      "baseline_y": 538
+    },
+    {
+      "id": "registry_office_line2",
+      "description": "Registration office name, line 2 (continuation)",
+      "text_type": "office_name_cont (BO'LIMI)",
+      "underline_y": 593,
+      "bbox": {
+        "x1": 779,
+        "y1": 559,
+        "x2": 1371,
+        "y2": 591
+      },
+      "baseline_y": 589
+    },
+    {
+      "id": "issue_year",
+      "description": "Issue date – year",
+      "text_type": "year_4digit",
+      "underline_y": 643,
+      "bbox": {
+        "x1": 913,
+        "y1": 611,
+        "x2": 983,
+        "y2": 641
+      },
+      "baseline_y": 639
+    },
+    {
+      "id": "issue_month",
+      "description": "Issue date – month",
+      "text_type": "month_name_uzbek",
+      "underline_y": 643,
+      "bbox": {
+        "x1": 1018,
+        "y1": 611,
+        "x2": 1168,
+        "y2": 641
+      },
+      "baseline_y": 639
+    },
+    {
+      "id": "issue_day",
+      "description": "Issue date – day",
+      "text_type": "day_2digit",
+      "underline_y": 643,
+      "bbox": {
+        "x1": 1244,
+        "y1": 611,
+        "x2": 1305,
+        "y2": 641
+      },
+      "baseline_y": 639
+    },
+    {
+      "id": "form_number",
+      "description": "Form serial number (right of №)",
+      "text_type": "digits_7 (typographic, red/black)",
+      "underline_y": 1016,
+      "bbox": {
+        "x1": 1083,
+        "y1": 986,
+        "x2": 1240,
+        "y2": 1014
+      },
+      "baseline_y": 1012
+    },
+    {
+      "id": "registry_head_name",
+      "description": "Head of registry office – name (no underline, right of title block)",
+      "text_type": "initials_surname (e.g. M. X. SURNAME)",
+      "bbox": {
+        "x1": 1100,
+        "y1": 698,
+        "x2": 1374,
+        "y2": 734
+      },
+      "baseline_y": 730,
+      "note": "approximate, no printed line"
+    },
+    {
+      "id": "form_series",
+      "description": "Form series printed left of bottom №",
+      "text_type": "series (roman numeral + 2 letters, e.g. III-XX)",
+      "bbox": {
+        "x1": 960,
+        "y1": 996,
+        "x2": 1045,
+        "y2": 1024
+      },
+      "note": "approximate"
+    },
+    {
+      "id": "stamp_zone",
+      "description": "Round official stamp (blue ink)",
+      "text_type": "stamp",
+      "bbox": {
+        "x1": 890,
+        "y1": 730,
+        "x2": 1110,
+        "y2": 950
+      },
+      "note": "circle center ≈(1000,840), r≈105; overlaps 'M.O./Печ.' and registry head text"
+    },
+    {
+      "id": "signature_zone",
+      "description": "Handwritten signature",
+      "text_type": "signature",
+      "bbox": {
+        "x1": 1060,
+        "y1": 760,
+        "x2": 1200,
+        "y2": 930
+      },
+      "note": "approximate"
+    },
+    {
+      "id": "qr_code",
+      "description": "Existing QR code (do not overwrite)",
+      "text_type": "qr",
+      "bbox": {
+        "x1": 1208,
+        "y1": 790,
+        "x2": 1352,
+        "y2": 932
+      }
+    }
+  ],
+  "source": "Measured from the blank two-page bilingual birth certificate scan.",
+  "printed_scripts": [
+    "latin",
+    "cyrillic"
+  ]
+}

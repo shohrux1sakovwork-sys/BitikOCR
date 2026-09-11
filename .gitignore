@@ -206,6 +206,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Generated documents. They live inside the generator that makes them, so
+# the rule is anchored there rather than to the repository root.
+/bitikocr/data/synthetic/output/
+
+# Local training data that is not part of the repository.
 sample_data/
 
 *.ipynb
