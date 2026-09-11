@@ -18,6 +18,7 @@ def test_listing_document_types(capsys: pytest.CaptureFixture[str]) -> None:
         "birth_certificate",
         "consent_letter",
         "death_certificate",
+        "explanatory_letter",
     ]
 
 

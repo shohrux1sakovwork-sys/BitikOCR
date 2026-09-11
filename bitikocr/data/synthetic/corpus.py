@@ -18,9 +18,11 @@ from bitikocr.data.synthetic.scripts import Bilingual, Script, in_script
 
 __all__ = [
     "DISTRICTS",
+    "EMPLOYEE_POSITIONS",
     "MONTHS",
     "ORGANISATION_ROLES",
     "STREETS",
+    "VILLAGES",
     "Address",
     "Person",
     "sample_address",
@@ -272,6 +274,32 @@ _MAHALLAS: tuple[str, ...] = (
     "Mustaqillik",
     "Guliston",
     "Obod",
+)
+
+#: Villages land is allotted in. A citizen building a house names the one
+#: their plot is in.
+VILLAGES: tuple[str, ...] = (
+    "Quriqtom",
+    "Qoraqum",
+    "Olmazor",
+    "Beshbuloq",
+    "Oqtepa",
+    "Bo'ston",
+    "Chinobod",
+    "Qo'shko'pir",
+)
+
+#: What an employee's post is called, as they write it before their name.
+EMPLOYEE_POSITIONS: tuple[str, ...] = (
+    "buxgalteriya bo'limi hisobchisi",
+    "kadrlar bo'limi inspektori",
+    "boshlang'ich sinf o'qituvchisi",
+    "matematika fani o'qituvchisi",
+    "ta'minot bo'limi muhandisi",
+    "xo'jalik bo'limi haydovchisi",
+    "qabulxona kotibasi",
+    "ishlab chiqarish sexi ishchisi",
+    "savdo bo'limi menejeri",
 )
 
 _CAUSES_OF_DEATH: tuple[str, ...] = (

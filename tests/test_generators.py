@@ -17,6 +17,7 @@ from bitikocr.data.synthetic.generators import (
     BirthCertificateGenerator,
     ConsentLetterGenerator,
     DeathCertificateGenerator,
+    ExplanatoryLetterGenerator,
     FormGenerator,
     FormOptions,
     LetterGenerator,
@@ -85,6 +86,7 @@ def test_every_document_type_is_registered() -> None:
         "birth_certificate",
         "consent_letter",
         "death_certificate",
+        "explanatory_letter",
     )
 
 
@@ -940,3 +942,95 @@ def test_both_letters_share_one_engine(
     assert (
         type(ariza_generator)._put_foot is not type(consent_generator)._put_foot
     )
+
+
+# -- explanatory letter -----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "fixture", ["citizen_explanation_fields", "employee_explanation_fields"]
+)
+def test_an_explanation_writes_the_whole_letter(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    fixture: str,
+    request: pytest.FixtureRequest,
+) -> None:
+    fields = request.getfixturevalue(fixture)
+    for seed in range(4):
+        annotation = explanatory_generator.generate(
+            fields, seed=seed
+        ).annotation
+        written = {block.kind for block in annotation.blocks if block.text}
+        assert {"recipient", "applicant", "body"} <= written
+        assert_boxes_are_inside_the_page(annotation)
+
+
+def test_an_explanation_is_neither_sealed_nor_registered(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    citizen_explanation_fields: dict[str, Any],
+) -> None:
+    """It is the writer's own account: nobody certifies or files it."""
+    annotation = explanatory_generator.generate(
+        citizen_explanation_fields, seed=5
+    ).annotation
+    kinds = {block.kind for block in annotation.blocks}
+    assert not {"stamp", "registration", "certifier_note"} & kinds
+
+
+def test_an_explanation_is_numbered_at_the_foot(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    ariza_generator: ArizaGenerator,
+    citizen_explanation_fields: dict[str, Any],
+    ariza_fields: dict[str, Any],
+) -> None:
+    """The scanned ones carry their archive number bottom-right, where an
+    ariza's is at the head."""
+    fields = {**citizen_explanation_fields, "page_number": "186"}
+    annotation = explanatory_generator.generate(fields, seed=5).annotation
+    boxes = {block.kind: block.bbox for block in annotation.blocks}
+    number, body = boxes["page_number"], boxes["body"]
+    assert number is not None and body is not None
+    assert number.top > body.bottom
+    assert number.top > annotation.size[1] * 0.85
+
+    ariza = ariza_generator.generate(
+        {**ariza_fields, "page_number": "12"}, seed=5
+    ).annotation
+    head = next(b.bbox for b in ariza.blocks if b.kind == "page_number")
+    assert head is not None and head.bottom < ariza.size[1] * 0.15
+
+
+def test_a_title_run_into_the_header_gets_no_line_of_its_own(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    citizen_explanation_fields: dict[str, Any],
+) -> None:
+    """Some hands finish the sender's block with the words "tushuntirish
+    xati" instead of writing a title under it. An empty title says so, and
+    must not fall back to the default."""
+    merged = {**citizen_explanation_fields, "title": ""}
+    annotation = explanatory_generator.generate(merged, seed=5).annotation
+    assert "title" not in {block.kind for block in annotation.blocks}
+
+    unnamed = {
+        name: value
+        for name, value in citizen_explanation_fields.items()
+        if name != "title"
+    }
+    annotation = explanatory_generator.generate(unnamed, seed=5).annotation
+    title = next(b for b in annotation.blocks if b.kind == "title")
+    assert title.text == "Тушунтириш хати"
+
+
+def test_an_explanation_is_reproducible_from_its_seed(
+    explanatory_generator: ExplanatoryLetterGenerator,
+    employee_explanation_fields: dict[str, Any],
+) -> None:
+    first = explanatory_generator.generate(employee_explanation_fields, seed=7)
+    second = explanatory_generator.generate(employee_explanation_fields, seed=7)
+    assert first.image.tobytes() == second.image.tobytes()
+    assert first.annotation.to_dict() == second.annotation.to_dict()
+
+
+def test_every_letter_shares_the_letter_engine(config: SyntheticConfig) -> None:
+    for name in ("ariza", "consent_letter", "explanatory_letter"):
+        assert isinstance(create_generator(name, config), LetterGenerator)

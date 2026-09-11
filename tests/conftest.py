@@ -17,6 +17,7 @@ from bitikocr.data.synthetic.generators import (
     BirthCertificateGenerator,
     ConsentLetterGenerator,
     DeathCertificateGenerator,
+    ExplanatoryLetterGenerator,
     FormOptions,
 )
 from bitikocr.data.synthetic.generators.death_certificate import (
@@ -135,6 +136,43 @@ def consent_organisation_fields() -> dict[str, object]:
 def consent_generator(config: SyntheticConfig) -> ConsentLetterGenerator:
     """A consent letter generator using the packaged assets."""
     return ConsentLetterGenerator(config)
+
+
+def _explanation_record(kind: str) -> dict[str, object]:
+    """Sample the first explanatory letter written by one sort of writer.
+
+    Args:
+        kind: ``citizen``, ``employee`` or ``student``.
+
+    Returns:
+        That letter's field values.
+    """
+    rng = random.Random(16)
+    for _ in range(200):
+        record = sample_record("explanatory_letter", rng, "cyrillic")
+        if record.notes["author_kind"] == kind:
+            return record.fields
+    raise AssertionError(f"no explanatory letter from a {kind} was drawn")
+
+
+@pytest.fixture(scope="session")
+def citizen_explanation_fields() -> dict[str, object]:
+    """A citizen's explanation to the district mayor."""
+    return _explanation_record("citizen")
+
+
+@pytest.fixture(scope="session")
+def employee_explanation_fields() -> dict[str, object]:
+    """An employee's explanation of a lapse at work."""
+    return _explanation_record("employee")
+
+
+@pytest.fixture(scope="session")
+def explanatory_generator(
+    config: SyntheticConfig,
+) -> ExplanatoryLetterGenerator:
+    """An explanatory letter generator using the packaged assets."""
+    return ExplanatoryLetterGenerator(config)
 
 
 @pytest.fixture(scope="session")

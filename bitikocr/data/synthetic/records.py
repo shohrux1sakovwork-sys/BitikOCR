@@ -838,6 +838,321 @@ def _sample_consent_letter(
     )
 
 
+# -- explanatory letter ----------------------------------------------------
+
+#: Who is explaining, and how often. Every scanned letter is a citizen
+#: telling the district mayor what they will do with land they are allotted;
+#: the genre as it is taught is an employee or a pupil accounting for a lapse
+#: to whoever they report to. The archive is weighted towards the first.
+_EXPLAINERS: tuple[str, ...] = ("citizen", "employee", "student")
+_EXPLAINER_WEIGHTS: tuple[float, ...] = (0.6, 0.28, 0.12)
+
+#: How a citizen's letter opens, in every scan.
+_EXPLANATION_OPENING = "Beraman ushbu tushuntirish xatini shu haqdakim"
+
+#: What a citizen undertakes, one per variant the scans carry.
+_CITIZEN_SUBJECTS: tuple[str, ...] = ("vacate", "build", "waiting")
+
+#: How a citizen folds their name into the last sentence rather than signing
+#: under it, as most of the scans do.
+_NAME_CLOSINGS: tuple[str, ...] = (
+    "deb",
+    "deb tushuncha beruvchi",
+    "deb ariza beruvchi",
+)
+
+#: What an employee or a pupil did. ``{hours}`` and ``{task}`` are filled in
+#: where they appear; a lapse with no date of its own gets none.
+_LAPSES: dict[str, dict[str, str]] = {
+    "employee": {
+        "late": "ishga {hours} soat kechikib keldim",
+        "absent": "ishga kelmadim",
+        "meeting": "bo'lib o'tgan umumiy yig'ilishda qatnashmadim",
+        "task": (
+            "menga topshirilgan {task} belgilangan muddatda topshira olmadim"
+        ),
+    },
+    "student": {
+        "late": "birinchi darsga kechikib keldim",
+        "absent": "darslarga qatnashmadim",
+        "homework": "berilgan uy vazifasini bajarmadim",
+    },
+}
+
+#: Lapses that happened on a day, and so are dated in the sentence.
+_DATED_LAPSES = frozenset({"late", "absent", "meeting"})
+
+_TASKS: tuple[str, ...] = (
+    "choraklik hisobotni",
+    "oylik ish rejasini",
+    "inventarizatsiya dalolatnomasini",
+    "buyurtmalar ro'yxatini",
+)
+
+#: Why it happened. Stated as fact, never as an apology: the guidance on the
+#: genre is that an explanation which asks for forgiveness is not one.
+_REASONS: dict[str, tuple[str, ...]] = {
+    "employee": (
+        "to'satdan betob bo'lib qolganim",
+        "farzandimning kasal bo'lib qolgani",
+        "jamoat transporti o'z vaqtida kelmagani",
+        "yo'lda yo'l-transport hodisasi sodir bo'lgani",
+        "oilamda kutilmagan holat yuz bergani",
+        "yaqin qarindoshimning dafn marosimida qatnashganim",
+        "kuchli qor sababli yo'l yopilib qolgani",
+    ),
+    "student": (
+        "to'satdan betob bo'lib qolganim",
+        "jamoat transporti o'z vaqtida kelmagani",
+        "oilamda kutilmagan holat yuz bergani",
+        "kuchli qor sababli yo'l yopilib qolgani",
+    ),
+}
+
+
+def _month(script: Script, month: int) -> str:
+    """Name a month in the letter's alphabet, spelled as the corpus has it."""
+    return in_script(corpus.MONTHS[month - 1], script)
+
+
+def _citizen_explanation(
+    rng: random.Random, script: Script, district: str
+) -> str:
+    """Write what a citizen undertakes to the district mayor.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the letter is written in.
+        district: The district the letter is written in, in Latin.
+
+    Returns:
+        The body, in ``script``.
+    """
+    opening = _EXPLANATION_OPENING
+    subject = rng.choice(_CITIZEN_SUBJECTS)
+
+    if subject == "vacate":
+        # Build the new house, and give up the one they are living in.
+        head = in_script(
+            f"{opening}, menga turar joy qurish uchun yer maydoni ajratib "
+            f"berilsa, o'z hisobimdan uyni qurib bitkazaman va vaqtincha "
+            f"yashab turgan joyimni {rng.randint(2015, 2024)} yil",
+            script,
+        )
+        tail = in_script("oyigacha bo'shatib beraman", script)
+        return f"{head} {_month(script, rng.randint(1, 12))} {tail}."
+
+    if subject == "build":
+        village = rng.choice(corpus.VILLAGES)
+        return in_script(
+            f"{opening}, menga {district} tumani {village} qishlog'i "
+            f"hududida yakka tartibda uy-joy qurish uchun ajratilgan yer "
+            f"maydonida turar joy binosini o'z mablag'im hisobidan qurishni "
+            f"bildiraman.",
+            script,
+        )
+
+    return in_script(
+        f"{opening}, menga tuman hokimligi tomonidan uy-joy qurish uchun "
+        f"yer maydoni ajratib berilishini so'rayman, hozircha ota-onam "
+        f"qaramog'ida yashayapman.",
+        script,
+    )
+
+
+def _lapse_explanation(
+    rng: random.Random,
+    script: Script,
+    kind: str,
+    person: corpus.Person,
+    when: tuple[int, int, int],
+) -> str:
+    """Write what an employee or a pupil did, and why.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the letter is written in.
+        kind: ``employee`` or ``student``.
+        person: Who is explaining.
+        when: The day it happened, as ``(year, month, day)``.
+
+    Returns:
+        The body, in ``script``.
+    """
+    year, month, day = when
+    lapse = rng.choice(list(_LAPSES[kind]))
+    what = in_script(
+        _LAPSES[kind][lapse].format(
+            hours=rng.randint(1, 3), task=rng.choice(_TASKS)
+        ),
+        script,
+    )
+    if lapse in _DATED_LAPSES:
+        year_part = in_script(f"{year}-yil", script)
+        on_the = in_script("kuni", script)
+        what = f"{year_part} {day}-{_month(script, month)} {on_the} {what}"
+
+    if rng.random() < 0.5:
+        men = in_script("Men", script)
+        first = f"{men}, {person.surname} {person.given_name}, {what}."
+    else:
+        announce = in_script("Shuni ma'lum qilamanki, men", script)
+        first = f"{announce} {what}."
+
+    reason = rng.choice(_REASONS[kind])
+    sentences = [first, in_script(f"Bunga {reason} sabab bo'ldi.", script)]
+
+    # What the guidance asks for when it can be had: something to check the
+    # account against, and an undertaking rather than an apology.
+    if rng.random() < 0.4:
+        sentences.append(
+            in_script("Buni tasdiqlovchi hujjat ilova qilinadi.", script)
+        )
+    if rng.random() < 0.5:
+        rules = "ish" if kind == "employee" else "o'quv"
+        sentences.append(
+            in_script(
+                f"Bundan buyon {rules} tartibiga qat'iy rioya qilaman.",
+                script,
+            )
+        )
+    return " ".join(sentences)
+
+
+def _explanation_header(
+    rng: random.Random,
+    script: Script,
+    kind: str,
+    person: corpus.Person,
+    district: str,
+) -> tuple[str, str]:
+    """Write who the letter is to and who it is from.
+
+    Args:
+        rng: Random source.
+        script: Alphabet the letter is written in.
+        kind: Who is explaining.
+        person: The writer.
+        district: The district the letter is written in, in Latin.
+
+    Returns:
+        ``(recipient, applicant)``, in ``script``.
+    """
+    to_suffix = in_script("ga", script)
+    from_suffix = in_script("dan", script)
+    name = f"{person.surname} {person.given_name}"
+
+    if kind == "citizen":
+        mayor = corpus.sample_person(rng, script, is_female=False)
+        office = in_script(f"{district} tumani hokimi", script)
+        recipient = (
+            f"{office} {mayor.given_name[0]}. {mayor.surname}{to_suffix}"
+        )
+        if rng.random() < 0.6:
+            street = rng.choice(corpus.STREETS)
+            home = in_script(
+                f"{district} shaharchasida {street} ko'chasi "
+                f"{rng.randint(1, 60)}-uyda",
+                script,
+            )
+        else:
+            home = in_script(f"{district} shaharchasida", script)
+        resident = in_script(
+            "yashovchi fuqaro" if rng.random() < 0.5 else "yashovchi", script
+        )
+        by = in_script("tomonidan", script)
+        return recipient, f"{home} {resident} {name} {by}"
+
+    head = corpus.sample_person(rng, script)
+    if kind == "employee":
+        organisation = corpus.sample_organisation(rng, script)
+        role = in_script(rng.choice(corpus.ORGANISATION_ROLES), script)
+        position = in_script(rng.choice(corpus.EMPLOYEE_POSITIONS), script)
+        return (
+            f"{organisation} {role} {head.initials()}{to_suffix}",
+            f"{position} {name}{from_suffix}",
+        )
+
+    if rng.random() < 0.6:
+        school = in_script(
+            f"{rng.randint(1, 60)}-son umumta'lim maktabi", script
+        )
+        pupil = in_script(f"{rng.randint(5, 11)}-sinf o'quvchisi", script)
+    else:
+        school = in_script(f"{district} kasb-hunar kolleji", script)
+        pupil = in_script(f"{rng.randint(1, 3)}-kurs talabasi", script)
+    director = in_script("direktori", script)
+    return (
+        f"{school} {director} {head.initials()}{to_suffix}",
+        f"{pupil} {name}{from_suffix}",
+    )
+
+
+def _sample_explanatory_letter(
+    rng: random.Random, script: Script
+) -> SampledContent:
+    """Sample the content of one explanatory letter."""
+    kind = rng.choices(_EXPLAINERS, weights=_EXPLAINER_WEIGHTS)[0]
+    person = corpus.sample_person(rng, script)
+    region = rng.choice(list(corpus.DISTRICTS))
+    district = rng.choice(corpus.DISTRICTS[region])
+
+    year = (
+        rng.randint(2015, 2023)
+        if kind == "citizen"
+        else rng.randint(1998, 2024)
+    )
+    month = rng.randint(1, 12)
+    day = rng.randint(1, 26)
+
+    recipient, applicant = _explanation_header(
+        rng, script, kind, person, district
+    )
+    if kind == "citizen":
+        body = _citizen_explanation(rng, script, district)
+    else:
+        body = _lapse_explanation(rng, script, kind, person, (year, month, day))
+
+    title = in_script("Tushuntirish xati", script)
+    if kind == "citizen" and rng.random() < 0.15:
+        # Some hands run the title on as the sender block's last words.
+        applicant = f"{applicant} {title.lower()}."
+        title = ""
+    elif rng.random() < 0.15:
+        title = title.upper()
+
+    fields: dict[str, Any] = {
+        "recipient": recipient,
+        "applicant": applicant,
+        "title": title,
+        "body": body,
+        "signature_name": f"{person.surname} {person.given_name}",
+        "page_number": str(rng.randint(1, 450)),
+    }
+
+    # Most scanned citizens sign off inside the last sentence, so the name
+    # is part of the body and only the scribble stands beneath it.
+    if kind == "citizen" and rng.random() < 0.5:
+        closing = in_script(rng.choice(_NAME_CLOSINGS), script)
+        stem = body.rstrip(".")
+        fields["body"] = f"{stem} {closing} {fields.pop('signature_name')}"
+
+    # An explanation is due within two working days of the lapse, so it is
+    # dated a day or two after it. A citizen's rarely carries a date at all.
+    filed_day = day + rng.randint(0, 2)
+    if rng.random() < (0.15 if kind == "citizen" else 0.9):
+        fields["date"] = f"{filed_day:02d}.{month:02d}.{year}"
+    if rng.random() < 0.25:
+        fields.pop("page_number")
+
+    return SampledContent(
+        fields=fields,
+        year=year,
+        dates={"filed": _iso(year, month, filed_day)},
+        notes={"author_kind": kind},
+    )
+
+
 def _iso(year: int, month: int, day: int) -> str:
     """Format a date the way the facts records normalise them."""
     return f"{year:04d}-{month:02d}-{day:02d}"
@@ -851,6 +1166,7 @@ RECORD_SAMPLERS: dict[
     "birth_certificate": _sample_birth_certificate,
     "consent_letter": _sample_consent_letter,
     "death_certificate": _sample_death_certificate,
+    "explanatory_letter": _sample_explanatory_letter,
 }
 
 

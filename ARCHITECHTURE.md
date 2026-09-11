@@ -63,6 +63,7 @@
 │           │   ├── letter.py    # LetterGenerator: writing on a blank sheet
 │           │   ├── ariza.py
 │           │   ├── consent_letter.py
+│           │   ├── explanatory_letter.py
 │           │   ├── birth_certificate.py
 │           │   └── death_certificate.py
 │           ├── assets/          # Shipped with the package
@@ -248,8 +249,15 @@ Letters have the same shape of split without the measuring. Nothing about a
 blank sheet can be read off a scan, so `LetterGenerator` arranges the page
 itself — addressee block, title, body, signature — and each letter subclass
 adds only its foot: an ariza carries the receiving office's registration
-marks, a consent letter whatever attested to it. A new kind of letter is a
+marks, a consent letter whatever attested to it, and an explanatory letter
+nothing at all — it is the writer's own account. A new kind of letter is a
 subclass and a sampler, with no asset at all.
+
+Where the letters differ in handling rather than content, the engine takes
+a class attribute rather than a hook: `date_x` for where the date sits and
+`page_number_at_foot` for archives that number a page at the bottom. A
+record can also leave the title empty, meaning it was written into the
+sender's block, and the engine then draws no title line.
 
 What reaches a page can depend on facts about the document that are never
 written on it. A consent letter is sealed only by an author who has a seal —

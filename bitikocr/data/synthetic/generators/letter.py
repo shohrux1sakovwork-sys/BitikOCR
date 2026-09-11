@@ -73,6 +73,10 @@ class LetterGenerator(DocumentGenerator):
     #: Where the date goes, as a share of the page width.
     date_x: ClassVar[tuple[float, float]] = (0.55, 0.78)
 
+    #: Whether the archivist numbered the page at its foot rather than its
+    #: head.
+    page_number_at_foot: ClassVar[bool] = False
+
     def __init__(
         self,
         config: SyntheticConfig,
@@ -95,7 +99,11 @@ class LetterGenerator(DocumentGenerator):
         recipient = str(fields.get("recipient", ""))
         applicant = str(fields.get("applicant", ""))
         body = str(fields.get("body", ""))
-        title = str(fields.get("title") or self.default_title)
+        # A record that names no title gets the type's own. One that sets it
+        # to empty had it written into the sender's block instead, as some
+        # hands do, so the page gets no title line of its own.
+        raw_title = fields.get("title")
+        title = self.default_title if raw_title is None else str(raw_title)
         signature_name = fields.get("signature_name")
         date = fields.get("date")
         page_number = fields.get("page_number")
@@ -151,7 +159,8 @@ class LetterGenerator(DocumentGenerator):
             width,
             height,
         )
-        y = self._put_title(page, title, title_hand, rng, style, width, y)
+        if title:
+            y = self._put_title(page, title, title_hand, rng, style, width, y)
         y = self._put_body(page, body, body_hand, rng, style, width, y)
         y = self._put_signature(
             page,
@@ -318,7 +327,11 @@ class LetterGenerator(DocumentGenerator):
         rng: random.Random,
         style: HandwritingStyle,
     ) -> None:
-        """Write the archivist's pencil page number in the top-right corner."""
+        """Write the archivist's page number in a right-hand corner.
+
+        Most archives number a page at its head; some at its foot, which a
+        letter type declares with :attr:`page_number_at_foot`.
+        """
         width, height = self.page_size
         pencil = Hand(
             second_info,
@@ -326,12 +339,17 @@ class LetterGenerator(DocumentGenerator):
             second_style.replace(pen="hard", ink_variation=0.3),
             rng,
         )
+        baseline = int(height * 0.015) + pencil.baseline
+        if self.page_number_at_foot:
+            # Held clear of the edge by more than a descender, so the number
+            # is never clipped by the paper.
+            baseline = height - int(height * 0.02) - pencil.size // 2
         page.put_lines(
             "page_number",
             [page_number],
             pencil,
             int(width * rng.uniform(0.86, 0.93)),
-            int(height * 0.015) + pencil.baseline,
+            baseline,
             color=PENCIL_COLOR,
         )
 

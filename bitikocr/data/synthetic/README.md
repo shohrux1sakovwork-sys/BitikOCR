@@ -114,6 +114,7 @@ Inside `generators/`:
 | `letter.py` | `LetterGenerator`: writing any letter on a blank sheet |
 | `ariza.py` | An application letter: a letter plus the office's marks |
 | `consent_letter.py` | A consent letter: a letter plus whatever attests to it |
+| `explanatory_letter.py` | An explanatory letter: a letter with no foot, numbered at the bottom |
 | `birth_certificate.py` | Four lines: a name and a default template |
 | `death_certificate.py` | Likewise |
 

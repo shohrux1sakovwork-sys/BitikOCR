@@ -31,6 +31,9 @@ from bitikocr.data.synthetic.generators.consent_letter import (
 from bitikocr.data.synthetic.generators.death_certificate import (
     DeathCertificateGenerator,
 )
+from bitikocr.data.synthetic.generators.explanatory_letter import (
+    ExplanatoryLetterGenerator,
+)
 from bitikocr.data.synthetic.generators.form import FormGenerator, FormOptions
 from bitikocr.data.synthetic.generators.letter import LetterGenerator
 
@@ -42,6 +45,7 @@ __all__ = [
     "ConsentLetterGenerator",
     "DeathCertificateGenerator",
     "DocumentGenerator",
+    "ExplanatoryLetterGenerator",
     "FieldValues",
     "FormGenerator",
     "FormOptions",
@@ -56,6 +60,7 @@ GENERATOR_TYPES: dict[str, type[DocumentGenerator]] = {
     BirthCertificateGenerator.name: BirthCertificateGenerator,
     ConsentLetterGenerator.name: ConsentLetterGenerator,
     DeathCertificateGenerator.name: DeathCertificateGenerator,
+    ExplanatoryLetterGenerator.name: ExplanatoryLetterGenerator,
 }
 
 

@@ -47,6 +47,7 @@ def test_every_document_type_can_be_sampled() -> None:
         "birth_certificate",
         "consent_letter",
         "death_certificate",
+        "explanatory_letter",
     )
 
 
@@ -383,3 +384,84 @@ def test_neighbours_in_one_letter_share_a_city() -> None:
     mine = corpus.sample_address(rng, "latin")
     theirs = corpus.sample_address(rng, "latin", mine.city)
     assert theirs.city == mine.city
+
+
+# -- explanatory letter -----------------------------------------------------
+
+
+def test_every_sort_of_explainer_is_drawn() -> None:
+    """The scans are all citizens; the genre as taught is employees and
+    pupils. Both have to reach the corpus."""
+    records = sample_records("explanatory_letter", 120, random.Random(30))
+    kinds = {record.notes["author_kind"] for record in records}
+    assert kinds == {"citizen", "employee", "student"}
+    assert all("author_kind" not in record.fields for record in records)
+
+
+def test_a_citizen_answers_the_district_mayor() -> None:
+    for record in sample_records(
+        "explanatory_letter", 60, random.Random(31), "latin"
+    ):
+        fields = record.fields
+        if record.notes["author_kind"] != "citizen":
+            continue
+        assert "tumani hokimi" in fields["recipient"]
+        assert fields["recipient"].endswith("ga")
+        assert "yashovchi" in fields["applicant"]
+        assert fields["body"].startswith(
+            "Beraman ushbu tushuntirish xatini shu haqdakim"
+        )
+
+
+def test_a_lapse_is_explained_without_an_apology() -> None:
+    """The guidance on the genre: state what happened and why. A letter that
+    asks for forgiveness has stopped explaining."""
+    for record in sample_records(
+        "explanatory_letter", 120, random.Random(32), "latin"
+    ):
+        body = record.fields["body"].lower()
+        if record.notes["author_kind"] == "citizen":
+            continue
+        assert "sabab" in body, body
+        assert "kechir" not in body and "uzr" not in body, body
+        assert record.fields["applicant"].endswith("dan")
+
+
+def test_every_explanation_is_signed_one_way_or_another() -> None:
+    """Either under the body, or — as most scanned citizens do — by folding
+    the name into the last sentence ahead of the scribble."""
+    folded = 0
+    for record in sample_records(
+        "explanatory_letter", 120, random.Random(33), "latin"
+    ):
+        fields = record.fields
+        if "signature_name" in fields:
+            continue
+        folded += 1
+        assert record.notes["author_kind"] == "citizen"
+        assert " deb " in fields["body"], fields["body"]
+    assert folded, "no letter folded its signature into the body"
+
+
+def test_a_title_is_either_its_own_line_or_the_headers_last_words() -> None:
+    merged = 0
+    for record in sample_records(
+        "explanatory_letter", 200, random.Random(34), "latin"
+    ):
+        fields = record.fields
+        if fields["title"]:
+            assert fields["title"].lower() == "tushuntirish xati"
+        else:
+            merged += 1
+            assert fields["applicant"].endswith("tushuntirish xati.")
+    assert merged, "no letter ran its title into the header"
+
+
+def test_an_explanation_is_dated_as_the_record_says() -> None:
+    for record in sample_records(
+        "explanatory_letter", 60, random.Random(35), "latin"
+    ):
+        if "date" not in record.fields:
+            continue
+        year, month, day = record.dates["filed"].split("-")
+        assert record.fields["date"] == f"{day}.{month}.{year}"
