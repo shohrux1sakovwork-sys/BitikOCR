@@ -200,7 +200,7 @@ slant, line slope and scan skew.
 | `--boxes` | render | Also write a box overlay per page |
 
 `--latin-share` is set from the font library rather than from the archive:
-seven fonts can write Latin against seventeen for Cyrillic, and 0.3 gives
+six fonts can write Latin against seventeen for Cyrillic, and 0.3 gives
 each font of either alphabet roughly the same number of pages. An even split
 would lean the Latin half on too few hands. Move it as fonts are added.
 

@@ -40,7 +40,7 @@ MODERN_FROM = 2000
 #: Share of records written in Latin when no script is forced. The archive
 #: holds both alphabets, but the font library is not evenly split, so this
 #: is set to spread the work across the hands rather than to mirror the
-#: archive: seven fonts can write Latin against seventeen for Cyrillic, and
+#: archive: six fonts can write Latin against seventeen for Cyrillic, and
 #: 0.3 gives each font of either alphabet roughly the same number of pages.
 #: Move it as fonts are added, or override it per batch with
 #: ``--latin-share``.
