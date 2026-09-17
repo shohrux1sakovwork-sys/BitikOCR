@@ -1058,3 +1058,23 @@ def test_an_explanation_is_reproducible_from_its_seed(
 def test_every_letter_shares_the_letter_engine(config: SyntheticConfig) -> None:
     for name in ("ariza", "consent_letter", "explanatory_letter"):
         assert isinstance(create_generator(name, config), LetterGenerator)
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_a_long_name_is_signed_inside_the_page(
+    explanatory_generator: ExplanatoryLetterGenerator, seed: int
+) -> None:
+    """A signer's name placed on the right starts earlier rather than
+    running past the edge, where its last letters would be clipped."""
+    fields = sample_record(
+        "explanatory_letter", random.Random(seed), "latin"
+    ).fields
+    fields = {
+        **fields,
+        "signature_name": "Abdurahmonova Mehriniso Sirojiddinovna",
+    }
+    annotation = explanatory_generator.generate(fields, seed=seed).annotation
+    width = annotation.size[0]
+    for block in annotation.blocks:
+        if block.kind == "signature_name" and block.bbox is not None:
+            assert block.bbox.right < width, block.bbox
