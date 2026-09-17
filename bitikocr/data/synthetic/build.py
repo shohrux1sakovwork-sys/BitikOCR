@@ -60,6 +60,7 @@ from bitikocr.data.synthetic.generators import (
     FormGenerator,
     create_generator,
 )
+from bitikocr.data.synthetic.layout import CLIPPED_KEY
 from bitikocr.data.synthetic.phrases import PhraseBank
 from bitikocr.data.synthetic.records import (
     DEFAULT_LATIN_SHARE,
@@ -469,6 +470,11 @@ class PageRenderer:
         document = self.generator(entry).generate(
             entry.record.fields, seed=entry.record.seed
         )
+        clipped = document.annotation.metadata.get(CLIPPED_KEY)
+        if clipped:
+            # Refused rather than written: its transcription would claim
+            # letters the image does not show.
+            raise ValueError(f"text cut off by the page edge: {clipped}")
         return document.image, document.annotation
 
     def finish(
