@@ -245,6 +245,20 @@ class DocumentGenerator(ABC):
             return main
         return second
 
+    def coverage_text(self, fields: FieldValues) -> str:
+        """Return everything the hand will write for these fields.
+
+        A font that cannot draw all of it cannot fill the page, so this is
+        what a caller checks a font against before forcing it.
+
+        Args:
+            fields: The page's field values.
+
+        Returns:
+            The text, joined.
+        """
+        return self._collect_text(fields)
+
     def _collect_text(self, fields: FieldValues) -> str:
         """Join every known field's text, for font coverage checks."""
         parts = [

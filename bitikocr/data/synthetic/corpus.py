@@ -105,6 +105,66 @@ _MALE_NAMES: tuple[str, ...] = (
     "Fazliddin",
     "G'ayrat",
     "Husan",
+    "Abdulla",
+    "Akmal",
+    "Anvar",
+    "Asqar",
+    "Baxtiyor",
+    "Bobur",
+    "Diyor",
+    "Eldor",
+    "Erkin",
+    "Farhod",
+    "Faxriddin",
+    "Hamid",
+    "Hasan",
+    "Ilhom",
+    "Islom",
+    "Jahongir",
+    "Jamshid",
+    "Komil",
+    "Laziz",
+    "Mansur",
+    "Mahmud",
+    "Muhammad",
+    "Murod",
+    "Nurbek",
+    "Nuriddin",
+    "Obid",
+    "Oybek",
+    "Rahmatillo",
+    "Ravshan",
+    "Sherzod",
+    "Shohruh",
+    "Sirojiddin",
+    "Sobir",
+    "Suhrob",
+    "Tohir",
+    "To'lqin",
+    "Ubaydullo",
+    "Valijon",
+    "Yorqin",
+    "Zokir",
+    "Abror",
+    "Azamat",
+    "Behruz",
+    "Hayot",
+    "Ixtiyor",
+    "Mirjalol",
+    "Nosir",
+    "Qahramon",
+    "Rasul",
+    "Sayfiddin",
+    "Shuhrat",
+    "Tolib",
+    "Xolmat",
+    "Yusuf",
+    "Asadbek",
+    "Mardon",
+    "Nurali",
+    "G'olib",
+    "Mo'min",
+    "Ne'mat",
 )
 
 _FEMALE_NAMES: tuple[str, ...] = (
@@ -138,6 +198,58 @@ _FEMALE_NAMES: tuple[str, ...] = (
     "Iroda",
     "Munisa",
     "Nigora",
+    "Adolat",
+    "Barchinoy",
+    "Dilnoza",
+    "Dilfuza",
+    "Durdona",
+    "Farangiz",
+    "Go'zal",
+    "Gulbahor",
+    "Gulshan",
+    "Gavhar",
+    "Hilola",
+    "Intizor",
+    "Jamila",
+    "Kumush",
+    "Lobar",
+    "Madina",
+    "Mavluda",
+    "Mastura",
+    "Mehriniso",
+    "Muhabbat",
+    "Mukarram",
+    "Muazzam",
+    "Nargiza",
+    "Nasiba",
+    "Oydin",
+    "Oysha",
+    "Parvina",
+    "Robiya",
+    "Ra'no",
+    "Saida",
+    "Sanobar",
+    "Sarvinoz",
+    "Shahnoza",
+    "Shoira",
+    "Surayyo",
+    "Tursunoy",
+    "Vazira",
+    "Xadicha",
+    "Xolida",
+    "Zarina",
+    "Ziyoda",
+    "Zuhra",
+    "Mohinur",
+    "Nilufar",
+    "Oygul",
+    "Salomat",
+    "Sitora",
+    "Maftuna",
+    "Muxlisa",
+    "Gulruh",
+    "Dilbar",
+    "Mo'tabar",
 )
 
 _SURNAME_STEMS: tuple[str, ...] = (
@@ -171,6 +283,55 @@ _SURNAME_STEMS: tuple[str, ...] = (
     "Hakim",
     "Islom",
     "Jo'ra",
+    "Abdulla",
+    "Azim",
+    "Ahmad",
+    "Bahrom",
+    "Boymurod",
+    "Chori",
+    "Dadaboy",
+    "Eshmat",
+    "Fozil",
+    "G'afur",
+    "Haydar",
+    "Ibrohim",
+    "Jalol",
+    "Kamol",
+    "Latip",
+    "Mahmud",
+    "Mirzo",
+    "Nabi",
+    "Norboy",
+    "Qosim",
+    "Rashid",
+    "Rustam",
+    "Sa'di",
+    "Shukur",
+    "Tursun",
+    "To'xta",
+    "Umar",
+    "Vali",
+    "Xolmat",
+    "Yunus",
+    "Ashur",
+    "Berdi",
+    "Hamro",
+    "Ismoil",
+    "Mamat",
+    "Nurmat",
+    "Qayum",
+    "Sharipboy",
+    "Tojiboy",
+    "Normat",
+    "Rajab",
+    "Safar",
+    "Sultan",
+    "Turg'un",
+    "Xoliq",
+    "Yoqub",
+    "Ziyod",
+    "Mo'min",
+    "Ne'mat",
 )
 
 _NATIONALITIES: tuple[str, ...] = (
@@ -342,9 +503,22 @@ class Person:
         return f"{self.given_name[0]}. {self.patronymic[0]}. {self.surname}"
 
 
+#: Letters a surname stem can end in that take ``-yev`` rather than ``-ov``.
+_VOWELS = "aeiou"
+
+#: Share of people whose patronymic is written the modern Uzbek way, as
+#: "Karim o'g'li" or "Karim qizi", rather than with a Russian suffix.
+_UZBEK_PATRONYMIC_SHARE = 0.35
+
+
+def _masculinise(stem: str) -> str:
+    """Return the masculine form of a surname stem."""
+    return f"{stem}yev" if stem.endswith(tuple(_VOWELS)) else f"{stem}ov"
+
+
 def _feminise(stem: str) -> str:
     """Return the feminine form of a surname stem."""
-    return f"{stem}ova" if not stem.endswith("o") else f"{stem}yeva"
+    return f"{_masculinise(stem)}a"
 
 
 def sample_person(
@@ -368,11 +542,14 @@ def sample_person(
     """
     female = rng.random() < 0.5 if is_female is None else is_female
     stem = surname_stem or rng.choice(_SURNAME_STEMS)
-    surname = _feminise(stem) if female else f"{stem}ov"
+    surname = _feminise(stem) if female else _masculinise(stem)
     given = rng.choice(_FEMALE_NAMES if female else _MALE_NAMES)
 
     father = father_name or rng.choice(_MALE_NAMES)
-    patronymic = f"{father}ovna" if female else f"{father}ovich"
+    if rng.random() < _UZBEK_PATRONYMIC_SHARE:
+        patronymic = f"{father} qizi" if female else f"{father} o'g'li"
+    else:
+        patronymic = f"{father}ovna" if female else f"{father}ovich"
 
     return Person(
         surname=in_script(surname, script),

@@ -112,7 +112,7 @@ def build_transcription_record(
                 rotation=round(quality.rotation, 3),
                 skew=quality.skew,
                 noise=cast(NoiseLevel, quality.noise),
-                capture="scanner",
+                capture=quality.capture,
             ),
             has_handwriting=True,
             has_printed_text=generator.has_printed_text,

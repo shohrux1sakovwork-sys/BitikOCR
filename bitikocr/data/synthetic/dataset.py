@@ -70,10 +70,12 @@ __all__ = [
     "DatasetSummary",
     "SampleFiles",
     "draw_annotations",
+    "index_entry",
     "iter_index",
     "read_records",
     "render_records",
     "write_records",
+    "write_sample",
 ]
 
 logger = logging.getLogger(__name__)
@@ -304,7 +306,7 @@ def render_records(
 
         image, annotation, quality = _finish(document, record, augmentation)
         identifier = layout.document_id(position, prefix)
-        files = _write_sample(
+        files = write_sample(
             layout=layout,
             identifier=identifier,
             record=record,
@@ -318,7 +320,7 @@ def render_records(
         written.append(files)
         index_lines.append(
             json.dumps(
-                _index_entry(record, files, annotation, layout),
+                index_entry(record, files, annotation, layout),
                 ensure_ascii=False,
             )
         )
@@ -359,7 +361,7 @@ def _finish(
     return image, annotation, quality
 
 
-def _write_sample(
+def write_sample(
     layout: DatasetLayout,
     identifier: str,
     record: DocumentRecord,
@@ -370,7 +372,26 @@ def _write_sample(
     collection: str,
     draw_boxes: bool,
 ) -> SampleFiles:
-    """Write one page and the two schema records describing it."""
+    """Write one page and the two schema records describing it.
+
+    The transcription is written last, and whole: a page whose annotation
+    exists is complete, which is how an interrupted build knows where to
+    pick up.
+
+    Args:
+        layout: The dataset to write into.
+        identifier: The id every file for this page shares.
+        record: What the page was told to say.
+        generator: The generator that drew it.
+        image: The finished page.
+        annotation: Its ground truth.
+        quality: What the augmentation did.
+        collection: The batch name recorded on the page.
+        draw_boxes: Also write a box overlay.
+
+    Returns:
+        Where everything was written.
+    """
     facts_path = layout.facts / f"{identifier}.json"
     image_path = layout.images / f"{identifier}{IMAGE_SUFFIX}"
     annotation_path = layout.annotations / f"{identifier}.json"
@@ -389,16 +410,18 @@ def _write_sample(
         image_size=image.size,
         original_file=image_path.name,
     )
-    annotation_path.write_text(
-        json.dumps(transcription.to_dict(), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
     facts = build_facts_record(record, identifier, relative_image, annotation)
     facts_path.write_text(
         json.dumps(facts.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+    partial = annotation_path.with_suffix(".json.part")
+    partial.write_text(
+        json.dumps(transcription.to_dict(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    partial.replace(annotation_path)
 
     preview_path: Path | None = None
     if draw_boxes:
@@ -416,13 +439,23 @@ def _write_sample(
     )
 
 
-def _index_entry(
+def index_entry(
     record: DocumentRecord,
     files: SampleFiles,
     annotation: DocumentAnnotation,
     layout: DatasetLayout,
 ) -> dict[str, Any]:
-    """Build one line of the data loader's index."""
+    """Build one line of the data loader's index.
+
+    Args:
+        record: What the page was told to say.
+        files: Where the page was written.
+        annotation: What was drawn.
+        layout: The dataset the page belongs to.
+
+    Returns:
+        The entry, ready to be written as one JSON line.
+    """
     return {
         "id": files.id,
         "image": files.image.relative_to(layout.root).as_posix(),

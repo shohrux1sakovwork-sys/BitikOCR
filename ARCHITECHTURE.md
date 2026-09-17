@@ -30,7 +30,9 @@
 ├── README.md                    # Project documentation
 ├── scripts/                     # Entry points, grouped by area
 │   └── data/
-│       └── generate_synth.py    # Generate synthetic training documents
+│       ├── generate_synth.py    # Generate synthetic training documents
+│       ├── build_corpus.py      # Plan, render in parallel, check a corpus
+│       └── build_phrase_bank.py # Wording from local models via Ollama
 ├── bitikocr/                    # Main package: library code only
 │   ├── __init__.py
 │   ├── py.typed                 # Type hinting marker
@@ -54,9 +56,13 @@
 │           ├── records.py       # Sampling a document's field values
 │           ├── facts.py         # Field values to structured facts
 │           ├── export.py        # Internals to the corpus schema
-│           ├── augment.py       # Spoiling a clean page like a scan
+│           ├── phrases.py       # Checked wording for the samplers
+│           ├── augment.py       # Planning and applying a page's wear
+│           ├── augment_gpu.py   # The same wear, on a GPU
 │           ├── ink.py           # Measuring the ink a layer carries
 │           ├── dataset.py       # Records to disk, and rendering them
+│           ├── build.py         # Whole-corpus planning and parallel render
+│           ├── validate.py      # Checking finished pages from their files
 │           ├── generators/      # One module per document type
 │           │   ├── base.py      # DocumentGenerator contract
 │           │   ├── form.py      # FormGenerator: filling any printed form
@@ -153,7 +159,11 @@ ground truth. It is layered so each piece has exactly one job:
 | `generators/form`| How a clerk fills a measured printed form    | Where the cells are        |
 | `generators/letter` | How a letter is arranged on a blank sheet | Which letter is being written |
 | `augment`        | Spoiling a finished page                     | What the page says         |
+| `augment_gpu`    | The same spoiling, with torch                | Annotations                |
+| `phrases`        | Checked wording from language models         | Where it came from         |
 | `dataset`        | Batches, file names, on-disk format          | Layout, rendering          |
+| `build`          | Planning a corpus, rendering it in parallel  | How a page is drawn        |
+| `validate`       | Checking pages from their files alone        | The generator              |
 
 ### The contract
 
@@ -337,6 +347,8 @@ Configuration is loaded once at startup (in `config.py` or `cli.py`) and passed 
 | Test framework | `pytest` | Industry standard, better than unittest |
 | Docstring format | Google-style | Clear, readable format for APIs |
 | Imaging dependencies | `data` extra | Pillow, numpy and fontTools are only needed to *generate* data, not to consume it |
+| GPU augmentation | `gpu` extra, imported lazily | torch comes from the CUDA index; without it the same plan runs on the CPU |
+| Language models | A script, over Ollama's HTTP API | Only the bank builder talks to a model; the package reads the checked bank |
 | Assets location | Inside the package | The generator finds them from any working directory, and a wheel ships everything it needs |
 | Style representation | Frozen dataclass | Typed, reproducible and safe to pass around; overrides go through `replace()` |
 | Ground-truth format | One JSON per image | Image and annotation share a file stem; no index to keep in sync |

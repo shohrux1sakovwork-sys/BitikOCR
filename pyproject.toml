@@ -48,6 +48,24 @@ train = [
     "transformers>=5.16.1",
     "ujson>=5.10.0",
 ]
+# Moving page augmentation onto a GPU; the pipeline falls back to the CPU
+# without it.
+gpu = [
+    "torch>=2.14.0",
+]
+
+# Torch and torchvision come from the CUDA build on Windows and Linux, so a
+# GPU is used wherever one is present. macOS has no CUDA and keeps PyPI's.
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform != 'darwin'" }]
+torchvision = [
+    { index = "pytorch-cu130", marker = "sys_platform != 'darwin'" },
+]
 
 [tool.black]
 line-length = 80

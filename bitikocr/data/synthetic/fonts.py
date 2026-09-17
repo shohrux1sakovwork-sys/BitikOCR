@@ -398,7 +398,13 @@ class FontLibrary:
                 render ``text``.
         """
         if font_path is not None:
-            info = FontInfo.from_path(Path(font_path))
+            # A font already in the library has been measured; measuring it
+            # again for every page would cost more than drawing the page.
+            wanted = Path(font_path).resolve()
+            info = next(
+                (font for font in self._fonts if font.path.resolve() == wanted),
+                None,
+            ) or FontInfo.from_path(wanted)
             if not info.can_render(text):
                 raise ValueError(
                     f"Font {info.name} cannot render this text even with "

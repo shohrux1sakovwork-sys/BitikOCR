@@ -4,7 +4,7 @@ export PYTHONUTF8 = 1
 
 # Both halves of the project are checked together, so both extras are
 # needed: the generator draws pages, the training pipeline reads them.
-UV_RUN ?= uv run --locked --extra data --extra train
+UV_RUN ?= uv run --locked --extra data --extra train --extra gpu
 
 # The package, its entry points and its suite: everything that is checked.
 SOURCES = bitikocr scripts tests
@@ -12,7 +12,7 @@ SOURCES = bitikocr scripts tests
 .PHONY: install style style-check lint-check type-check test checks
 
 install:
-	uv sync --extra data --extra train
+	uv sync --extra data --extra train --extra gpu
 
 style:
 	$(UV_RUN) isort $(SOURCES)

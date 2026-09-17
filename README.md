@@ -89,6 +89,54 @@ uv run python scripts/data/generate_synth.py list-fonts
 uv run python scripts/data/generate_synth.py list-templates
 ```
 
+## Building a large corpus
+
+`generate_synth.py` makes one batch of one type. For a training corpus of
+tens of thousands of pages, `build_corpus.py` plans every page up front,
+renders them in parallel — handwriting on the CPU, augmentation on the GPU
+— and checks the result:
+
+```bash
+uv run --extra data --extra gpu python scripts/data/build_corpus.py all -o corpus/v1 --per-type 4000 --phrases corpus/phrases.json
+```
+
+- **No page twice.** Each record's content is fingerprinted while it is
+  planned, and a repeat is drawn again.
+- **Even coverage.** Fonts, form variants and pen weights are dealt out so
+  each gets its share; a form printed only in Cyrillic is filled in
+  Cyrillic.
+- **Resumable.** A page is done once its annotation is written; run
+  `render` again to pick up where a build stopped.
+- **Checked.** `check` validates every page from its files alone — schema,
+  image size, outlines, facts evidence — and refuses duplicate text or
+  images.
+
+The steps can be run one at a time: `plan`, `render`, `check`, `clean`.
+The plan lives in `<output>/_work/` and is deleted by `clean` once the
+corpus has passed its check.
+
+### Wording from local language models
+
+Letters are written from a fixed set of phrases. To widen them, a phrase
+bank can be filled by models served by [Ollama](https://ollama.com), which
+take turns writing and review each other's batches:
+
+```bash
+uv run --extra data python scripts/data/build_phrase_bank.py -o corpus/phrases.json --models qwen3.5:9b gemma4:e4b muse-glimmer:latest
+```
+
+Every phrase is checked before it is kept: plain Uzbek Latin, no digits or
+proper names a facts record would miss, and the grammar of the sentence it
+is dropped into. Pass the bank to `plan` with `--phrases`; the samplers then
+take a slot's wording from it 60% of the time.
+
+### GPU
+
+The `gpu` extra installs torch from the CUDA 13.0 index on Windows and
+Linux. `render` uses the GPU whenever torch can see one (`--gpu-workers 0`
+forces the CPU); on an RTX 5070 the augmentation takes 0.05–0.1 s a page
+against 1–1.6 s on the CPU.
+
 ## Output format
 
 A dataset directory holds both stages:
@@ -280,9 +328,16 @@ Rendered pages are clean. `--augment` spoils them the way a scanner and time
 would: paper tint, uneven lighting, edge vignetting, dust specks, defocus,
 sensor grain, JPEG artefacts and a slight scan skew.
 
-The skew moves the ink, so it moves the bounding boxes with it — every other
-step is photometric and leaves the ground truth alone. `--augment 0` turns
-the whole thing off; higher values than the default `1.0` push it further.
+The corpus build adds more: a quarter of the pages are photographed with a
+phone — in perspective, on a desk, often with a shadow across them — and
+pages may be folded, stained, photocopied or captured at a low resolution.
+A photographed page records `capture: camera`.
+
+Skew and perspective move the ink, so they move the outlines with it: every
+polygon goes through the same transform as the pixels, and every box is
+re-derived from the result. Every other step is photometric and leaves the
+ground truth alone. `--augment 0` turns the whole thing off; higher values
+than the default `1.0` push it further.
 
 ## Using it from Python
 

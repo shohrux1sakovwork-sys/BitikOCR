@@ -110,9 +110,13 @@ it.
 | `annotation.py` | What was drawn, in this module's own terms | The corpus schema |
 | `layout.py` | Placing ink and recording what was placed | Which document is being made |
 | `generators/` | Where things go on one kind of document | What it says, how it ages |
-| `augment.py` | Spoiling a finished page like a scan | What the page says |
+| `phrases.py` | Checked wording from outside the samplers | Where it came from |
+| `augment.py` | Planning and applying a scan's or a photo's wear | What the page says |
+| `augment_gpu.py` | The same plan, carried out with torch on a GPU | Annotations |
 | `export.py` | Mapping all of the above onto the corpus schema | How anything is drawn |
 | `dataset.py` | Batches, file names, on-disk layout | Layout, rendering |
+| `build.py` | Planning a whole corpus and rendering it in parallel | How a page is drawn |
+| `validate.py` | Checking finished pages from their files alone | The generator |
 
 Inside `generators/`:
 
