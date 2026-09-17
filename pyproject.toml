@@ -37,6 +37,8 @@ train = [
     "torchvision>=0.29.0",
     "transformers>=5.16.1",
     "ujson>=5.10.0",
+    "peft>=0.11.1",
+    "jiwer>=4.0.0",
 ]
 
 [tool.black]

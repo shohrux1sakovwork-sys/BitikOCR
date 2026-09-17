@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 import torch
+import transformers
 
 from bitikocr.data import sft_dataset
 from bitikocr.data.constants import DEFAULT_IMAGE_TOKEN, IGNORE_INDEX
@@ -31,7 +32,7 @@ class FakeTokenizer:
         return {"input_ids": torch.tensor([[ord(char) + 200 for char in text]])}
 
 
-class FakeProcessor:
+class FakeProcessor(transformers.ProcessorMixin):
     """Provide deterministic multimodal prompt tensors for dataset tests."""
 
     def __init__(self, include_modality: bool = True) -> None:
@@ -211,6 +212,50 @@ def test_data_module(tmp_path: Path, processor: FakeProcessor) -> None:
     module = sft_dataset.make_supervised_data_module(
         "test-model", processor, DataArguments(data_path=str(path))
     )
-    assert set(module) == {"dataset", "data_collator"}
-    batch = module["data_collator"]([module["dataset"][0]])
+    assert set(module) == {"train_dataset", "data_collator"}
+    batch = module["data_collator"]([module["train_dataset"][0]])
     assert batch["input_ids"].shape[0] == 1
+
+
+def test_eval_reference_does_not_change_inputs(
+    processor: FakeProcessor,
+) -> None:
+    """Keep transcriptions out of prompt-only evaluation model inputs."""
+    dataset = sft_dataset.SupervisedDataset(
+        [
+            {"image": "page.png", "text": "first answer"},
+            {"image": "page.png", "text": "a different answer"},
+        ],
+        processor,
+        DataArguments(),
+        "test-model",
+        is_eval=True,
+    )
+    first, second = dataset[0], dataset[1]
+    assert "labels" not in first
+    assert first["input_ids"].tolist() == [11, 91, 91, 12]
+    assert first["reference_text"] == "first answer"
+    assert second["reference_text"] == "a different answer"
+    for key in first.keys() - {"reference_text"}:
+        assert torch.equal(first[key], second[key])
+
+
+def test_data_module_wires_eval_collator(
+    tmp_path: Path, processor: FakeProcessor
+) -> None:
+    """Construct both collators through the factory used by the entry point."""
+    train_path = tmp_path / "train.jsonl"
+    eval_path = tmp_path / "eval.jsonl"
+    train_path.write_text('{"image": "train.png", "text": "train"}\n')
+    eval_path.write_text('{"image": "eval.png", "text": ""}\n')
+    module = sft_dataset.make_supervised_data_module(
+        "test-model",
+        processor,
+        DataArguments(data_path=str(train_path), eval_path=str(eval_path)),
+    )
+    train_batch = module["data_collator"]([module["train_dataset"][0]])
+    eval_batch = module["eval_data_collator"]([module["eval_dataset"][0]])
+    assert "labels" in train_batch
+    assert "labels" not in eval_batch
+    assert eval_batch["reference_text"] == [""]
+    assert module["eval_data_collator"].is_eval

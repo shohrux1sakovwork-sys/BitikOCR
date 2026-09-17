@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Any
 
 import torch
 import transformers
@@ -26,6 +27,19 @@ from bitikocr.data.data_utils import (
 from bitikocr.params import DataArguments
 
 
+def left_pad_sequence(
+    sequences: list[torch.Tensor], padding_value: int = 0
+) -> torch.Tensor:
+    """Pad a list of 1D tensors on the left."""
+    max_len = max(seq.size(0) for seq in sequences)
+    out_dims = (len(sequences), max_len)
+    out_tensor = sequences[0].new_full(out_dims, padding_value)
+    for i, tensor in enumerate(sequences):
+        length = tensor.size(0)
+        out_tensor[i, max_len - length :] = tensor
+    return out_tensor
+
+
 class SupervisedDataset(Dataset):
     """Prepare local OCR records with one ``image`` path and ``text`` string.
 
@@ -39,9 +53,11 @@ class SupervisedDataset(Dataset):
         processor: transformers.ProcessorMixin,
         data_args: DataArguments,
         model_id: str,
+        is_eval: bool = False,
     ) -> None:
         """Load records and prepare the fixed OCR instruction."""
         super().__init__()
+        self.is_eval = is_eval
         if isinstance(data_path, str):
             with open(data_path, encoding="utf-8") as data_file:
                 contents = data_file.read()
@@ -81,7 +97,7 @@ class SupervisedDataset(Dataset):
         """Return the number of OCR records."""
         return len(self.list_data_dict)
 
-    def __getitem__(self, i: int) -> dict[str, torch.Tensor]:
+    def __getitem__(self, i: int) -> dict[str, Any]:
         """Load one image and supervise only its transcription and ending."""
         record = self.list_data_dict[i]
         if (
@@ -95,8 +111,14 @@ class SupervisedDataset(Dataset):
             )
 
         image_path = record["image"]
-        if self.data_args.image_folder and not os.path.isabs(image_path):
-            image_path = os.path.join(self.data_args.image_folder, image_path)
+        img_folder = (
+            self.data_args.eval_image_folder
+            if self.is_eval and self.data_args.eval_image_folder
+            else self.data_args.image_folder
+        )
+        if img_folder and not os.path.isabs(image_path):
+            image_path = os.path.join(img_folder, image_path)
+
         image = get_image_info(
             image_path,
             self.data_args.image_min_pixels,
@@ -113,6 +135,22 @@ class SupervisedDataset(Dataset):
             return_tensors="pt",
         )
         prompt_ids = inputs["input_ids"].squeeze(0)
+        prompt_types = get_mm_token_type_ids(
+            inputs,
+            inputs["input_ids"],
+            self.processor.tokenizer.convert_tokens_to_ids(DEFAULT_IMAGE_TOKEN),
+        ).squeeze(0)
+
+        if self.is_eval:
+            return {
+                "input_ids": prompt_ids,
+                "attention_mask": torch.ones_like(prompt_ids),
+                "mm_token_type_ids": prompt_types,
+                "pixel_values": inputs["pixel_values"],
+                "image_grid_thw": inputs["image_grid_thw"],
+                "reference_text": record["text"],
+            }
+
         answer_ids = self.processor.tokenizer(
             f"{record['text']}{DEFAULT_IM_END_TOKEN}\n",
             add_special_tokens=False,
@@ -122,11 +160,6 @@ class SupervisedDataset(Dataset):
         labels = torch.cat(
             [torch.full_like(prompt_ids, IGNORE_INDEX), answer_ids]
         )
-        prompt_types = get_mm_token_type_ids(
-            inputs,
-            inputs["input_ids"],
-            self.processor.tokenizer.convert_tokens_to_ids(DEFAULT_IMAGE_TOKEN),
-        ).squeeze(0)
         return {
             "input_ids": input_ids,
             "labels": labels,
@@ -142,34 +175,34 @@ class SupervisedDataset(Dataset):
 class DataCollatorForSupervisedDataset:
     """Pad OCR sequences and combine their image tensors into a batch."""
 
-    def __init__(self, pad_token_id: int) -> None:
-        """Store the tokenizer's padding token ID."""
+    def __init__(self, pad_token_id: int, is_eval: bool = False) -> None:
+        """Store the tokenizer's padding token ID and evaluation mode."""
         self.pad_token_id = pad_token_id
+        self.is_eval = is_eval
 
-    def __call__(
-        self, examples: list[dict[str, torch.Tensor]]
-    ) -> dict[str, torch.Tensor]:
-        """Pad text fields on the right and concatenate image patches."""
-        input_ids = pad_sequence(
-            [example["input_ids"] for example in examples],
-            batch_first=True,
-            padding_value=self.pad_token_id,
-        )
-        return {
-            "input_ids": input_ids,
-            "labels": pad_sequence(
-                [example["labels"] for example in examples],
-                batch_first=True,
-                padding_value=IGNORE_INDEX,
+    def __call__(self, examples: list[dict[str, Any]]) -> dict[str, Any]:
+        """Pad text fields and concatenate image patches."""
+
+        def right_pad_sequence(
+            seqs: list[torch.Tensor], padding_value: int
+        ) -> torch.Tensor:
+            return pad_sequence(
+                seqs, batch_first=True, padding_value=padding_value
+            )
+
+        pad_fn = left_pad_sequence if self.is_eval else right_pad_sequence
+
+        batch: dict[str, Any] = {
+            "input_ids": pad_fn(
+                [example["input_ids"] for example in examples],
+                padding_value=self.pad_token_id,
             ),
-            "attention_mask": pad_sequence(
+            "attention_mask": pad_fn(
                 [example["attention_mask"] for example in examples],
-                batch_first=True,
                 padding_value=0,
             ),
-            "mm_token_type_ids": pad_sequence(
+            "mm_token_type_ids": pad_fn(
                 [example["mm_token_type_ids"] for example in examples],
-                batch_first=True,
                 padding_value=0,
             ),
             "pixel_values": torch.cat(
@@ -180,21 +213,44 @@ class DataCollatorForSupervisedDataset:
             ),
         }
 
+        if self.is_eval:
+            batch["reference_text"] = [
+                example["reference_text"] for example in examples
+            ]
+        else:
+            batch["labels"] = pad_fn(
+                [example["labels"] for example in examples],
+                padding_value=IGNORE_INDEX,
+            )
+
+        return batch
+
 
 def make_supervised_data_module(
     model_id: str,
     processor: transformers.ProcessorMixin,
     data_args: DataArguments,
 ) -> dict:
-    """Return ``dataset`` and ``data_collator`` for an OCR data loader."""
+    """Return ``train_dataset``, ``eval_dataset``, and collators."""
     if data_args.data_path is None:
         raise ValueError("Set data_path to the OCR training data file.")
     dataset = SupervisedDataset(
         data_args.data_path, processor, data_args, model_id
     )
-    return {
-        "dataset": dataset,
+    result = {
+        "train_dataset": dataset,
         "data_collator": DataCollatorForSupervisedDataset(
-            processor.tokenizer.pad_token_id
+            processor.tokenizer.pad_token_id, is_eval=False
         ),
     }
+
+    if data_args.eval_path:
+        eval_dataset = SupervisedDataset(
+            data_args.eval_path, processor, data_args, model_id, is_eval=True
+        )
+        result["eval_dataset"] = eval_dataset
+        result["eval_data_collator"] = DataCollatorForSupervisedDataset(
+            processor.tokenizer.pad_token_id, is_eval=True
+        )
+
+    return result
