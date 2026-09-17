@@ -15,12 +15,13 @@ from __future__ import annotations
 import io
 import math
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 from PIL import Image, ImageFilter
 
-from bitikocr.data.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import BoundingBox, Polygon
 from bitikocr.data.synthetic.annotation import (
     BlockAnnotation,
     DocumentAnnotation,
@@ -179,8 +180,9 @@ def rotate_page(
     """Skew a page as if it were laid crookedly on the scanner.
 
     The page keeps its size, so the ground truth stays in the same
-    coordinate space. Boxes are re-derived from their rotated corners, which
-    grows them slightly — the cost of keeping them axis-aligned.
+    coordinate space. A block's outline is turned with the ink and kept as
+    the tilted quadrilateral it now is; its box is re-derived from those
+    corners, which grows it slightly — the cost of keeping it axis-aligned.
 
     Args:
         image: The page to skew.
@@ -202,18 +204,26 @@ def rotate_page(
     )
     centre = (width / 2, height / 2)
 
+    def turn_points(outline: Polygon) -> list[tuple[float, float]]:
+        return [_rotate_point(x, y, centre, degrees) for x, y in outline]
+
+    def turn_polygon(outline: Polygon | None) -> Polygon | None:
+        if outline is None:
+            return None
+        # Clamped to the page: a corner carried past the edge describes
+        # ink that was clipped away, not ink that is there.
+        return tuple(
+            (
+                min(width, max(0, round(x))),
+                min(height, max(0, round(y))),
+            )
+            for x, y in turn_points(outline)
+        )
+
     def turn(box: BoundingBox | None) -> BoundingBox | None:
         if box is None:
             return None
-        corners = [
-            _rotate_point(x, y, centre, degrees)
-            for x, y in (
-                (box.left, box.top),
-                (box.right, box.top),
-                (box.right, box.bottom),
-                (box.left, box.bottom),
-            )
-        ]
+        corners = turn_points(box.to_polygon())
         # Round outwards so the box never clips the ink it follows, then
         # trim to the page: a rotation can carry ink off the edge, and a
         # box that lands entirely outside describes nothing.
@@ -230,7 +240,7 @@ def rotate_page(
     turned = DocumentAnnotation(
         text=annotation.text,
         blocks=[
-            BlockAnnotation(block.kind, block.text, turn(block.bbox))
+            _turn_block(block, turn, turn_polygon)
             for block in annotation.blocks
         ],
         lines=[
@@ -241,6 +251,17 @@ def rotate_page(
         metadata={**annotation.metadata, "rotation": round(degrees, 3)},
     )
     return rotated, turned
+
+
+def _turn_block(
+    block: BlockAnnotation,
+    turn: Callable[[BoundingBox | None], BoundingBox | None],
+    turn_polygon: Callable[[Polygon | None], Polygon | None],
+) -> BlockAnnotation:
+    """Rotate one block, dropping its outline if it left the page."""
+    box = turn(block.bbox)
+    outline = turn_polygon(block.outline) if box is not None else None
+    return BlockAnnotation(block.kind, block.text, box, outline)
 
 
 def _rotate_point(

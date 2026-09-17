@@ -530,10 +530,18 @@ def test_the_single_signature_line_is_also_the_name_line(
     assert single.signature.baseline_y is not None
 
 
-def test_the_single_layout_is_printed_in_cyrillic_only(
+def test_the_single_layout_is_printed_in_uzbek_cyrillic_only(
     single: FormTemplate,
 ) -> None:
-    assert single.printed_scripts == ("cyrillic",)
+    assert single.printed_languages == ("uz-cyrillic",)
+
+
+def test_a_bilingual_layout_is_printed_in_uzbek_and_russian(
+    bilingual: FormTemplate,
+) -> None:
+    """The second language on the bilingual forms is Russian, not Uzbek in
+    Cyrillic, and the corpus tells the two apart."""
+    assert bilingual.printed_languages == ("uz-latin", "ru")
 
 
 def test_every_single_field_stays_inside_the_form(single: FormTemplate) -> None:

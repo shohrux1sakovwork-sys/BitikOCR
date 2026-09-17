@@ -132,6 +132,53 @@ def test_rotated_boxes_stay_on_the_page(
         assert 0 <= box.top < box.bottom <= height, degrees
 
 
+def test_rotation_turns_a_blocks_outline_with_the_ink(
+    page: tuple[Image.Image, DocumentAnnotation],
+) -> None:
+    """The outline stays a four-cornered shape, now tilted, and its box is
+    the one that encloses it."""
+    image, annotation = page
+    _, turned = rotate_page(image, annotation, 6.0)
+    block = turned.blocks[0]
+    assert block.polygon is not None and block.bbox is not None
+    assert len(block.polygon) == 4
+    xs = [x for x, _ in block.polygon]
+    ys = [y for _, y in block.polygon]
+    assert len(set(xs)) > 2 and len(set(ys)) > 2, "the outline did not tilt"
+    assert block.bbox.left <= min(xs) and max(xs) <= block.bbox.right
+    assert block.bbox.top <= min(ys) and max(ys) <= block.bbox.bottom
+
+
+def test_an_upright_block_is_outlined_by_its_box(
+    page: tuple[Image.Image, DocumentAnnotation],
+) -> None:
+    _, annotation = page
+    block = annotation.blocks[0]
+    assert block.polygon is None
+    assert block.outline == (
+        (100, 120),
+        (300, 120),
+        (300, 160),
+        (100, 160),
+    )
+
+
+def test_a_rotated_outline_stays_on_the_page() -> None:
+    image = Image.new("RGB", (200, 100), (245, 242, 232))
+    corner = BoundingBox(150, 60, 200, 100)
+    annotation = DocumentAnnotation(
+        text="x",
+        blocks=[BlockAnnotation("body", "x", corner)],
+        lines=[],
+        size=(200, 100),
+    )
+    _, turned = rotate_page(image, annotation, -8.0)
+    polygon = turned.blocks[0].polygon
+    assert polygon is not None
+    for x, y in polygon:
+        assert 0 <= x <= 200 and 0 <= y <= 100
+
+
 def test_a_rotated_box_still_contains_its_ink() -> None:
     """The box must follow the ink, not stay where the ink used to be."""
     image = Image.new("RGB", (400, 300), (255, 255, 255))

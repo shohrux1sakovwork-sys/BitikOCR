@@ -17,6 +17,7 @@ from typing import Any, ClassVar
 from PIL import Image
 
 from bitikocr.config import SyntheticConfig
+from bitikocr.data.models.schema import Hand, Role
 from bitikocr.data.synthetic.annotation import DocumentAnnotation
 from bitikocr.data.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.data.synthetic.style import HandwritingStyle, sample_style
@@ -25,10 +26,21 @@ __all__ = [
     "DEFAULT_INK_STRENGTH",
     "DocumentGenerator",
     "FieldValues",
+    "PartKind",
     "SyntheticDocument",
 ]
 
 FieldValues = Mapping[str, Any]
+
+#: Which region of the page a block is, and how its text was put there.
+PartKind = tuple[Role, Hand]
+
+#: Marks any document may carry, whatever it is. They are regions without
+#: text of their own, and the schema has a role for each.
+_MARK_PARTS: Mapping[str, PartKind] = {
+    "stamp": ("stamp", "printed"),
+    "signature": ("signature", "handwritten"),
+}
 
 _MAX_SEED = 2**31
 
@@ -83,6 +95,10 @@ class DocumentGenerator(ABC):
 
     #: Whether the blank page already carries printed text of its own.
     has_printed_text: ClassVar[bool] = False
+
+    #: Which schema region each of this document's blocks is, and how it
+    #: was written. A block not listed is handwritten body text.
+    BLOCK_PARTS: ClassVar[Mapping[str, PartKind]] = {}
 
     def __init__(
         self,
@@ -161,6 +177,23 @@ class DocumentGenerator(ABC):
             ValueError: If no available font can render the given text, or if
                 ``style_overrides`` names an unknown style field.
         """
+
+    def part_of(self, block: str) -> PartKind:
+        """Say which region of the page a block is, and how it was written.
+
+        The generator names its blocks after what they hold — a surname, a
+        recipient, a serial number — while the corpus schema knows only six
+        regions. This is the one place a block's name is mapped onto them.
+
+        Args:
+            block: The block's name.
+
+        Returns:
+            ``(role, hand)`` for the schema's part.
+        """
+        if block in _MARK_PARTS:
+            return _MARK_PARTS[block]
+        return self.BLOCK_PARTS.get(block, ("body", "handwritten"))
 
     # -- shared helpers ----------------------------------------------------
 

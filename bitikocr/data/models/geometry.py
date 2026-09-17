@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-__all__ = ["BoundingBox"]
+__all__ = ["BoundingBox", "Point", "Polygon", "polygon_bounds"]
+
+#: One ``(x, y)`` position in image pixels.
+Point = tuple[int, int]
+
+#: A closed outline, its points in drawing order. Three or more points.
+Polygon = tuple[Point, ...]
 
 
 @dataclass(frozen=True)
@@ -37,6 +43,15 @@ class BoundingBox:
     def to_list(self) -> list[int]:
         """Return the box as ``[left, top, right, bottom]``."""
         return [self.left, self.top, self.right, self.bottom]
+
+    def to_polygon(self) -> Polygon:
+        """Return the box as its four corners, clockwise from top-left."""
+        return (
+            (self.left, self.top),
+            (self.right, self.top),
+            (self.right, self.bottom),
+            (self.left, self.bottom),
+        )
 
     def to_xywh(self) -> list[int]:
         """Return the box as ``[x, y, width, height]``.
@@ -85,3 +100,24 @@ class BoundingBox:
             right=max(box.right for box in present),
             bottom=max(box.bottom for box in present),
         )
+
+
+def polygon_bounds(polygon: Sequence[Sequence[float]]) -> BoundingBox:
+    """Return the smallest box enclosing a polygon.
+
+    Args:
+        polygon: The outline's points, each ``(x, y)``.
+
+    Returns:
+        The enclosing box, with the extreme points on its edges.
+
+    Raises:
+        ValueError: If the outline has fewer than three points.
+    """
+    if len(polygon) < 3:
+        raise ValueError(
+            f"A polygon needs at least 3 points, got {len(polygon)}"
+        )
+    xs = [point[0] for point in polygon]
+    ys = [point[1] for point in polygon]
+    return BoundingBox.from_iterable((min(xs), min(ys), max(xs), max(ys)))

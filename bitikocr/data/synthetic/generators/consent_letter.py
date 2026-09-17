@@ -15,6 +15,7 @@ addressee block, the title, the body, the author's signature — comes from
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from typing import ClassVar
 
 from bitikocr.data.synthetic.effects import (
@@ -22,7 +23,7 @@ from bitikocr.data.synthetic.effects import (
     STAMP_REACH,
     draw_round_stamp,
 )
-from bitikocr.data.synthetic.generators.base import FieldValues
+from bitikocr.data.synthetic.generators.base import FieldValues, PartKind
 from bitikocr.data.synthetic.generators.letter import (
     DEFAULT_PAGE_SIZE,
     LetterGenerator,
@@ -96,6 +97,18 @@ class ConsentLetterGenerator(LetterGenerator):
     # The spec puts the date at the foot on the left, with the signature
     # opposite it on the right.
     date_x: ClassVar[tuple[float, float]] = (0.12, 0.24)
+
+    # A citizen's passport and phone belong to the sender's block, and the
+    # whole attestation — phrase, office, name, scribble — is a signature.
+    BLOCK_PARTS: ClassVar[Mapping[str, PartKind]] = {
+        **LetterGenerator.BLOCK_PARTS,
+        "passport": ("header", "handwritten"),
+        "phone": ("header", "handwritten"),
+        "certifier_note": ("signature", "handwritten"),
+        "certifier_role": ("signature", "handwritten"),
+        "certifier_name": ("signature", "handwritten"),
+        CERTIFICATION_SIGNATURE_BLOCK: ("signature", "handwritten"),
+    }
 
     FIELD_NAMES: ClassVar[tuple[str, ...]] = (
         "recipient",
@@ -302,4 +315,4 @@ class ConsentLetterGenerator(LetterGenerator):
             font_path=find_print_font(self.library),
             rng=rng,
         )
-        page.add_block("stamp", f"{ring} / {' '.join(centre_lines)}", box)
+        page.add_block("stamp", "\n".join([ring, *centre_lines]), box)

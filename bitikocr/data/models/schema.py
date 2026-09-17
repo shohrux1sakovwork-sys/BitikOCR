@@ -10,16 +10,20 @@ independent of how a document was produced: a synthetic page, a real archive
 scan and an augmented copy of one all describe themselves the same way, and
 ``source.origin`` is what tells them apart.
 
-Boxes are ``[x, y, width, height]`` here, not the two-corner spelling the
-renderer works in; see :meth:`~bitikocr.data.models.geometry.BoundingBox.to_xywh`.
+A region is outlined by a polygon of ``[x, y]`` points, and its box —
+``[x, y, width, height]`` here, not the two-corner spelling the renderer
+works in — is the one enclosing that outline. Fields a real scan may leave
+unknown (``document_type``, ``text_mode``, ``era``, ``year_approx``, a
+part's ``hand``) are nullable, and ``parts`` may be empty.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
-from bitikocr.data.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import Polygon, polygon_bounds
 
 __all__ = [
     "AnnotationInfo",
@@ -29,13 +33,18 @@ __all__ = [
     "Era",
     "Fact",
     "FactsRecord",
+    "Hand",
+    "Language",
+    "Layout",
     "NoiseLevel",
     "Origin",
     "Part",
     "QualityInfo",
+    "Role",
     "SourceInfo",
     "TextMode",
     "TranscriptionRecord",
+    "UncertainSpan",
 ]
 
 #: How a document came to exist. The three-stage split depends on this.
@@ -44,8 +53,23 @@ Origin = Literal["synthetic", "real", "augmented"]
 #: Which period a document belongs to. The main axis the corpus balances.
 Era = Literal["old", "modern"]
 
-#: Whether the text on a page is written, printed, or both.
+#: A language on the page. Uzbek is split by alphabet, because to a
+#: recogniser the two are different scripts to read.
+Language = Literal["uz-cyrillic", "uz-latin", "ru"]
+
+#: Whether the text on a page, or in one region of it, is written, printed,
+#: or both.
 TextMode = Literal["handwritten", "printed", "mixed"]
+
+#: How a region's text was put there. The same values as :data:`TextMode`,
+#: named for what it describes.
+Hand = TextMode
+
+#: What a region of the page is.
+Role = Literal["header", "title", "body", "signature", "stamp", "other"]
+
+#: How the page is arranged.
+Layout = Literal["single_column", "two_column"]
 
 #: How far an annotation has been through review.
 AnnotationStatus = Literal["auto", "reviewed", "gold", "unclear", "rejected"]
@@ -57,6 +81,13 @@ NoiseLevel = Literal["low", "medium", "high"]
 CaptureKind = Literal["scanner", "camera", "screenshot", "born_digital"]
 
 
+def _check(value: object, allowed: object, what: str) -> None:
+    """Refuse a value outside a Literal's set, naming what it was for."""
+    choices = get_args(allowed)
+    if value not in choices:
+        raise ValueError(f"{what} must be one of {choices}, got {value!r}")
+
+
 @dataclass(frozen=True)
 class SourceInfo:
     """Where a document came from.
@@ -64,34 +95,32 @@ class SourceInfo:
     Args:
         origin: Synthetic, real, or an augmented copy of a real one.
         collection: The batch it belongs to, for slicing and provenance.
-        era: Which period it is from.
+        era: Which period it is from, or None when that is not known.
         year_approx: The year it is dated, as best known.
-        seed: For a synthetic page, the seed that reproduces it exactly.
-        generator: For a synthetic page, what drew it.
-        font: For a synthetic page, the handwriting font used.
+        original_file: The file's name before it was ingested, with
+            ``#page=N`` for a page taken out of a PDF.
     """
 
     origin: Origin
     collection: str
-    era: Era
+    era: Era | None = None
     year_approx: int | None = None
-    seed: int | None = None
-    generator: str | None = None
-    font: str | None = None
+    original_file: str | None = None
+
+    def __post_init__(self) -> None:
+        _check(self.origin, Origin, "source.origin")
+        if self.era is not None:
+            _check(self.era, Era, "source.era")
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the JSON-serialisable form, dropping unknown provenance."""
-        payload: dict[str, Any] = {
+        """Return the JSON-serialisable form of the provenance."""
+        return {
             "origin": self.origin,
             "collection": self.collection,
             "era": self.era,
             "year_approx": self.year_approx,
+            "original_file": self.original_file,
         }
-        for name in ("seed", "generator", "font"):
-            value = getattr(self, name)
-            if value is not None:
-                payload[name] = value
-        return payload
 
 
 @dataclass(frozen=True)
@@ -128,11 +157,12 @@ class DocumentMetadata:
     """What kind of document this is and what it contains.
 
     Args:
-        language: Languages present, as ISO codes.
-        scripts: Every alphabet appearing on the page, printed or written.
-        primary_script: The alphabet the document is mainly in.
-        document_type: Which kind of document it is.
-        text_mode: Whether its text is written, printed, or both.
+        language: Every language on the page, written or printed; see
+            :data:`Language`.
+        document_type: Which kind of document it is, or None.
+        text_mode: Whether its text is written, printed, both, or None.
+        layout: How the page is arranged.
+        quality: How cleanly it was captured.
         has_table: Whether it contains a table.
         has_formula: Whether it contains a formula.
         has_diagram: Whether it contains a diagram.
@@ -140,16 +170,12 @@ class DocumentMetadata:
         has_printed_text: Whether anything on it is printed.
         has_stamp: Whether it carries an office seal.
         has_signature: Whether it carries a signature.
-        layout: How the page is arranged.
-        quality: How cleanly it was captured.
     """
 
-    language: list[str]
-    scripts: list[str]
-    primary_script: str
-    document_type: str
-    text_mode: TextMode
-    layout: str
+    language: list[Language]
+    document_type: str | None
+    text_mode: TextMode | None
+    layout: Layout
     quality: QualityInfo
     has_table: bool = False
     has_formula: bool = False
@@ -159,12 +185,17 @@ class DocumentMetadata:
     has_stamp: bool = False
     has_signature: bool = False
 
+    def __post_init__(self) -> None:
+        for language in self.language:
+            _check(language, Language, "metadata.language")
+        if self.text_mode is not None:
+            _check(self.text_mode, TextMode, "metadata.text_mode")
+        _check(self.layout, Layout, "metadata.layout")
+
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of the document's metadata."""
         return {
             "language": list(self.language),
-            "scripts": list(self.scripts),
-            "primary_script": self.primary_script,
             "document_type": self.document_type,
             "text_mode": self.text_mode,
             "has_table": self.has_table,
@@ -183,33 +214,63 @@ class DocumentMetadata:
 class Part:
     """One region of the page, with what it says and where it is.
 
+    Its outline is the polygon and its box is derived from that, so the two
+    can never disagree and the box always encloses the outline.
+
     Args:
-        role: What the region is, e.g. ``title``, ``body``, ``recipient``.
-        text: Its transcription.
-        bbox: Where it sits, as ``[x, y, width, height]``.
-        lines: The individual lines inside it, each with its own box. This
-            extends the schema: it is what line-level HTR training needs, and
-            a reader that only knows ``role``/``text``/``bbox`` can ignore it.
+        role: What the region is; see :data:`Role`.
+        polygon: The region's outline, three or more ``(x, y)`` points.
+        text: Its transcription. Empty for a region with no text, such as a
+            signature scribble.
+        hand: How its text was put there, or None when that is not known.
+
+    Raises:
+        ValueError: If the role or hand is not one the schema allows, or
+            the outline has fewer than three points.
     """
 
-    role: str
-    text: str
-    bbox: BoundingBox | None = None
-    lines: tuple[tuple[str, BoundingBox | None], ...] = ()
+    role: Role
+    polygon: Polygon
+    text: str = ""
+    hand: Hand | None = None
+
+    def __post_init__(self) -> None:
+        _check(self.role, Role, "part.role")
+        if self.hand is not None:
+            _check(self.hand, Hand, "part.hand")
+        polygon_bounds(self.polygon)  # Refuses fewer than three points.
+
+    @property
+    def bbox(self) -> list[int]:
+        """The box enclosing the outline, as ``[x, y, width, height]``."""
+        return polygon_bounds(self.polygon).to_xywh()
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of the region."""
-        payload: dict[str, Any] = {
+        return {
             "role": self.role,
+            "polygon": [[x, y] for x, y in self.polygon],
+            "bbox": self.bbox,
             "text": self.text,
-            "bbox": self.bbox.to_xywh() if self.bbox else None,
+            "hand": self.hand,
         }
-        if self.lines:
-            payload["lines"] = [
-                {"text": text, "bbox": box.to_xywh() if box else None}
-                for text, box in self.lines
-            ]
-        return payload
+
+
+@dataclass(frozen=True)
+class UncertainSpan:
+    """A stretch of the transcription the annotator is unsure of.
+
+    Args:
+        text: The stretch, exactly as it appears in the transcription.
+        note: Why it is uncertain.
+    """
+
+    text: str
+    note: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the JSON-serialisable form of the span."""
+        return {"text": self.text, "note": self.note}
 
 
 @dataclass(frozen=True)
@@ -232,6 +293,9 @@ class AnnotationInfo:
     revision: int = 1
     unclear_reason: str | None = None
 
+    def __post_init__(self) -> None:
+        _check(self.status, AnnotationStatus, "annotation.status")
+
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of the review state."""
         return {
@@ -251,27 +315,54 @@ class TranscriptionRecord:
     Args:
         id: The document's identifier, shared with its facts record.
         image: Path to the page, relative to the corpus root.
+        image_size: The page's ``(width, height)`` in pixels.
         source: Where the document came from.
         metadata: What kind of document it is.
         text: The whole transcription in reading order, one line per
             physical line.
-        parts: The regions the text is divided into.
+        parts: The regions the page is divided into. Optional: a record may
+            carry none.
         annotation: How far the transcription has been reviewed.
+        uncertain_spans: Stretches of ``text`` the annotator is unsure of.
+            The key is left out of the record when there are none.
+
+    Raises:
+        ValueError: If a part reaches off the page, or an uncertain span is
+            not a stretch of the transcription.
     """
 
     id: str
     image: str
+    image_size: tuple[int, int]
     source: SourceInfo
     metadata: DocumentMetadata
     text: str
-    parts: tuple[Part, ...] = ()
+    parts: Sequence[Part] = ()
     annotation: AnnotationInfo = field(default_factory=AnnotationInfo)
+    uncertain_spans: Sequence[UncertainSpan] = ()
+
+    def __post_init__(self) -> None:
+        width, height = self.image_size
+        for part in self.parts:
+            for x, y in part.polygon:
+                if not (0 <= x <= width and 0 <= y <= height):
+                    raise ValueError(
+                        f"{self.id}: {part.role} point ({x}, {y}) lies off "
+                        f"the {width}x{height} page"
+                    )
+        for span in self.uncertain_spans:
+            if span.text not in self.text:
+                raise ValueError(
+                    f"{self.id}: uncertain span {span.text!r} is not in "
+                    "the transcription"
+                )
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of the transcription record."""
-        return {
+        payload: dict[str, Any] = {
             "id": self.id,
             "image": self.image,
+            "image_size": list(self.image_size),
             "source": self.source.to_dict(),
             "metadata": self.metadata.to_dict(),
             "target": {
@@ -280,6 +371,11 @@ class TranscriptionRecord:
             },
             "annotation": self.annotation.to_dict(),
         }
+        if self.uncertain_spans:
+            payload["uncertain_spans"] = [
+                span.to_dict() for span in self.uncertain_spans
+            ]
+        return payload
 
 
 @dataclass(frozen=True)

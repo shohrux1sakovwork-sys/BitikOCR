@@ -377,6 +377,8 @@ def _write_sample(
         image_path=relative_image,
         collection=collection,
         quality=quality,
+        image_size=image.size,
+        original_file=image_path.name,
     )
     annotation_path.write_text(
         json.dumps(transcription.to_dict(), ensure_ascii=False, indent=2),
@@ -442,11 +444,12 @@ def draw_annotations(
     """
     preview = image.copy()
     draw = ImageDraw.Draw(preview)
+    # A block is drawn as the outline the annotation exports, so a skewed
+    # page shows its tilted regions rather than their enclosing boxes.
     for block in annotation.blocks:
-        if block.bbox:
-            draw.rectangle(
-                block.bbox.to_list(), outline=_BLOCK_OUTLINE, width=2
-            )
+        outline = block.outline
+        if outline:
+            draw.polygon(list(outline), outline=_BLOCK_OUTLINE, width=2)
     for line in annotation.lines:
         if line.bbox:
             draw.rectangle(line.bbox.to_list(), outline=_LINE_OUTLINE, width=3)

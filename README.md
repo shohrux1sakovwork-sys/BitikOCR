@@ -116,25 +116,21 @@ under what conditions the page was captured.
 {
   "id": "doc_000002",
   "image": "images/doc_000002.png",
+  "image_size": [2932, 2146],
   "source": {
     "origin": "synthetic",
     "collection": "birth_certificate",
     "era": "modern",
     "year_approx": 2019,
-    "seed": 1803740873,
-    "generator": "bitikocr@0.1.0",
-    "font": "CyrilicHand06.otf"
+    "original_file": "doc_000002.png"
   },
   "metadata": {
-    "language": ["uz"],
-    "scripts": ["cyrillic", "latin"],
-    "primary_script": "cyrillic",
+    "language": ["uz-cyrillic", "uz-latin", "ru"],
     "document_type": "birth_certificate",
     "text_mode": "mixed",
-    "has_handwriting": true,
-    "has_printed_text": true,
-    "has_stamp": true,
-    "has_signature": true,
+    "has_table": false, "has_formula": false, "has_diagram": false,
+    "has_handwriting": true, "has_printed_text": true,
+    "has_stamp": true, "has_signature": true,
     "layout": "two_column",
     "quality": {
       "blur": true, "rotation": -0.463, "skew": true,
@@ -144,8 +140,11 @@ under what conditions the page was captured.
   "target": {
     "text": "whole text, reading order, one line per physical line",
     "parts": [
-      {"role": "child_surname", "text": "Ҳакимова", "bbox": [637, 605, 217, 62],
-       "lines": [{"text": "Ҳакимова", "bbox": [637, 605, 217, 62]}]}
+      {"role": "body",
+       "polygon": [[637, 607], [853, 605], [854, 666], [638, 667]],
+       "bbox": [637, 605, 217, 62],
+       "text": "Ҳакимова",
+       "hand": "handwritten"}
     ]
   },
   "annotation": {
@@ -157,11 +156,31 @@ under what conditions the page was captured.
 }
 ```
 
-Boxes here are `[x, y, width, height]`. Every one is measured from the ink
-actually drawn, so it stays correct through jitter, slant and scan skew.
-`parts` are the page's regions; each also carries the `lines` inside it,
-which is what line-level HTR training needs — a reader that only knows
-`role`/`text`/`bbox` can ignore them.
+The typed definition is `bitikocr/data/models/schema.py`, and it refuses a
+record that breaks the contract rather than writing it.
+
+- **`language`** names languages, not alphabets: `uz-cyrillic`, `uz-latin`
+  or `ru`. The clerk's own comes first, then whatever the blank form is
+  printed in — the bilingual certificates add `uz-latin` and `ru`.
+- **`parts`** are the page's regions, one per thing drawn, each with a
+  `role` from `header`, `title`, `body`, `signature`, `stamp` and `other`,
+  and a `hand` saying whether it was written or printed. A signature
+  scribble and a seal are parts too.
+- **`polygon`** is a region's outline in pixels. On a page skewed on the
+  scanner it is the tilted quadrilateral the ink actually occupies;
+  **`bbox`** is `[x, y, width, height]` of the box enclosing it. Both are
+  measured from the ink drawn, so they stay correct through jitter, slant
+  and skew.
+- **`original_file`** is the file's name before it joined the corpus. A
+  synthetic page is born under its own name, so it is that.
+- **`uncertain_spans`** is optional and never written for a synthetic page,
+  which is certain of every word. When present, each span's `text` is an
+  exact stretch of `target.text`.
+- A real scan may not know everything: `document_type`, `text_mode`, `era`,
+  `year_approx` and a part's `hand` can be `null`, and `parts` can be `[]`.
+
+Which font drew a page, and the seed that reproduces it, are not part of the
+schema. They are in `index.jsonl`, beside the page.
 
 Nothing in the metadata is assumed: `has_stamp` is read from what was drawn,
 `quality` from what the augmentation actually did, `era` from the year the

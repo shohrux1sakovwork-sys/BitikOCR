@@ -152,7 +152,9 @@ def test_the_annotation_holds_the_ground_truth(
     )
     assert payload["id"] == summary.samples[0].id
     assert payload["metadata"]["document_type"] == "ariza"
-    assert payload["metadata"]["primary_script"] == "cyrillic"
+    assert payload["metadata"]["language"] == ["uz-cyrillic"]
+    assert payload["source"]["original_file"] == payload["image"].split("/")[-1]
+    assert payload["image_size"] == [1654, 2339]
     assert payload["target"]["text"]
     assert payload["target"]["parts"]
 

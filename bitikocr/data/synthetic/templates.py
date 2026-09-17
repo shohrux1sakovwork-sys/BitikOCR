@@ -166,8 +166,9 @@ class FormTemplate:
         signature: Where the registrar signs, if the form has one.
         keep_out: Regions already occupied by the blank form, such as a
             printed QR code. Nothing may be drawn over them.
-        printed_scripts: Alphabets the blank form itself is printed in. A
-            bilingual certificate carries both whatever the clerk writes in.
+        printed_languages: Languages the blank form itself is printed in,
+            as the corpus schema names them. A bilingual certificate
+            carries Uzbek and Russian whatever the clerk writes in.
     """
 
     name: str
@@ -178,7 +179,7 @@ class FormTemplate:
     printed: tuple[MarkArea, ...] = ()
     signature: MarkArea | None = None
     keep_out: tuple[MarkArea, ...] = ()
-    printed_scripts: tuple[str, ...] = ()
+    printed_languages: tuple[str, ...] = ()
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -282,7 +283,7 @@ class FormTemplate:
             printed=tuple(marks.get("printed", ())),
             signature=_only(marks.get("signature")),
             keep_out=tuple(marks.get("keep_out", ())),
-            printed_scripts=tuple(payload.get("printed_scripts", ())),
+            printed_languages=tuple(payload.get("printed_languages", ())),
         )
 
 

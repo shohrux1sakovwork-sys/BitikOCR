@@ -436,8 +436,5 @@
     }
   ],
   "source": "Measured from the printed underlines of the scanned blank form; see detected_underlines_raw.txt in the source material.",
-  "printed_scripts": [
-    "latin",
-    "cyrillic"
-  ]
+  "printed_languages": ["uz-latin", "ru"]
 }

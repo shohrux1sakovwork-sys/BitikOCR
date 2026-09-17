@@ -25,6 +25,8 @@ from bitikocr.data.models.schema import (
     Era,
     Fact,
     FactsRecord,
+    Language,
+    Layout,
     NoiseLevel,
     Part,
     QualityInfo,
@@ -40,8 +42,12 @@ from bitikocr.data.synthetic.records import DocumentRecord
 
 __all__ = ["build_facts_record", "build_transcription_record"]
 
-#: Blocks that are marks on the page rather than regions of its text.
-_MARK_BLOCKS = frozenset({"stamp", "signature"})
+#: The schema's language for text a clerk wrote in each alphabet. Every
+#: synthetic document is written in Uzbek.
+_WRITTEN_LANGUAGE: dict[str, Language] = {
+    "latin": "uz-latin",
+    "cyrillic": "uz-cyrillic",
+}
 
 #: What a synthetic page's transcription is worth: it was not read off the
 #: page, it was written onto it, so it is exact by construction.
@@ -56,6 +62,8 @@ def build_transcription_record(
     image_path: str,
     collection: str,
     quality: AugmentationReport | None = None,
+    image_size: tuple[int, int] | None = None,
+    original_file: str | None = None,
 ) -> TranscriptionRecord:
     """Describe one generated page in the corpus schema.
 
@@ -67,32 +75,38 @@ def build_transcription_record(
         image_path: Path to the page, relative to the corpus root.
         collection: The batch this page belongs to.
         quality: What the augmentation did, when a page was aged.
+        image_size: The saved page's ``(width, height)``; the annotation's
+            own size when omitted.
+        original_file: What the page was called before it joined the
+            corpus. A synthetic page is born under its own name, so the
+            dataset passes that.
 
     Returns:
         The transcription record.
     """
     quality = quality or AugmentationReport()
-    blocks = {block.kind for block in annotation.blocks if block.bbox}
+    parts = _parts(annotation, generator)
+    roles = {part.role for part in parts}
+    # A signature is a scribble, not a written name, and it may be anyone's:
+    # a consent letter can carry only its certifier's.
+    signed = any(part.role == "signature" and not part.text for part in parts)
 
     return TranscriptionRecord(
         id=document_id,
         image=image_path,
+        image_size=image_size or annotation.size,
         source=SourceInfo(
             origin="synthetic",
             collection=collection,
             era=cast(Era, record.era),
             year_approx=record.year,
-            seed=record.seed,
-            generator=f"bitikocr@{__version__}",
-            font=annotation.metadata.get("font"),
+            original_file=original_file,
         ),
         metadata=DocumentMetadata(
-            language=["uz"],
-            scripts=_scripts(record, generator),
-            primary_script=record.script,
+            language=_languages(record, generator),
             document_type=record.document_type,
             text_mode=cast(TextMode, generator.text_mode),
-            layout=generator.layout,
+            layout=cast(Layout, generator.layout),
             quality=QualityInfo(
                 blur=quality.blur,
                 rotation=round(quality.rotation, 3),
@@ -102,11 +116,11 @@ def build_transcription_record(
             ),
             has_handwriting=True,
             has_printed_text=generator.has_printed_text,
-            has_stamp="stamp" in blocks,
-            has_signature="signature" in blocks,
+            has_stamp="stamp" in roles,
+            has_signature=signed,
         ),
         text=annotation.text,
-        parts=_parts(annotation),
+        parts=parts,
         annotation=AnnotationInfo(
             status=_SYNTHETIC_ANNOTATION,
             pre_annotator=f"generator:bitikocr@{__version__}",
@@ -162,41 +176,44 @@ def _fields_on_page(
     }
 
 
-def _scripts(record: DocumentRecord, generator: DocumentGenerator) -> list[str]:
-    """Return every alphabet on the page, written and printed.
+def _languages(
+    record: DocumentRecord, generator: DocumentGenerator
+) -> list[Language]:
+    """Return every language on the page, written first, then printed.
 
-    A bilingual form carries both alphabets in its own printing, whichever
-    one the clerk filled it in with.
+    A bilingual form is printed in Uzbek and Russian whichever alphabet the
+    clerk filled it in with, so its printing adds to what was written.
     """
-    seen: list[str] = [record.script]
+    seen: list[Language] = [_WRITTEN_LANGUAGE[record.script]]
     template = getattr(generator, "template", None)
-    for script in getattr(template, "printed_scripts", ()):
-        if script not in seen:
-            seen.append(script)
+    for language in getattr(template, "printed_languages", ()):
+        if language not in seen:
+            seen.append(cast(Language, language))
     return seen
 
 
-def _parts(annotation: DocumentAnnotation) -> tuple[Part, ...]:
+def _parts(
+    annotation: DocumentAnnotation, generator: DocumentGenerator
+) -> tuple[Part, ...]:
     """Turn the drawn blocks into the schema's regions.
 
-    Marks — the seal, the signature — are not regions of text and carry no
-    transcription, so they are left out of the parts list; the metadata
-    already records that the page has them.
+    Every block that left ink on the page becomes one part, in the order it
+    was drawn — the marks too, since the schema has regions for a stamp and
+    a signature. The generator says which region each block is and how it
+    was written, and the block's outline, tilted if the page was skewed,
+    becomes the part's polygon. A block that drew nothing has no outline and
+    is left out.
     """
-    lines_by_block: dict[str, list[tuple[str, object]]] = {}
-    for line in annotation.lines:
-        lines_by_block.setdefault(line.block, []).append((line.text, line.bbox))
-
-    return tuple(
-        Part(
-            role=block.kind,
-            text=block.text,
-            bbox=block.bbox,
-            lines=tuple(lines_by_block.get(block.kind, ())),  # type: ignore[arg-type]
+    parts = []
+    for block in annotation.blocks:
+        outline = block.outline
+        if outline is None:
+            continue
+        role, hand = generator.part_of(block.kind)
+        parts.append(
+            Part(role=role, polygon=outline, text=block.text, hand=hand)
         )
-        for block in annotation.blocks
-        if block.kind not in _MARK_BLOCKS and block.text
-    )
+    return tuple(parts)
 
 
 def document_id(prefix: str, position: int) -> str:

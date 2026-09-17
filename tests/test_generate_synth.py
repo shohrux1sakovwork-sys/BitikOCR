@@ -85,8 +85,8 @@ def test_listing_templates_shows_every_death_certificate_variant(
     assert main(["list-templates"]) == 0
     printed = capsys.readouterr().out
     assert "death_certificate_cyrillic_single" in printed
-    assert "printed in: cyrillic" in printed
-    assert "printed in: latin, cyrillic" in printed
+    assert "printed in: uz-cyrillic" in printed
+    assert "printed in: uz-latin, ru" in printed
     assert "serial_number ('№' + value)" in printed
 
 

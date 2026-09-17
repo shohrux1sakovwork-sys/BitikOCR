@@ -27,6 +27,7 @@ from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
+    PartKind,
     SyntheticDocument,
 )
 from bitikocr.data.synthetic.hand import Hand
@@ -76,6 +77,19 @@ class LetterGenerator(DocumentGenerator):
     #: Whether the archivist numbered the page at its foot rather than its
     #: head.
     page_number_at_foot: ClassVar[bool] = False
+
+    #: The regions every letter is made of. The addressee block is the
+    #: header, the author's name and date close the letter with the
+    #: signature, and marks added afterwards by someone else are other.
+    BLOCK_PARTS: ClassVar[Mapping[str, PartKind]] = {
+        "recipient": ("header", "handwritten"),
+        "applicant": ("header", "handwritten"),
+        "title": ("title", "handwritten"),
+        "body": ("body", "handwritten"),
+        "signature_name": ("signature", "handwritten"),
+        "date": ("signature", "handwritten"),
+        "page_number": ("other", "handwritten"),
+    }
 
     def __init__(
         self,

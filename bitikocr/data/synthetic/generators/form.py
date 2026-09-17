@@ -30,6 +30,7 @@ from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
+    PartKind,
     SyntheticDocument,
 )
 from bitikocr.data.synthetic.hand import Hand
@@ -185,6 +186,19 @@ class FormGenerator(DocumentGenerator):
         return cls(
             config, font_path, FormOptions(template=template), ink_strength
         )
+
+    def part_of(self, block: str) -> PartKind:
+        """Say which region of the form a block is.
+
+        A form's cells are its body. What the registry typesets into it — a
+        serial, a series — is other printed matter, and the registrar's name
+        belongs with the signature it sits beside.
+        """
+        if block in self.template.printed_names:
+            return ("other", "printed")
+        if block == REGISTRAR_NAME_FIELD:
+            return ("signature", "handwritten")
+        return super().part_of(block)
 
     @property
     def registrar_writes_on_signature(self) -> bool:
@@ -515,7 +529,7 @@ class FormGenerator(DocumentGenerator):
             font_path=find_print_font(self.library),
             rng=rng,
         )
-        page.add_block("stamp", f"{ring} / {' '.join(centre_lines)}", box)
+        page.add_block("stamp", "\n".join([ring, *centre_lines]), box)
         return {SEAL_RING_FIELD: ring, SEAL_CENTRE_FIELD: centre_lines}
 
     @staticmethod
