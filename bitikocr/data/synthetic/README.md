@@ -56,9 +56,9 @@ changes what gets drawn.
 ```
 bitikocr/data/synthetic/output/birth_certificate/
   facts/doc_000002.json        structured values on the page
-  images/doc_000002.png        the rendered page
+  images/doc_000002.jpg        the rendered page
   annotations/doc_000002.json  the transcription record
-  previews/doc_000002.png      box overlays, only with --boxes
+  previews/doc_000002.jpg      box overlays, only with --boxes
   index.jsonl                  one line per page, for a data loader
 ```
 

@@ -16,9 +16,9 @@ Layout on disk::
 
     <output>/
       facts/<id>.json        the structured values the page carries
-      images/<id>.png        the rendered page
+      images/<id>.jpg        the rendered page
       annotations/<id>.json  the transcription record: text, parts, capture
-      previews/<id>.png      box overlays, only with draw_boxes
+      previews/<id>.jpg      box overlays, only with draw_boxes
       index.jsonl            one line per page, tying the three together
 
 Both JSON records follow the corpus schema in
@@ -63,7 +63,9 @@ from bitikocr.data.synthetic.records import DocumentRecord
 
 __all__ = [
     "DEFAULT_ID_PREFIX",
+    "IMAGE_SUFFIX",
     "INDEX_NAME",
+    "JPEG_QUALITY",
     "DatasetLayout",
     "DatasetSummary",
     "SampleFiles",
@@ -80,6 +82,13 @@ _BLOCK_OUTLINE = (30, 160, 30)
 _LINE_OUTLINE = (220, 30, 30)
 
 INDEX_NAME = "index.jsonl"
+
+#: File extension and JPEG quality pages are saved with. A lossless page
+#: runs to several megabytes, which a corpus of tens of thousands cannot
+#: afford, and real archive scans arrive as JPEG anyway. At this quality
+#: the compression is invisible on handwriting.
+IMAGE_SUFFIX = ".jpg"
+JPEG_QUALITY = 90
 
 #: What documents are called when the caller does not say. Namespace it per
 #: document type if several sets will be merged into one corpus.
@@ -363,10 +372,10 @@ def _write_sample(
 ) -> SampleFiles:
     """Write one page and the two schema records describing it."""
     facts_path = layout.facts / f"{identifier}.json"
-    image_path = layout.images / f"{identifier}.png"
+    image_path = layout.images / f"{identifier}{IMAGE_SUFFIX}"
     annotation_path = layout.annotations / f"{identifier}.json"
 
-    image.save(image_path)
+    image.convert("RGB").save(image_path, "JPEG", quality=JPEG_QUALITY)
     relative_image = image_path.relative_to(layout.root).as_posix()
 
     transcription = build_transcription_record(
@@ -393,8 +402,10 @@ def _write_sample(
 
     preview_path: Path | None = None
     if draw_boxes:
-        preview_path = layout.previews / f"{identifier}.png"
-        draw_annotations(image, annotation).save(preview_path)
+        preview_path = layout.previews / f"{identifier}{IMAGE_SUFFIX}"
+        draw_annotations(image, annotation).convert("RGB").save(
+            preview_path, "JPEG", quality=JPEG_QUALITY
+        )
 
     return SampleFiles(
         id=identifier,

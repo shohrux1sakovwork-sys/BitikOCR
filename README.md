@@ -96,9 +96,9 @@ A dataset directory holds both stages:
 ```
 bitikocr/data/synthetic/output/birth_certificate/
   facts/doc_000002.json        the structured values on the page
-  images/doc_000002.png        the rendered page
+  images/doc_000002.jpg        the rendered page
   annotations/doc_000002.json  the transcription record
-  previews/doc_000002.png      box overlays, only with --boxes
+  previews/doc_000002.jpg      box overlays, only with --boxes
   index.jsonl                  one line per page, for a data loader
 ```
 
@@ -115,14 +115,14 @@ under what conditions the page was captured.
 ```json
 {
   "id": "doc_000002",
-  "image": "images/doc_000002.png",
+  "image": "images/doc_000002.jpg",
   "image_size": [2932, 2146],
   "source": {
     "origin": "synthetic",
     "collection": "birth_certificate",
     "era": "modern",
     "year_approx": 2019,
-    "original_file": "doc_000002.png"
+    "original_file": "doc_000002.jpg"
   },
   "metadata": {
     "language": ["uz-cyrillic", "uz-latin", "ru"],
@@ -191,7 +191,7 @@ A **facts** file is the structured values a reader would take off the page:
 ```json
 {
   "id": "doc_000002",
-  "image": "images/doc_000002.png",
+  "image": "images/doc_000002.jpg",
   "facts": [
     {"category": "date", "value": "2019-06-25", "fuzzy": false,
      "evidence_text": "2019 йил июн 25", "field": "birth"},

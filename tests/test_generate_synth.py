@@ -44,7 +44,7 @@ def test_generating_writes_the_requested_number_of_samples(
     )
 
     assert exit_code == 0
-    assert len(list((tmp_path / "images").glob("*.png"))) == 1
+    assert len(list((tmp_path / "images").glob("*.jpg"))) == 1
     assert len(list((tmp_path / "annotations").glob("*.json"))) == 1
     assert len(list((tmp_path / "facts").glob("*.json"))) == 1
     assert (tmp_path / "index.jsonl").is_file()
@@ -129,7 +129,7 @@ def test_facts_can_be_rendered_afterwards(tmp_path: Path) -> None:
         == 0
     )
     assert main(["render", str(tmp_path), "--augment", "0"]) == 0
-    assert len(list((tmp_path / "images").glob("*.png"))) == 2
+    assert len(list((tmp_path / "images").glob("*.jpg"))) == 2
     assert len(list((tmp_path / "annotations").glob("*.json"))) == 2
 
 
@@ -230,4 +230,4 @@ def test_the_ink_strength_reaches_the_page(
     facts = next((tmp_path / "facts").glob("*.json"))
     payload = json.loads(facts.read_text(encoding="utf-8"))
     assert payload["facts"], "expected the page to carry facts"
-    assert next((tmp_path / "images").glob("*.png")).is_file()
+    assert next((tmp_path / "images").glob("*.jpg")).is_file()
