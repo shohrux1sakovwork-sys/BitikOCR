@@ -1,0 +1,443 @@
+{
+  "template_name": "death_certificate_bilingual",
+  "image": "death_certificate_bilingual.png",
+  "width": 1419,
+  "height": 1108,
+  "coordinate_system": "pixels, origin top-left, bbox=[x1,y1,x2,y2]",
+  "baseline_note": "baseline_y is the y of the printed underline (measured); text should sit on/just above it. bbox top = baseline-38, bottom = baseline+4 for descenders. Handwriting in real scans often rises ~10-15px above bbox top and may overflow right of x2.",
+  "left_page_x_range": [
+    94,
+    607
+  ],
+  "right_page_x_range": [
+    800,
+    1324
+  ],
+  "gutter_x": [
+    640,
+    790
+  ],
+  "fields": [
+    {
+      "id": "surname",
+      "page": "left",
+      "baseline_y": 331,
+      "bbox_xyxy": [
+        94,
+        293,
+        607,
+        335
+      ],
+      "label_uz": "familiyasi",
+      "label_ru": "фамилия",
+      "text_type": "uzbek_latin_word (surname, capitalized, cursive)",
+      "example": "Karimov",
+      "notes": ""
+    },
+    {
+      "id": "given_name_patronymic",
+      "page": "left",
+      "baseline_y": 376,
+      "bbox_xyxy": [
+        94,
+        338,
+        607,
+        380
+      ],
+      "label_uz": "ismi, otasining ismi",
+      "label_ru": "имя, отчество",
+      "text_type": "uzbek_latin_words (given name [+ patronymic])",
+      "example": "Otaboy",
+      "notes": ""
+    },
+    {
+      "id": "citizenship",
+      "page": "left",
+      "baseline_y": 435,
+      "bbox_xyxy": [
+        212,
+        397,
+        607,
+        439
+      ],
+      "label_uz": "Fuqaroligi",
+      "label_ru": "Гражданство",
+      "text_type": "uzbek_latin_word (country)",
+      "example": "O'zbekiston",
+      "notes": ""
+    },
+    {
+      "id": "death_year",
+      "page": "left",
+      "baseline_y": 487,
+      "bbox_xyxy": [
+        94,
+        449,
+        183,
+        491
+      ],
+      "label_uz": "yil",
+      "label_ru": "год",
+      "text_type": "digits_4",
+      "example": "2015",
+      "notes": ""
+    },
+    {
+      "id": "death_month",
+      "page": "left",
+      "baseline_y": 487,
+      "bbox_xyxy": [
+        227,
+        449,
+        415,
+        491
+      ],
+      "label_uz": "oyining",
+      "label_ru": "месяц",
+      "text_type": "uzbek_month_name_latin",
+      "example": "yanvar",
+      "notes": "yanvar, fevral, mart, aprel, may, iyun, iyul, avgust, sentabr, oktabr, noyabr, dekabr"
+    },
+    {
+      "id": "death_day",
+      "page": "left",
+      "baseline_y": 487,
+      "bbox_xyxy": [
+        495,
+        449,
+        549,
+        491
+      ],
+      "label_uz": "kunida",
+      "label_ru": "число",
+      "text_type": "digits_1_2",
+      "example": "15",
+      "notes": ""
+    },
+    {
+      "id": "death_year_in_words",
+      "page": "left",
+      "baseline_y": 527,
+      "bbox_xyxy": [
+        94,
+        489,
+        607,
+        531
+      ],
+      "label_uz": "yil so'z bilan",
+      "label_ru": "год прописью",
+      "text_type": "uzbek_latin_phrase (year written out in words)",
+      "example": "ikki ming o'n beshinchi",
+      "notes": "in real docs often overflows onto next line; template provides one line"
+    },
+    {
+      "id": "age_at_death",
+      "page": "left",
+      "baseline_y": 584,
+      "bbox_xyxy": [
+        368,
+        546,
+        438,
+        588
+      ],
+      "label_uz": "yoshda vafot etdi",
+      "label_ru": "умер(ла) в возрасте",
+      "text_type": "digits_1_3",
+      "example": "63",
+      "notes": ""
+    },
+    {
+      "id": "record_year",
+      "page": "left",
+      "baseline_y": 643,
+      "bbox_xyxy": [
+        182,
+        605,
+        270,
+        647
+      ],
+      "label_uz": "Bu haqda ... yil",
+      "label_ru": "Об этом ... год",
+      "text_type": "digits_4",
+      "example": "2015",
+      "notes": ""
+    },
+    {
+      "id": "record_month",
+      "page": "left",
+      "baseline_y": 643,
+      "bbox_xyxy": [
+        313,
+        605,
+        415,
+        647
+      ],
+      "label_uz": "oyining",
+      "label_ru": "месяц",
+      "text_type": "uzbek_month_name_latin",
+      "example": "yanvar",
+      "notes": ""
+    },
+    {
+      "id": "record_day",
+      "page": "left",
+      "baseline_y": 643,
+      "bbox_xyxy": [
+        495,
+        605,
+        549,
+        647
+      ],
+      "label_uz": "kunida",
+      "label_ru": "число",
+      "text_type": "digits_1_2",
+      "example": "23",
+      "notes": ""
+    },
+    {
+      "id": "record_number",
+      "page": "left",
+      "baseline_y": 704,
+      "bbox_xyxy": [
+        120,
+        666,
+        234,
+        708
+      ],
+      "label_uz": "№ -son bilan dalolatnoma yozuvi",
+      "label_ru": "№ актовая запись",
+      "text_type": "digits_1_4",
+      "example": "21",
+      "notes": ""
+    },
+    {
+      "id": "cause_of_death_line1",
+      "page": "left",
+      "baseline_y": 764,
+      "bbox_xyxy": [
+        246,
+        726,
+        607,
+        768
+      ],
+      "label_uz": "O'limning sababi",
+      "label_ru": "Причина смерти",
+      "text_type": "uzbek_latin_phrase (medical diagnosis, cursive, multiline)",
+      "example": "sigmasimon ichak",
+      "notes": ""
+    },
+    {
+      "id": "cause_of_death_line2",
+      "page": "left",
+      "baseline_y": 784,
+      "bbox_xyxy": [
+        246,
+        766,
+        607,
+        788
+      ],
+      "label_uz": "O'limning sababi (cont.)",
+      "label_ru": "Причина смерти (прод.)",
+      "text_type": "uzbek_latin_phrase (continuation)",
+      "example": "saratoni",
+      "notes": "second ruled line only 20px below line 1 — text here is compressed (~18px x-height) or written between/over the two lines; line 1 and 2 form one logical multi-line field"
+    },
+    {
+      "id": "death_place_country",
+      "page": "left",
+      "baseline_y": 833,
+      "bbox_xyxy": [
+        235,
+        795,
+        607,
+        837
+      ],
+      "label_uz": "Vafot etgan joyi / davlat",
+      "label_ru": "Место смерти / государство",
+      "text_type": "uzbek_latin_word (country)",
+      "example": "O'zbekiston",
+      "notes": ""
+    },
+    {
+      "id": "death_place_region",
+      "page": "left",
+      "baseline_y": 880,
+      "bbox_xyxy": [
+        94,
+        842,
+        607,
+        884
+      ],
+      "label_uz": "viloyat",
+      "label_ru": "область",
+      "text_type": "uzbek_latin_word (region name)",
+      "example": "Xorazm",
+      "notes": ""
+    },
+    {
+      "id": "death_place_district",
+      "page": "left",
+      "baseline_y": 925,
+      "bbox_xyxy": [
+        94,
+        887,
+        607,
+        929
+      ],
+      "label_uz": "tuman",
+      "label_ru": "район",
+      "text_type": "uzbek_latin_word (district name)",
+      "example": "Yangiariq",
+      "notes": ""
+    },
+    {
+      "id": "death_place_settlement",
+      "page": "left",
+      "baseline_y": 971,
+      "bbox_xyxy": [
+        94,
+        933,
+        607,
+        975
+      ],
+      "label_uz": "shahar, posyolka, qishloq",
+      "label_ru": "город, посёлок, кишлак",
+      "text_type": "uzbek_latin_words (settlement name)",
+      "example": "Yangiariq shahri",
+      "notes": "frequently left blank"
+    },
+    {
+      "id": "registration_office_line1",
+      "page": "right",
+      "baseline_y": 186,
+      "bbox_xyxy": [
+        936,
+        148,
+        1324,
+        190
+      ],
+      "label_uz": "Qayd etish joyi",
+      "label_ru": "Место регистрации",
+      "text_type": "uzbek_latin_phrase (FHDYO office name)",
+      "example": "Yangiariq tumani",
+      "notes": ""
+    },
+    {
+      "id": "registration_office_line2",
+      "page": "right",
+      "baseline_y": 208,
+      "bbox_xyxy": [
+        981,
+        188,
+        1324,
+        212
+      ],
+      "label_uz": "Qayd etish joyi (cont.)",
+      "label_ru": "Место регистрации (прод.)",
+      "text_type": "uzbek_latin_phrase (continuation)",
+      "example": "FHDYO bo'limi",
+      "notes": "second ruled line 22px below line 1; handwriting is small or overlaps the printed hint text beneath"
+    },
+    {
+      "id": "issue_year",
+      "page": "right",
+      "baseline_y": 303,
+      "bbox_xyxy": [
+        921,
+        265,
+        993,
+        307
+      ],
+      "label_uz": "Berilgan vaqti yil",
+      "label_ru": "Дата выдачи год",
+      "text_type": "digits_4",
+      "example": "2015",
+      "notes": ""
+    },
+    {
+      "id": "issue_month",
+      "page": "right",
+      "baseline_y": 303,
+      "bbox_xyxy": [
+        1033,
+        265,
+        1145,
+        307
+      ],
+      "label_uz": "oyining",
+      "label_ru": "месяц",
+      "text_type": "uzbek_month_name_latin",
+      "example": "yanvar",
+      "notes": ""
+    },
+    {
+      "id": "issue_day",
+      "page": "right",
+      "baseline_y": 303,
+      "bbox_xyxy": [
+        1222,
+        265,
+        1282,
+        307
+      ],
+      "label_uz": "kuni",
+      "label_ru": "число",
+      "text_type": "digits_1_2",
+      "example": "23",
+      "notes": ""
+    },
+    {
+      "id": "registrar_signature",
+      "page": "right",
+      "baseline_y": 498,
+      "bbox_xyxy": [
+        1114,
+        460,
+        1324,
+        502
+      ],
+      "label_uz": "FHDYO organi mudiri",
+      "label_ru": "Заведующий органом ЗАГС",
+      "text_type": "signature (scribble) + optional surname",
+      "example": "<signature> Rahimova",
+      "notes": "real docs often write surname above and signature on the line"
+    },
+    {
+      "id": "official_seal",
+      "page": "right",
+      "baseline_y": null,
+      "bbox_xyxy": [
+        840,
+        540,
+        1140,
+        800
+      ],
+      "label_uz": "Muhr",
+      "label_ru": "Печать",
+      "text_type": "round_stamp (ink seal, ~260px dia, overlaps 'Muhr' label and registrar block)",
+      "example": "",
+      "notes": "circular stamp, purple/blue ink, contains office name around rim"
+    },
+    {
+      "id": "serial_number",
+      "page": "right",
+      "baseline_y": null,
+      "bbox_xyxy": [
+        1045,
+        880,
+        1300,
+        915
+      ],
+      "label_uz": "I-HR №",
+      "label_ru": "I-HR №",
+      "text_type": "printed_digits_7 (typewriter/serif, NOT handwritten)",
+      "example": "0070000",
+      "notes": "printed after the 'I-HR №' label; no underline in template"
+    }
+  ],
+  "source": "Measured from the printed underlines of the scanned blank form; see detected_underlines_raw.txt in the source material.",
+  "printed_scripts": [
+    "latin",
+    "cyrillic"
+  ]
+}

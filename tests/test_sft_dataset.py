@@ -2,10 +2,11 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import torch
+import transformers
 
 from bitikocr.data import sft_dataset
 from bitikocr.data.constants import DEFAULT_IMAGE_TOKEN, IGNORE_INDEX
@@ -53,6 +54,17 @@ class FakeProcessor:
         return result
 
 
+def as_processor(fake: FakeProcessor) -> transformers.ProcessorMixin:
+    """Hand the fake to code that is typed for a real processor.
+
+    FakeProcessor implements only the slice of the processor interface the
+    dataset actually touches, which is the whole point of it: these tests
+    run without downloading a model. The cast is where that deliberate
+    narrowing is declared, so it is stated once rather than at every call.
+    """
+    return cast(transformers.ProcessorMixin, fake)
+
+
 @pytest.fixture
 def processor(monkeypatch: pytest.MonkeyPatch) -> FakeProcessor:
     """Replace external model metadata and image loading for unit tests."""
@@ -84,7 +96,7 @@ def test_load_records(
         path.write_text(f"\n{contents}\n\n", encoding="utf-8")
         source = str(path)
     dataset = sft_dataset.SupervisedDataset(
-        source, processor, DataArguments(), "test-model"
+        source, as_processor(processor), DataArguments(), "test-model"
     )
     assert len(dataset) == 1
     assert dataset.list_data_dict == records
@@ -118,7 +130,7 @@ def test_load_records(
 def test_invalid_record(processor: FakeProcessor, record: Any) -> None:
     """Report malformed records as validation errors instead of crashes."""
     dataset = sft_dataset.SupervisedDataset(
-        [record], processor, DataArguments(), "test-model"
+        [record], as_processor(processor), DataArguments(), "test-model"
     )
     with pytest.raises(ValueError, match="OCR record 0 requires"):
         dataset[0]
@@ -128,7 +140,10 @@ def test_missing_modality_ids(processor: FakeProcessor) -> None:
     """Recover image positions when processor modality output is absent."""
     processor.include_modality = False
     dataset = sft_dataset.SupervisedDataset(
-        [{"image": "x", "text": ""}], processor, DataArguments(), "test-model"
+        [{"image": "x", "text": ""}],
+        as_processor(processor),
+        DataArguments(),
+        "test-model",
     )
     example = dataset[0]
     assert example["mm_token_type_ids"][:4].tolist() == [0, 1, 1, 0]
@@ -158,7 +173,7 @@ def test_image_folder_resolution(
     image_path = str(cwd_image) if absolute else "page.png"
     dataset = sft_dataset.SupervisedDataset(
         [{"image": image_path, "text": "hello"}],
-        processor,
+        as_processor(processor),
         DataArguments(image_folder=str(image_root)),
         "test-model",
     )
@@ -204,12 +219,14 @@ def test_data_module(tmp_path: Path, processor: FakeProcessor) -> None:
     """Return the documented dataset/collator pair and reject an absent path."""
     with pytest.raises(ValueError, match="Set data_path"):
         sft_dataset.make_supervised_data_module(
-            "test-model", processor, DataArguments()
+            "test-model", as_processor(processor), DataArguments()
         )
     path = tmp_path / "data.jsonl"
     path.write_text('{"image": "page.png", "text": "hello"}\n')
     module = sft_dataset.make_supervised_data_module(
-        "test-model", processor, DataArguments(data_path=str(path))
+        "test-model",
+        as_processor(processor),
+        DataArguments(data_path=str(path)),
     )
     assert set(module) == {"dataset", "data_collator"}
     batch = module["data_collator"]([module["dataset"][0]])
