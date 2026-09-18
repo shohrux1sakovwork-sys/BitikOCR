@@ -27,6 +27,7 @@ from bitikocr.data.synthetic.generators.base import (
     DEFAULT_INK_STRENGTH,
     DocumentGenerator,
     FieldValues,
+    PartKind,
     SyntheticDocument,
 )
 from bitikocr.data.synthetic.hand import Hand
@@ -45,6 +46,10 @@ _TARGET_FILL = 0.86
 # Nothing is written closer than this many nominal sizes to the foot of the
 # page: a clerk runs out of paper before they run out of margin.
 _FOOT_MARGIN = 2.0
+
+#: How far across the page a signing-off line may reach, as a share of the
+#: width; the header block stops at the same place.
+_RIGHT_LIMIT = 0.955
 _MIN_FONT_SIZE = 34
 _SHRINK_FACTOR = 0.92
 
@@ -76,6 +81,19 @@ class LetterGenerator(DocumentGenerator):
     #: Whether the archivist numbered the page at its foot rather than its
     #: head.
     page_number_at_foot: ClassVar[bool] = False
+
+    #: The regions every letter is made of. The addressee block is the
+    #: header, the author's name and date close the letter with the
+    #: signature, and marks added afterwards by someone else are other.
+    BLOCK_PARTS: ClassVar[Mapping[str, PartKind]] = {
+        "recipient": ("header", "handwritten"),
+        "applicant": ("header", "handwritten"),
+        "title": ("title", "handwritten"),
+        "body": ("body", "handwritten"),
+        "signature_name": ("signature", "handwritten"),
+        "date": ("signature", "handwritten"),
+        "page_number": ("other", "handwritten"),
+    }
 
     def __init__(
         self,
@@ -470,7 +488,7 @@ class LetterGenerator(DocumentGenerator):
                 "signature_name",
                 [str(signature_name)],
                 hand,
-                int(width * spread),
+                _fit(int(width * spread), str(signature_name), hand, width),
                 min(y + int(font_size * rng.uniform(0, 0.5)), last_baseline),
             )
 
@@ -479,7 +497,12 @@ class LetterGenerator(DocumentGenerator):
                 "date",
                 [str(date)],
                 hand,
-                int(width * rng.uniform(*self.date_x)),
+                _fit(
+                    int(width * rng.uniform(*self.date_x)),
+                    str(date),
+                    hand,
+                    width,
+                ),
                 min(y + int(font_size * rng.uniform(1.7, 2.3)), last_baseline),
             )
 
@@ -496,7 +519,32 @@ class LetterGenerator(DocumentGenerator):
                 "phone",
                 [str(phone)],
                 hand,
-                int(width * rng.uniform(0.12, 0.25)),
+                _fit(
+                    int(width * rng.uniform(0.12, 0.25)),
+                    str(phone),
+                    hand,
+                    width,
+                ),
                 phone_y,
             )
         return y
+
+
+def _fit(left: int, text: str, hand: Hand, width: int) -> int:
+    """Move a one-line text left until it ends inside the right margin.
+
+    A long name placed at the usual spot can run past the page's edge, and
+    ink beyond the edge is clipped while the transcription keeps every
+    letter. Such a line is started earlier instead.
+
+    Args:
+        left: Where the line would start.
+        text: The line.
+        hand: The hand writing it.
+        width: The page's width.
+
+    Returns:
+        The start that keeps the whole line on the page.
+    """
+    limit = int(width * _RIGHT_LIMIT - hand.measure(text))
+    return max(0, min(left, limit))

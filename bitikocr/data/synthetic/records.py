@@ -17,14 +17,17 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bitikocr.data.synthetic import corpus
+from bitikocr.data.synthetic.phrases import PhraseBank
 from bitikocr.data.synthetic.scripts import Script, in_script
 
 __all__ = [
+    "BANK_SHARE",
     "DEFAULT_LATIN_SHARE",
     "MODERN_FROM",
     "RECORD_SAMPLERS",
     "DocumentRecord",
     "SampledContent",
+    "Sampler",
     "available_record_types",
     "sample_record",
     "sample_records",
@@ -45,6 +48,11 @@ MODERN_FROM = 2000
 #: Move it as fonts are added, or override it per batch with
 #: ``--latin-share``.
 DEFAULT_LATIN_SHARE = 0.3
+
+#: Chance a sampler takes a slot's wording from the phrase bank rather than
+#: its own phrases, when it has a bank. Its own phrases are the ones the
+#: scans carry, so they keep a share of every batch.
+BANK_SHARE = 0.6
 
 _ARIZA_SUBJECTS: tuple[str, ...] = (
     "yashab turgan turar joyimga egalik huquqini belgilab berishingizni",
@@ -366,7 +374,9 @@ def _later_date(
 
 
 def _sample_death_certificate(
-    rng: random.Random, script: Script
+    rng: random.Random,
+    script: Script,
+    phrases: PhraseBank | None = None,
 ) -> SampledContent:
     """Sample the content of one death certificate."""
     person = corpus.sample_person(rng, script)
@@ -430,7 +440,9 @@ def _sample_death_certificate(
 
 
 def _sample_birth_certificate(
-    rng: random.Random, script: Script
+    rng: random.Random,
+    script: Script,
+    phrases: PhraseBank | None = None,
 ) -> SampledContent:
     """Sample the content of one birth certificate."""
     stem = corpus.surname_stem(rng)
@@ -535,7 +547,11 @@ def _form_series(rng: random.Random, script: Script) -> str:
 # -- ariza -----------------------------------------------------------------
 
 
-def _sample_ariza(rng: random.Random, script: Script) -> SampledContent:
+def _sample_ariza(
+    rng: random.Random,
+    script: Script,
+    phrases: PhraseBank | None = None,
+) -> SampledContent:
     """Sample the content of one application letter."""
     official = corpus.sample_person(rng, script, is_female=False)
     applicant = corpus.sample_person(rng, script)
@@ -559,10 +575,17 @@ def _sample_ariza(rng: random.Random, script: Script) -> SampledContent:
         f"{district} {street} {street_word} {house} {resident} "
         f"{applicant.surname} {applicant.given_name}{from_suffix}"
     )
+    subject = _wording(rng, phrases, "ariza_request", _ARIZA_SUBJECTS)
     body = (
         f"{in_script(rng.choice(_ARIZA_OPENINGS), script)} "
-        f"{in_script(rng.choice(_ARIZA_SUBJECTS), script)} {request}."
+        f"{in_script(subject, script)} {request}."
     )
+    detail = _extra_sentence(rng, phrases, "ariza_detail", 0.45)
+    if detail is not None:
+        # Background comes first when it explains the request, after it
+        # when it supports it.
+        detail = in_script(detail, script)
+        body = f"{detail} {body}" if rng.random() < 0.5 else f"{body} {detail}"
 
     year = rng.randint(1985, 2024)
     month = rng.randint(1, 12)
@@ -786,7 +809,9 @@ def _consent_certification(
 
 
 def _sample_consent_letter(
-    rng: random.Random, script: Script
+    rng: random.Random,
+    script: Script,
+    phrases: PhraseBank | None = None,
 ) -> SampledContent:
     """Sample the content of one consent letter."""
     official = corpus.sample_person(rng, script, is_female=False)
@@ -818,6 +843,9 @@ def _sample_consent_letter(
         "page_number": str(rng.randint(1, 450)),
         **author,
     }
+    closing = _extra_sentence(rng, phrases, "consent_closing", 0.35)
+    if closing is not None:
+        fields["body"] = f"{fields['body']} {in_script(closing, script)}"
 
     # Only a citizen needs someone else to vouch for their signature, and
     # only then does a seal reach the page. An organisation has already
@@ -966,6 +994,7 @@ def _lapse_explanation(
     kind: str,
     person: corpus.Person,
     when: tuple[int, int, int],
+    phrases: PhraseBank | None = None,
 ) -> str:
     """Write what an employee or a pupil did, and why.
 
@@ -975,6 +1004,7 @@ def _lapse_explanation(
         kind: ``employee`` or ``student``.
         person: Who is explaining.
         when: The day it happened, as ``(year, month, day)``.
+        phrases: Extra wording to draw from, if the batch has a bank.
 
     Returns:
         The body, in ``script``.
@@ -983,7 +1013,8 @@ def _lapse_explanation(
     lapse = rng.choice(list(_LAPSES[kind]))
     what = in_script(
         _LAPSES[kind][lapse].format(
-            hours=rng.randint(1, 3), task=rng.choice(_TASKS)
+            hours=rng.randint(1, 3),
+            task=_wording(rng, phrases, "explanation_task", _TASKS),
         ),
         script,
     )
@@ -999,7 +1030,7 @@ def _lapse_explanation(
         announce = in_script("Shuni ma'lum qilamanki, men", script)
         first = f"{announce} {what}."
 
-    reason = rng.choice(_REASONS[kind])
+    reason = _wording(rng, phrases, "explanation_reason", _REASONS[kind])
     sentences = [first, in_script(f"Bunga {reason} sabab bo'ldi.", script)]
 
     # What the guidance asks for when it can be had: something to check the
@@ -1010,12 +1041,9 @@ def _lapse_explanation(
         )
     if rng.random() < 0.5:
         rules = "ish" if kind == "employee" else "o'quv"
-        sentences.append(
-            in_script(
-                f"Bundan buyon {rules} tartibiga qat'iy rioya qilaman.",
-                script,
-            )
-        )
+        own = f"Bundan buyon {rules} tartibiga qat'iy rioya qilaman."
+        closing = _wording(rng, phrases, "explanation_closing", (own,))
+        sentences.append(in_script(closing, script))
     return " ".join(sentences)
 
 
@@ -1089,7 +1117,9 @@ def _explanation_header(
 
 
 def _sample_explanatory_letter(
-    rng: random.Random, script: Script
+    rng: random.Random,
+    script: Script,
+    phrases: PhraseBank | None = None,
 ) -> SampledContent:
     """Sample the content of one explanatory letter."""
     kind = rng.choices(_EXPLAINERS, weights=_EXPLAINER_WEIGHTS)[0]
@@ -1111,7 +1141,9 @@ def _sample_explanatory_letter(
     if kind == "citizen":
         body = _citizen_explanation(rng, script, district)
     else:
-        body = _lapse_explanation(rng, script, kind, person, (year, month, day))
+        body = _lapse_explanation(
+            rng, script, kind, person, (year, month, day), phrases
+        )
 
     title = in_script("Tushuntirish xati", script)
     if kind == "citizen" and rng.random() < 0.15:
@@ -1153,15 +1185,53 @@ def _sample_explanatory_letter(
     )
 
 
+def _wording(
+    rng: random.Random,
+    phrases: PhraseBank | None,
+    slot: str,
+    own: tuple[str, ...],
+) -> str:
+    """Pick a slot's wording, from the bank or from the sampler's own.
+
+    Args:
+        rng: Random source.
+        phrases: The bank, if the batch has one.
+        slot: The bank slot the wording fills.
+        own: The sampler's own phrases for the same place.
+
+    Returns:
+        The wording, in Latin.
+    """
+    if phrases is not None and rng.random() < BANK_SHARE:
+        drawn = phrases.sample(rng, slot)
+        if drawn is not None:
+            return drawn
+    return rng.choice(own)
+
+
+def _extra_sentence(
+    rng: random.Random,
+    phrases: PhraseBank | None,
+    slot: str,
+    chance: float,
+) -> str | None:
+    """Maybe draw one more sentence from the bank."""
+    if phrases is None or rng.random() >= chance:
+        return None
+    return phrases.sample(rng, slot)
+
+
 def _iso(year: int, month: int, day: int) -> str:
     """Format a date the way the facts records normalise them."""
     return f"{year:04d}-{month:02d}-{day:02d}"
 
 
+#: What a sampler is called with: a random source, the alphabet, and the
+#: phrase bank if the batch has one.
+Sampler = Callable[[random.Random, Script, PhraseBank | None], SampledContent]
+
 #: Document type mapped to the sampler that fills it.
-RECORD_SAMPLERS: dict[
-    str, Callable[[random.Random, Script], SampledContent]
-] = {
+RECORD_SAMPLERS: dict[str, Sampler] = {
     "ariza": _sample_ariza,
     "birth_certificate": _sample_birth_certificate,
     "consent_letter": _sample_consent_letter,
@@ -1180,6 +1250,7 @@ def sample_record(
     rng: random.Random,
     script: Script | None = None,
     latin_share: float = DEFAULT_LATIN_SHARE,
+    phrases: PhraseBank | None = None,
 ) -> DocumentRecord:
     """Sample the content of one document.
 
@@ -1188,6 +1259,7 @@ def sample_record(
         rng: Random source.
         script: Force an alphabet instead of sampling one.
         latin_share: Chance of drawing Latin when no script is forced.
+        phrases: Extra wording for the samplers that can use it.
 
     Returns:
         The sampled record, carrying its own render seed.
@@ -1207,7 +1279,7 @@ def sample_record(
         chosen: Script = script
     else:
         chosen = "latin" if rng.random() < latin_share else "cyrillic"
-    content = sampler(rng, chosen)
+    content = sampler(rng, chosen, phrases)
     return DocumentRecord(
         document_type=document_type,
         script=chosen,
@@ -1228,6 +1300,7 @@ def sample_records(
     rng: random.Random,
     script: Script | None = None,
     latin_share: float = DEFAULT_LATIN_SHARE,
+    phrases: PhraseBank | None = None,
 ) -> list[DocumentRecord]:
     """Sample several records of one document type.
 
@@ -1238,6 +1311,7 @@ def sample_records(
         script: Force an alphabet instead of sampling one per record.
         latin_share: Share of records written in Latin, when no script is
             forced.
+        phrases: Extra wording for the samplers that can use it.
 
     Returns:
         The sampled records, in order.
@@ -1253,6 +1327,6 @@ def sample_records(
             f"latin_share must be between 0 and 1, got {latin_share}"
         )
     return [
-        sample_record(document_type, rng, script, latin_share)
+        sample_record(document_type, rng, script, latin_share, phrases)
         for _ in range(count)
     ]

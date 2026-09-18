@@ -89,6 +89,54 @@ uv run python scripts/data/generate_synth.py list-fonts
 uv run python scripts/data/generate_synth.py list-templates
 ```
 
+## Building a large corpus
+
+`generate_synth.py` makes one batch of one type. For a training corpus of
+tens of thousands of pages, `build_corpus.py` plans every page up front,
+renders them in parallel — handwriting on the CPU, augmentation on the GPU
+— and checks the result:
+
+```bash
+uv run --extra data --extra gpu python scripts/data/build_corpus.py all -o corpus/v1 --per-type 4000 --phrases corpus/phrases.json
+```
+
+- **No page twice.** Each record's content is fingerprinted while it is
+  planned, and a repeat is drawn again.
+- **Even coverage.** Fonts, form variants and pen weights are dealt out so
+  each gets its share; a form printed only in Cyrillic is filled in
+  Cyrillic.
+- **Resumable.** A page is done once its annotation is written; run
+  `render` again to pick up where a build stopped.
+- **Checked.** `check` validates every page from its files alone — schema,
+  image size, outlines, facts evidence — and refuses duplicate text or
+  images.
+
+The steps can be run one at a time: `plan`, `render`, `check`, `clean`.
+The plan lives in `<output>/_work/` and is deleted by `clean` once the
+corpus has passed its check.
+
+### Wording from local language models
+
+Letters are written from a fixed set of phrases. To widen them, a phrase
+bank can be filled by models served by [Ollama](https://ollama.com), which
+take turns writing and review each other's batches:
+
+```bash
+uv run --extra data python scripts/data/build_phrase_bank.py -o corpus/phrases.json --models qwen3.5:9b gemma4:e4b muse-glimmer:latest
+```
+
+Every phrase is checked before it is kept: plain Uzbek Latin, no digits or
+proper names a facts record would miss, and the grammar of the sentence it
+is dropped into. Pass the bank to `plan` with `--phrases`; the samplers then
+take a slot's wording from it 60% of the time.
+
+### GPU
+
+The `gpu` extra installs torch from the CUDA 13.0 index on Windows and
+Linux. `render` uses the GPU whenever torch can see one (`--gpu-workers 0`
+forces the CPU); on an RTX 5070 the augmentation takes 0.05–0.1 s a page
+against 1–1.6 s on the CPU.
+
 ## Output format
 
 A dataset directory holds both stages:
@@ -96,9 +144,9 @@ A dataset directory holds both stages:
 ```
 bitikocr/data/synthetic/output/birth_certificate/
   facts/doc_000002.json        the structured values on the page
-  images/doc_000002.png        the rendered page
+  images/doc_000002.jpg        the rendered page
   annotations/doc_000002.json  the transcription record
-  previews/doc_000002.png      box overlays, only with --boxes
+  previews/doc_000002.jpg      box overlays, only with --boxes
   index.jsonl                  one line per page, for a data loader
 ```
 
@@ -115,26 +163,22 @@ under what conditions the page was captured.
 ```json
 {
   "id": "doc_000002",
-  "image": "images/doc_000002.png",
+  "image": "images/doc_000002.jpg",
+  "image_size": [2932, 2146],
   "source": {
     "origin": "synthetic",
     "collection": "birth_certificate",
     "era": "modern",
     "year_approx": 2019,
-    "seed": 1803740873,
-    "generator": "bitikocr@0.1.0",
-    "font": "CyrilicHand06.otf"
+    "original_file": "doc_000002.jpg"
   },
   "metadata": {
-    "language": ["uz"],
-    "scripts": ["cyrillic", "latin"],
-    "primary_script": "cyrillic",
+    "language": ["uz-cyrillic", "uz-latin", "ru"],
     "document_type": "birth_certificate",
     "text_mode": "mixed",
-    "has_handwriting": true,
-    "has_printed_text": true,
-    "has_stamp": true,
-    "has_signature": true,
+    "has_table": false, "has_formula": false, "has_diagram": false,
+    "has_handwriting": true, "has_printed_text": true,
+    "has_stamp": true, "has_signature": true,
     "layout": "two_column",
     "quality": {
       "blur": true, "rotation": -0.463, "skew": true,
@@ -144,8 +188,11 @@ under what conditions the page was captured.
   "target": {
     "text": "whole text, reading order, one line per physical line",
     "parts": [
-      {"role": "child_surname", "text": "Ҳакимова", "bbox": [637, 605, 217, 62],
-       "lines": [{"text": "Ҳакимова", "bbox": [637, 605, 217, 62]}]}
+      {"role": "body",
+       "polygon": [[637, 607], [853, 605], [854, 666], [638, 667]],
+       "bbox": [637, 605, 217, 62],
+       "text": "Ҳакимова",
+       "hand": "handwritten"}
     ]
   },
   "annotation": {
@@ -157,11 +204,31 @@ under what conditions the page was captured.
 }
 ```
 
-Boxes here are `[x, y, width, height]`. Every one is measured from the ink
-actually drawn, so it stays correct through jitter, slant and scan skew.
-`parts` are the page's regions; each also carries the `lines` inside it,
-which is what line-level HTR training needs — a reader that only knows
-`role`/`text`/`bbox` can ignore them.
+The typed definition is `bitikocr/data/models/schema.py`, and it refuses a
+record that breaks the contract rather than writing it.
+
+- **`language`** names languages, not alphabets: `uz-cyrillic`, `uz-latin`
+  or `ru`. The clerk's own comes first, then whatever the blank form is
+  printed in — the bilingual certificates add `uz-latin` and `ru`.
+- **`parts`** are the page's regions, one per thing drawn, each with a
+  `role` from `header`, `title`, `body`, `signature`, `stamp` and `other`,
+  and a `hand` saying whether it was written or printed. A signature
+  scribble and a seal are parts too.
+- **`polygon`** is a region's outline in pixels. On a page skewed on the
+  scanner it is the tilted quadrilateral the ink actually occupies;
+  **`bbox`** is `[x, y, width, height]` of the box enclosing it. Both are
+  measured from the ink drawn, so they stay correct through jitter, slant
+  and skew.
+- **`original_file`** is the file's name before it joined the corpus. A
+  synthetic page is born under its own name, so it is that.
+- **`uncertain_spans`** is optional and never written for a synthetic page,
+  which is certain of every word. When present, each span's `text` is an
+  exact stretch of `target.text`.
+- A real scan may not know everything: `document_type`, `text_mode`, `era`,
+  `year_approx` and a part's `hand` can be `null`, and `parts` can be `[]`.
+
+Which font drew a page, and the seed that reproduces it, are not part of the
+schema. They are in `index.jsonl`, beside the page.
 
 Nothing in the metadata is assumed: `has_stamp` is read from what was drawn,
 `quality` from what the augmentation actually did, `era` from the year the
@@ -172,7 +239,7 @@ A **facts** file is the structured values a reader would take off the page:
 ```json
 {
   "id": "doc_000002",
-  "image": "images/doc_000002.png",
+  "image": "images/doc_000002.jpg",
   "facts": [
     {"category": "date", "value": "2019-06-25", "fuzzy": false,
      "evidence_text": "2019 йил июн 25", "field": "birth"},
@@ -261,9 +328,16 @@ Rendered pages are clean. `--augment` spoils them the way a scanner and time
 would: paper tint, uneven lighting, edge vignetting, dust specks, defocus,
 sensor grain, JPEG artefacts and a slight scan skew.
 
-The skew moves the ink, so it moves the bounding boxes with it — every other
-step is photometric and leaves the ground truth alone. `--augment 0` turns
-the whole thing off; higher values than the default `1.0` push it further.
+The corpus build adds more: a quarter of the pages are photographed with a
+phone — in perspective, on a desk, often with a shadow across them — and
+pages may be folded, stained, photocopied or captured at a low resolution.
+A photographed page records `capture: camera`.
+
+Skew and perspective move the ink, so they move the outlines with it: every
+polygon goes through the same transform as the pixels, and every box is
+re-derived from the result. Every other step is photometric and leaves the
+ground truth alone. `--augment 0` turns the whole thing off; higher values
+than the default `1.0` push it further.
 
 ## Using it from Python
 

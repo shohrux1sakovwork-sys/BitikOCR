@@ -7,6 +7,7 @@ import random
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from bitikocr.data.synthetic.augment import AugmentationProfile
 from bitikocr.data.synthetic.dataset import (
@@ -152,7 +153,9 @@ def test_the_annotation_holds_the_ground_truth(
     )
     assert payload["id"] == summary.samples[0].id
     assert payload["metadata"]["document_type"] == "ariza"
-    assert payload["metadata"]["primary_script"] == "cyrillic"
+    assert payload["metadata"]["language"] == ["uz-cyrillic"]
+    assert payload["source"]["original_file"] == payload["image"].split("/")[-1]
+    assert payload["image_size"] == [1654, 2339]
     assert payload["target"]["text"]
     assert payload["target"]["parts"]
 
@@ -165,7 +168,7 @@ def test_the_facts_beside_a_page_describe_that_page(
     summary = render_records(ariza_generator, ariza_records, tmp_path)
     payload = json.loads(summary.samples[0].facts.read_text(encoding="utf-8"))
     assert payload["id"] == summary.samples[0].id
-    assert payload["image"].endswith(".png")
+    assert payload["image"].endswith(".jpg")
 
     written = {fact["evidence_text"] for fact in payload["facts"]}
     assert ariza_records[0].fields["signature_name"] in written
@@ -275,3 +278,21 @@ def test_a_record_the_fonts_cannot_write_is_skipped_not_fatal(
     assert len(summary) == 1
     assert len(summary.skipped) == 1
     assert summary.skipped[0][0] == 0
+
+
+def test_pages_and_previews_are_saved_as_jpeg(
+    ariza_generator: ArizaGenerator,
+    ariza_records: list[DocumentRecord],
+    tmp_path: Path,
+) -> None:
+    """A corpus of tens of thousands of pages cannot afford lossless files."""
+    summary = render_records(
+        ariza_generator, ariza_records, tmp_path, draw_boxes=True
+    )
+    sample = summary.samples[0]
+    assert sample.preview is not None
+    for path in (sample.image, sample.preview):
+        assert path.suffix == ".jpg"
+        with Image.open(path) as saved:
+            assert saved.format == "JPEG"
+            assert saved.mode == "RGB"

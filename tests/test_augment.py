@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import random
 
 import numpy as np
@@ -15,10 +16,16 @@ from bitikocr.data.synthetic.annotation import (
     LineAnnotation,
 )
 from bitikocr.data.synthetic.augment import (
+    AugmentationPlan,
     AugmentationProfile,
+    apply_plan,
     augment_page,
+    homography,
+    plan_augmentation,
     rotate_page,
+    warp_page,
 )
+from bitikocr.data.synthetic.augment_gpu import cuda_available
 
 
 @pytest.fixture()
@@ -132,6 +139,53 @@ def test_rotated_boxes_stay_on_the_page(
         assert 0 <= box.top < box.bottom <= height, degrees
 
 
+def test_rotation_turns_a_blocks_outline_with_the_ink(
+    page: tuple[Image.Image, DocumentAnnotation],
+) -> None:
+    """The outline stays a four-cornered shape, now tilted, and its box is
+    the one that encloses it."""
+    image, annotation = page
+    _, turned = rotate_page(image, annotation, 6.0)
+    block = turned.blocks[0]
+    assert block.polygon is not None and block.bbox is not None
+    assert len(block.polygon) == 4
+    xs = [x for x, _ in block.polygon]
+    ys = [y for _, y in block.polygon]
+    assert len(set(xs)) > 2 and len(set(ys)) > 2, "the outline did not tilt"
+    assert block.bbox.left <= min(xs) and max(xs) <= block.bbox.right
+    assert block.bbox.top <= min(ys) and max(ys) <= block.bbox.bottom
+
+
+def test_an_upright_block_is_outlined_by_its_box(
+    page: tuple[Image.Image, DocumentAnnotation],
+) -> None:
+    _, annotation = page
+    block = annotation.blocks[0]
+    assert block.polygon is None
+    assert block.outline == (
+        (100, 120),
+        (300, 120),
+        (300, 160),
+        (100, 160),
+    )
+
+
+def test_a_rotated_outline_stays_on_the_page() -> None:
+    image = Image.new("RGB", (200, 100), (245, 242, 232))
+    corner = BoundingBox(150, 60, 200, 100)
+    annotation = DocumentAnnotation(
+        text="x",
+        blocks=[BlockAnnotation("body", "x", corner)],
+        lines=[],
+        size=(200, 100),
+    )
+    _, turned = rotate_page(image, annotation, -8.0)
+    polygon = turned.blocks[0].polygon
+    assert polygon is not None
+    for x, y in polygon:
+        assert 0 <= x <= 200 and 0 <= y <= 100
+
+
 def test_a_rotated_box_still_contains_its_ink() -> None:
     """The box must follow the ink, not stay where the ink used to be."""
     image = Image.new("RGB", (400, 300), (255, 255, 255))
@@ -166,3 +220,126 @@ def test_rotation_fills_the_corners_with_the_page_colour() -> None:
     )
     rotated, _ = rotate_page(image, annotation, 5.0)
     assert np.asarray(rotated)[1, 1].sum() > 300
+
+
+# -- plans, photographs and the GPU ----------------------------------------
+
+
+def _marked_page() -> tuple[Image.Image, DocumentAnnotation]:
+    """A white page with one black bar and its box."""
+    image = Image.new("RGB", (400, 300), (255, 255, 255))
+    for x in range(150, 250):
+        for y in range(140, 160):
+            image.putpixel((x, y), (0, 0, 0))
+    box = BoundingBox(150, 140, 250, 160)
+    annotation = DocumentAnnotation(
+        text="x",
+        blocks=[BlockAnnotation("body", "x", box)],
+        lines=[LineAnnotation("body", "x", box)],
+        size=(400, 300),
+    )
+    return image, annotation
+
+
+_PHOTO = AugmentationProfile(
+    camera_share=1.0,
+    blur=0.0,
+    noise=0.0,
+    speck_density=0.0,
+    vignette=0.0,
+    jpeg_quality=None,
+)
+
+
+def test_a_plan_round_trips_through_its_dict() -> None:
+    plan = plan_augmentation(random.Random(4), AugmentationProfile.varied())
+    assert AugmentationPlan.from_dict(plan.to_dict()) == plan
+
+
+def test_the_varied_profile_uses_every_effect() -> None:
+    rng = random.Random(0)
+    seen = {
+        effect
+        for _ in range(300)
+        for effect in plan_augmentation(
+            rng, AugmentationProfile.varied()
+        ).effects
+    }
+    assert seen >= {
+        "perspective",
+        "crease",
+        "stain",
+        "shadow",
+        "photocopy",
+        "low_resolution",
+        "blur",
+    }
+
+
+def test_a_photographed_page_reports_a_camera() -> None:
+    image, annotation = _marked_page()
+    plan = plan_augmentation(random.Random(1), _PHOTO)
+    _, _, report = apply_plan(image, annotation, plan)
+    assert report.capture == "camera"
+    assert report.skew
+
+
+def test_a_photographed_outline_still_holds_its_ink() -> None:
+    image, annotation = _marked_page()
+    plan = plan_augmentation(random.Random(1), _PHOTO)
+    moved, turned, _ = apply_plan(image, annotation, plan)
+    outline = turned.blocks[0].outline
+    assert outline is not None and len(outline) == 4
+
+    pixels = np.asarray(moved).sum(axis=2)
+    dark = [(int(x), int(y)) for y, x in zip(*np.nonzero(pixels < 150))]
+    assert dark
+    xs = [x for x, _ in outline]
+    ys = [y for _, y in outline]
+    # The outline is a tilted quadrilateral; its bounds hold all the ink.
+    for x, y in dark:
+        assert min(xs) - 1 <= x <= max(xs) + 1
+        assert min(ys) - 1 <= y <= max(ys) + 1
+
+
+def test_a_warp_by_the_identity_changes_nothing() -> None:
+    image, annotation = _marked_page()
+    identity = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    moved, kept = warp_page(image, annotation, identity, (255, 255, 255))
+    assert np.array_equal(np.asarray(moved), np.asarray(image))
+    assert kept.blocks[0].bbox == annotation.blocks[0].bbox
+
+
+def test_a_homography_sends_its_points_where_asked() -> None:
+    source = [(0, 0), (10, 0), (10, 10), (0, 10)]
+    target = [(1, 2), (12, 1), (11, 13), (0, 9)]
+    matrix = homography(source, target)
+    for (x, y), (u, v) in zip(source, target):
+        w = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2]
+        assert (matrix[0][0] * x + matrix[0][1] * y + matrix[0][2]) / w == (
+            pytest.approx(u)
+        )
+        assert (matrix[1][0] * x + matrix[1][1] * y + matrix[1][2]) / w == (
+            pytest.approx(v)
+        )
+
+
+@pytest.mark.skipif(not cuda_available(), reason="needs a CUDA device")
+def test_the_gpu_draws_what_the_cpu_draws() -> None:
+    image, annotation = _marked_page()
+    profile = AugmentationProfile(
+        camera_share=1.0, noise=0.0, speck_density=0.0, jpeg_quality=None
+    )
+    # The light field is drawn by each backend's own generator, so it is
+    # left out to compare the rest.
+    plan = dataclasses.replace(
+        plan_augmentation(random.Random(3), profile), light=0.0
+    )
+    on_cpu, cpu_truth, _ = apply_plan(image, annotation, plan, "cpu")
+    on_gpu, gpu_truth, _ = apply_plan(image, annotation, plan, "cuda")
+    assert cpu_truth.blocks == gpu_truth.blocks
+    difference = np.abs(
+        np.asarray(on_cpu).astype(int) - np.asarray(on_gpu).astype(int)
+    )
+    # Only the resampling kernels differ between the two.
+    assert difference.mean() < 2

@@ -424,8 +424,9 @@ def _run_list_templates(
         template = FormTemplate.load(config.layout(name))
         width, height = template.native_size
         print(f"{template.name}  ({width}x{height}, {template.background})")
-        if template.printed_scripts:
-            print(f"  printed in: {', '.join(template.printed_scripts)}")
+        if template.printed_languages:
+            printed = ", ".join(template.printed_languages)
+            print(f"  printed in: {printed}")
         print(f"  fields:   {', '.join(template.field_names)}")
         if template.printed:
             # A prefix is the label the form does not print for itself, so

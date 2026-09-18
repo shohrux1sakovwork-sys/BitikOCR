@@ -767,6 +767,30 @@ def test_a_certified_letter_is_attested_and_sealed(
     assert CERTIFICATION_SIGNATURE_BLOCK in kinds
 
 
+def test_a_letter_signed_only_by_its_certifier_is_still_signed(
+    config: SyntheticConfig,
+    consent_fields: dict[str, Any],
+) -> None:
+    """The author may not scribble; the official who attests always does.
+    Either way the page carries a signature, and the record must say so."""
+    from bitikocr.data.synthetic.export import build_transcription_record
+    from bitikocr.data.synthetic.records import DocumentRecord
+
+    generator = ConsentLetterGenerator(config)
+    record = DocumentRecord("consent_letter", "cyrillic", 5, consent_fields)
+    document = generator.generate(
+        consent_fields, seed=5, style_overrides={"signature_scribble": False}
+    )
+    kinds = {block.kind for block in document.annotation.blocks}
+    assert "signature" not in kinds
+    assert CERTIFICATION_SIGNATURE_BLOCK in kinds
+
+    metadata = build_transcription_record(
+        record, document.annotation, generator, "doc_1", "images/x.png", "b"
+    ).to_dict()["metadata"]
+    assert metadata["has_signature"] is True
+
+
 def test_an_uncertified_citizens_letter_carries_no_seal(
     consent_generator: ConsentLetterGenerator,
     consent_plain_fields: dict[str, Any],
@@ -1034,3 +1058,23 @@ def test_an_explanation_is_reproducible_from_its_seed(
 def test_every_letter_shares_the_letter_engine(config: SyntheticConfig) -> None:
     for name in ("ariza", "consent_letter", "explanatory_letter"):
         assert isinstance(create_generator(name, config), LetterGenerator)
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_a_long_name_is_signed_inside_the_page(
+    explanatory_generator: ExplanatoryLetterGenerator, seed: int
+) -> None:
+    """A signer's name placed on the right starts earlier rather than
+    running past the edge, where its last letters would be clipped."""
+    fields = sample_record(
+        "explanatory_letter", random.Random(seed), "latin"
+    ).fields
+    fields = {
+        **fields,
+        "signature_name": "Abdurahmonova Mehriniso Sirojiddinovna",
+    }
+    annotation = explanatory_generator.generate(fields, seed=seed).annotation
+    width = annotation.size[0]
+    for block in annotation.blocks:
+        if block.kind == "signature_name" and block.bbox is not None:
+            assert block.bbox.right < width, block.bbox

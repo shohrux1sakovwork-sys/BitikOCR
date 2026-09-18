@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from bitikocr.data.models.geometry import BoundingBox
+from bitikocr.data.models.geometry import BoundingBox, Polygon
 
 __all__ = [
     "BlockAnnotation",
@@ -57,11 +57,22 @@ class BlockAnnotation:
         kind: Block name, e.g. ``"body"``, ``"surname"`` or ``"stamp"``.
         text: Transcription of the block. Empty for non-textual blocks.
         bbox: Tight box around the rendered ink, or None if nothing was drawn.
+        polygon: The block's outline, when it is not simply its box. A page
+            skewed on the scanner turns every box into a tilted
+            quadrilateral, and this is where that shape is kept.
     """
 
     kind: str
     text: str
     bbox: BoundingBox | None
+    polygon: Polygon | None = None
+
+    @property
+    def outline(self) -> Polygon | None:
+        """The block's outline: its polygon, or else its box's corners."""
+        if self.polygon is not None:
+            return self.polygon
+        return self.bbox.to_polygon() if self.bbox else None
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of this block."""

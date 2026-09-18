@@ -6,7 +6,12 @@ import random
 
 from bitikocr.data.synthetic.fonts import FontLibrary
 from bitikocr.data.synthetic.hand import Hand
-from bitikocr.data.synthetic.layout import Page, wrap_text
+from bitikocr.data.synthetic.layout import (
+    CLIPPED_KEY,
+    EDGE_MARGIN,
+    Page,
+    wrap_text,
+)
 from bitikocr.data.synthetic.style import HandwritingStyle
 
 TEXT = "Ҳақиқий ўзбек ёзуви ғалаба қилди ва яна давом этди"
@@ -142,3 +147,45 @@ def test_every_font_and_pen_leaves_visible_ink(
             assert (
                 rendered.getchannel("A").getbbox() is not None
             ), f"{font.name} wrote nothing with a {pen} pen"
+
+
+def test_a_line_past_the_right_edge_is_moved_back_inside(
+    library: FontLibrary, style: HandwritingStyle
+) -> None:
+    hand = make_hand(library, style)
+    page = Page((800, 400), style, random.Random(0))
+    page.put_lines("name", ["Ҳақиқий ўзбек"], hand, 700, 200)
+    box = page.lines[0].bbox
+    assert box is not None
+    assert box.right <= 800 - EDGE_MARGIN
+    assert page.annotation(("name",)).metadata.get(CLIPPED_KEY) is None
+
+
+def test_a_line_below_the_foot_is_moved_back_inside(
+    library: FontLibrary, style: HandwritingStyle
+) -> None:
+    hand = make_hand(library, style)
+    page = Page((800, 400), style, random.Random(0))
+    page.put_lines("date", ["ўзбек"], hand, 100, 420)
+    box = page.lines[0].bbox
+    assert box is not None and box.bottom <= 400 - EDGE_MARGIN
+
+
+def test_a_line_that_fits_stays_where_it_was_put(
+    library: FontLibrary, style: HandwritingStyle
+) -> None:
+    first = Page((2000, 800), style, random.Random(0))
+    second = Page((4000, 1600), style, random.Random(0))
+    first.put_lines("name", ["ўзбек"], make_hand(library, style), 100, 200)
+    second.put_lines("name", ["ўзбек"], make_hand(library, style), 100, 200)
+    assert first.lines[0].bbox == second.lines[0].bbox
+
+
+def test_a_line_wider_than_the_page_is_reported_as_clipped(
+    library: FontLibrary, style: HandwritingStyle
+) -> None:
+    hand = make_hand(library, style)
+    page = Page((200, 400), style, random.Random(0))
+    page.put_lines("body", [TEXT], hand, 10, 200)
+    annotation = page.annotation(("body",))
+    assert annotation.metadata[CLIPPED_KEY] == ["body"]

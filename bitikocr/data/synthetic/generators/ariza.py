@@ -10,9 +10,10 @@ it has been filed.
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from typing import ClassVar
 
-from bitikocr.data.synthetic.generators.base import FieldValues
+from bitikocr.data.synthetic.generators.base import FieldValues, PartKind
 from bitikocr.data.synthetic.generators.letter import (
     DEFAULT_PAGE_SIZE,
     LetterGenerator,
@@ -51,6 +52,14 @@ class ArizaGenerator(LetterGenerator):
         "reg_date",
         "page_number",
     )
+
+    # An ariza's phone number is written with the signature, and the office
+    # registers it in a hand of its own.
+    BLOCK_PARTS: ClassVar[Mapping[str, PartKind]] = {
+        **LetterGenerator.BLOCK_PARTS,
+        "phone": ("signature", "handwritten"),
+        "registration": ("other", "handwritten"),
+    }
 
     READING_ORDER: ClassVar[tuple[str, ...]] = (
         "page_number",

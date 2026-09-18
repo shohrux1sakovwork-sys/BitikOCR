@@ -56,9 +56,9 @@ changes what gets drawn.
 ```
 bitikocr/data/synthetic/output/birth_certificate/
   facts/doc_000002.json        structured values on the page
-  images/doc_000002.png        the rendered page
+  images/doc_000002.jpg        the rendered page
   annotations/doc_000002.json  the transcription record
-  previews/doc_000002.png      box overlays, only with --boxes
+  previews/doc_000002.jpg      box overlays, only with --boxes
   index.jsonl                  one line per page, for a data loader
 ```
 
@@ -75,8 +75,17 @@ Which way a page was produced is recorded in the records themselves, as
 them apart.
 
 Both JSON records follow the schema in `bitikocr/data/models/schema.py`, which is
-the typed definition and the place to look first. Boxes there are
+the typed definition and the place to look first. A region there is a
+`polygon` of `[x, y]` points with the `bbox` enclosing it as
 `[x, y, width, height]`; internally the renderer works in two corners.
+
+Each generator says which of the schema's six roles its blocks are —
+`header`, `title`, `body`, `signature`, `stamp`, `other` — through
+`BLOCK_PARTS` and `part_of`; a block it does not list is handwritten body
+text. A form's cells are body, what it typesets is other printed matter,
+and every scribble and seal is a part of its own. A form layout names the
+languages it is printed in under `printed_languages`, which is how a
+bilingual certificate adds `uz-latin` and `ru` to the page's languages.
 
 ---
 
@@ -101,9 +110,13 @@ it.
 | `annotation.py` | What was drawn, in this module's own terms | The corpus schema |
 | `layout.py` | Placing ink and recording what was placed | Which document is being made |
 | `generators/` | Where things go on one kind of document | What it says, how it ages |
-| `augment.py` | Spoiling a finished page like a scan | What the page says |
+| `phrases.py` | Checked wording from outside the samplers | Where it came from |
+| `augment.py` | Planning and applying a scan's or a photo's wear | What the page says |
+| `augment_gpu.py` | The same plan, carried out with torch on a GPU | Annotations |
 | `export.py` | Mapping all of the above onto the corpus schema | How anything is drawn |
 | `dataset.py` | Batches, file names, on-disk layout | Layout, rendering |
+| `build.py` | Planning a whole corpus and rendering it in parallel | How a page is drawn |
+| `validate.py` | Checking finished pages from their files alone | The generator |
 
 Inside `generators/`:
 
@@ -304,7 +317,7 @@ Field geometry is measured on a scan of the blank form:
   "template_name": "death_certificate_bilingual",
   "image": "death_certificate_bilingual.png",
   "width": 1419, "height": 1108,
-  "printed_scripts": ["latin", "cyrillic"],
+  "printed_languages": ["uz-latin", "ru"],
   "fields": [
     {"id": "surname", "baseline_y": 331, "bbox_xyxy": [94, 293, 607, 335],
      "text_type": "uzbek_latin_word"}

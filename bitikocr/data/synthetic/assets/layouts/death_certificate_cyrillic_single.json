@@ -6,9 +6,7 @@
   "coordinate_system": "pixels, origin top-left, bbox=[x1,y1,x2,y2]",
   "baseline_note": "baseline_y is the y of the printed underline (measured). bbox top is the free area below the nearest printed element above (4px margin); bbox bottom = baseline+4 for descenders. Row pitch is 39-50 px and real handwriting is large, often overshooting into the neighbouring row.",
   "source": "Measured from the printed underlines of the scanned blank single-page Cyrillic form. Field ids follow the bilingual layout so one death-certificate record fills either variant; 'measured_id' keeps the name the measurement used.",
-  "printed_scripts": [
-    "cyrillic"
-  ],
+  "printed_languages": ["uz-cyrillic"],
   "fields": [
     {
       "id": "surname",

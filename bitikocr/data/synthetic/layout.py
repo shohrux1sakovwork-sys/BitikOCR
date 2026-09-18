@@ -24,9 +24,17 @@ from bitikocr.data.synthetic.hand import Hand
 from bitikocr.data.synthetic.ink import alpha_bounding_box
 from bitikocr.data.synthetic.style import Color, HandwritingStyle
 
-__all__ = ["Page", "wrap_text"]
+__all__ = ["CLIPPED_KEY", "EDGE_MARGIN", "Page", "wrap_text"]
 
 logger = logging.getLogger(__name__)
+
+#: Metadata key listing the blocks whose ink the page edge cut off. A page
+#: with any is one whose transcription claims letters the image lacks.
+CLIPPED_KEY = "clipped_blocks"
+
+#: How close to the edge a line that had to be moved back is left, in
+#: pixels.
+EDGE_MARGIN = 4
 
 
 def wrap_text(
@@ -89,6 +97,8 @@ class Page:
         self.rng = rng
         self.lines: list[LineAnnotation] = []
         self.blocks: list[BlockAnnotation] = []
+        #: Blocks whose written text the page edge cut into.
+        self.clipped: set[str] = set()
 
         if background is None:
             self.image = Image.new("RGBA", size, style.paper + (255,))
@@ -153,7 +163,9 @@ class Page:
             if align_right_edge is not None:
                 left = align_right_edge - int(hand.measure(line)) - pen_offset
 
-            position = (left - pen_offset, y - hand.baseline)
+            position = self._inside(
+                rendered, (left - pen_offset, y - hand.baseline)
+            )
             self.image.alpha_composite(rendered, position)
 
             box = self._clip(alpha_bounding_box(rendered, position), block)
@@ -197,11 +209,44 @@ class Page:
             pen=self.style.pen,
             max_width=max_width,
         )
-        box = self._clip(box, block)
+        box = self._clip(box, block, carries_text=False)
         self.add_block(block, "", box)
         return box
 
-    def _clip(self, box: BoundingBox | None, block: str) -> BoundingBox | None:
+    def _inside(
+        self, rendered: Image.Image, position: tuple[int, int]
+    ) -> tuple[int, int]:
+        """Move a rendered line so its ink stays on the page.
+
+        A line is placed by rule, and a long name in a large hand can carry
+        it past an edge, where the ink would be cut off while the
+        transcription kept every letter. Such a line is moved back inside
+        instead; a line that fits is left exactly where it was placed.
+
+        Args:
+            rendered: The line's ink.
+            position: Where its top-left corner would go.
+
+        Returns:
+            Where it goes.
+        """
+        box = alpha_bounding_box(rendered, position)
+        if box is None:
+            return position
+        x, y = position
+        if box.right > self.width:
+            x -= box.right - self.width + EDGE_MARGIN
+        if box.bottom > self.height:
+            y -= box.bottom - self.height + EDGE_MARGIN
+        # The left and top edges win: a line wider than the page is kept
+        # whole at its start rather than at its end.
+        x += max(0, EDGE_MARGIN - (box.left + x - position[0]))
+        y += max(0, EDGE_MARGIN - (box.top + y - position[1]))
+        return x, y
+
+    def _clip(
+        self, box: BoundingBox | None, block: str, carries_text: bool = True
+    ) -> BoundingBox | None:
         """Trim a box to the page, since ink beyond it is never drawn.
 
         A box reaching past the canvas would claim ink the page does not
@@ -211,6 +256,8 @@ class Page:
         Args:
             box: The measured box, or None when nothing was drawn.
             block: Name of the block being recorded, for the log.
+            carries_text: Whether the ink is transcribed. A scribble cut by
+                the edge is still a scribble; cut text is a wrong label.
 
         Returns:
             The box within the page, or None if none of it landed on it.
@@ -226,9 +273,13 @@ class Page:
         )
         if clipped.right <= clipped.left or clipped.bottom <= clipped.top:
             logger.warning("%s was drawn entirely off the page", block)
+            if carries_text:
+                self.clipped.add(block)
             return None
         if clipped != box:
             logger.warning("%s was drawn partly off the page", block)
+            if carries_text:
+                self.clipped.add(block)
         return clipped
 
     # -- annotation bookkeeping --------------------------------------------
@@ -281,5 +332,8 @@ class Page:
             blocks=list(self.blocks),
             lines=list(self.lines),
             size=(self.width, self.height),
-            metadata=dict(metadata or {}),
+            metadata={
+                **(metadata or {}),
+                **({CLIPPED_KEY: sorted(self.clipped)} if self.clipped else {}),
+            },
         )

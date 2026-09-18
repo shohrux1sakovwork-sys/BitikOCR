@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import random
+from typing import get_args
 
 import pytest
 
 from bitikocr.config import SyntheticConfig
-from bitikocr.data.models.schema import FactsRecord, TranscriptionRecord
-from bitikocr.data.synthetic.augment import AugmentationReport
+from bitikocr.data.models.schema import (
+    FactsRecord,
+    Role,
+    TranscriptionRecord,
+)
+
+#: The six regions the schema allows a part to be.
+SCHEMA_ROLES = frozenset(get_args(Role))
+from bitikocr.data.synthetic.augment import AugmentationReport, rotate_page
 from bitikocr.data.synthetic.export import (
     build_facts_record,
     build_transcription_record,
@@ -76,18 +84,27 @@ def test_a_transcription_record_has_the_schema_shape(
     exported: tuple[TranscriptionRecord, FactsRecord],
 ) -> None:
     payload = exported[0].to_dict()
-    assert set(payload) == {
+    # A synthetic page is certain of every word, so it never carries the
+    # optional uncertain_spans key.
+    assert list(payload) == [
         "id",
         "image",
+        "image_size",
         "source",
         "metadata",
         "target",
         "annotation",
-    }
+    ]
     assert set(payload["target"]) == {"text", "parts"}
-    assert {"origin", "collection", "era", "year_approx"} <= set(
-        payload["source"]
-    )
+    assert set(payload["source"]) == {
+        "origin",
+        "collection",
+        "era",
+        "year_approx",
+        "original_file",
+    }
+    assert "scripts" not in payload["metadata"]
+    assert "primary_script" not in payload["metadata"]
 
 
 def test_a_facts_record_has_the_schema_shape(
@@ -116,7 +133,8 @@ def test_a_generated_page_says_it_is_synthetic(
     source = exported[0].to_dict()["source"]
     assert source["origin"] == "synthetic"
     assert source["collection"] == "test_batch"
-    assert source["seed"] is not None
+    assert source["era"] in ("old", "modern")
+    assert isinstance(source["year_approx"], int)
 
 
 def test_the_era_follows_the_year_the_document_is_dated(
@@ -146,10 +164,11 @@ def test_a_form_is_mixed_text_and_a_letter_is_handwritten(
     assert create_generator("birth_certificate", config).text_mode == "mixed"
 
 
-def test_a_bilingual_form_reports_both_alphabets(
+def test_a_bilingual_form_reports_the_languages_it_is_printed_in(
     config: SyntheticConfig,
 ) -> None:
-    """The form's own printing is bilingual whatever the clerk wrote in."""
+    """The form is printed in Uzbek Latin and Russian whatever the clerk
+    wrote in, and the clerk's own language comes first."""
     generator = create_generator("death_certificate", config)
     record = sample_record("death_certificate", random.Random(2), "cyrillic")
     document = generator.generate(record.fields, seed=record.seed)
@@ -158,11 +177,10 @@ def test_a_bilingual_form_reports_both_alphabets(
         record, document.annotation, generator, "doc_1", "images/x.png", "b"
     ).to_dict()["metadata"]
 
-    assert metadata["primary_script"] == "cyrillic"
-    assert set(metadata["scripts"]) == {"cyrillic", "latin"}
+    assert metadata["language"] == ["uz-cyrillic", "uz-latin", "ru"]
 
 
-def test_a_blank_sheet_reports_only_its_own_alphabet(
+def test_a_blank_sheet_reports_only_its_own_language(
     config: SyntheticConfig,
 ) -> None:
     generator = create_generator("ariza", config)
@@ -173,21 +191,21 @@ def test_a_blank_sheet_reports_only_its_own_alphabet(
         record, document.annotation, generator, "doc_1", "images/x.png", "b"
     ).to_dict()["metadata"]
 
-    assert metadata["scripts"] == ["cyrillic"]
+    assert metadata["language"] == ["uz-cyrillic"]
     assert metadata["has_printed_text"] is False
 
 
-def test_a_single_script_form_reports_only_the_clerks_alphabet(
+def test_a_single_language_form_adds_only_what_the_clerk_wrote(
     config: SyntheticConfig,
 ) -> None:
-    """The single-page certificate is printed in Cyrillic, so a Cyrillic
-    record puts one alphabet on the page, and a Latin one two."""
+    """The single-page certificate is printed in Uzbek Cyrillic, so a
+    Cyrillic record puts one language on the page, and a Latin one two."""
     generator = create_generator(
         "death_certificate", config, template=SINGLE_TEMPLATE
     )
     cases: tuple[tuple[Script, list[str]], ...] = (
-        ("cyrillic", ["cyrillic"]),
-        ("latin", ["latin", "cyrillic"]),
+        ("cyrillic", ["uz-cyrillic"]),
+        ("latin", ["uz-latin", "uz-cyrillic"]),
     )
     for script, expected in cases:
         record = sample_record("death_certificate", random.Random(2), script)
@@ -195,7 +213,7 @@ def test_a_single_script_form_reports_only_the_clerks_alphabet(
         metadata = build_transcription_record(
             record, document.annotation, generator, "doc_1", "images/x.png", "b"
         ).to_dict()["metadata"]
-        assert metadata["scripts"] == expected
+        assert metadata["language"] == expected
         assert metadata["has_printed_text"] is True
 
 
@@ -228,26 +246,119 @@ def test_parts_carry_boxes_as_x_y_width_height(
     parts = exported[0].to_dict()["target"]["parts"]
     assert parts
     for part in parts:
-        if part["bbox"] is None:
-            continue
         _, _, width, height = part["bbox"]
         assert width > 0 and height > 0, part["role"]
 
 
-def test_a_part_keeps_the_lines_inside_it(
+def test_every_part_has_exactly_the_schema_keys(
     exported: tuple[TranscriptionRecord, FactsRecord],
 ) -> None:
-    """Line boxes are what line-level HTR training needs."""
-    parts = exported[0].to_dict()["target"]["parts"]
-    assert any(part.get("lines") for part in parts)
+    for part in exported[0].to_dict()["target"]["parts"]:
+        assert list(part) == ["role", "polygon", "bbox", "text", "hand"]
+        assert part["role"] in SCHEMA_ROLES, part["role"]
+        assert part["hand"] in ("handwritten", "printed", "mixed", None)
 
 
-def test_marks_are_not_parts_of_the_text(
+def test_a_parts_box_encloses_its_outline_on_the_page(
     exported: tuple[TranscriptionRecord, FactsRecord],
 ) -> None:
-    roles = {part["role"] for part in exported[0].to_dict()["target"]["parts"]}
-    assert "stamp" not in roles
-    assert "signature" not in roles
+    payload = exported[0].to_dict()
+    page_width, page_height = payload["image_size"]
+    for part in payload["target"]["parts"]:
+        x, y, width, height = part["bbox"]
+        assert len(part["polygon"]) >= 3
+        for px, py in part["polygon"]:
+            assert x <= px <= x + width and y <= py <= y + height
+            assert 0 <= px <= page_width and 0 <= py <= page_height
+
+
+def test_the_page_size_is_the_saved_images(
+    exported: tuple[TranscriptionRecord, FactsRecord],
+) -> None:
+    width, height = exported[0].to_dict()["image_size"]
+    assert width > 0 and height > 0
+
+
+def test_marks_are_regions_of_their_own(
+    exported: tuple[TranscriptionRecord, FactsRecord],
+) -> None:
+    """The schema has regions for a stamp and a signature, and a page that
+    carries one reports it as a part with the matching role."""
+    payload = exported[0].to_dict()
+    roles = {part["role"] for part in payload["target"]["parts"]}
+    assert ("stamp" in roles) == payload["metadata"]["has_stamp"]
+    scribbles = [
+        part
+        for part in payload["target"]["parts"]
+        if part["role"] == "signature" and not part["text"]
+    ]
+    assert bool(scribbles) == payload["metadata"]["has_signature"]
+    for part in payload["target"]["parts"]:
+        if part["role"] == "stamp":
+            assert part["hand"] == "printed"
+
+
+def test_a_letter_is_divided_into_header_title_body_and_signature(
+    config: SyntheticConfig,
+) -> None:
+    generator = create_generator("ariza", config)
+    record = sample_record("ariza", random.Random(4), "latin")
+    document = generator.generate(record.fields, seed=record.seed)
+    parts = build_transcription_record(
+        record, document.annotation, generator, "doc_1", "images/x.png", "b"
+    ).to_dict()["target"]["parts"]
+
+    # A wrapped block keeps its line breaks, so compare the words.
+    by_role: dict[str, list[str]] = {}
+    for part in parts:
+        by_role.setdefault(part["role"], []).append(
+            " ".join(part["text"].split())
+        )
+    assert {"header", "title", "body", "signature"} <= set(by_role)
+    assert record.fields["recipient"] in by_role["header"]
+    assert by_role["body"] == [record.fields["body"]]
+
+
+def test_what_a_form_typesets_is_printed_matter(
+    config: SyntheticConfig,
+) -> None:
+    """A serial number is printed; everything in the cells is written."""
+    generator = create_generator("death_certificate", config)
+    record = sample_record("death_certificate", random.Random(4), "latin")
+    document = generator.generate(record.fields, seed=record.seed)
+    parts = build_transcription_record(
+        record, document.annotation, generator, "doc_1", "images/x.png", "b"
+    ).to_dict()["target"]["parts"]
+
+    printed = [part for part in parts if part["hand"] == "printed"]
+    assert {part["role"] for part in printed} == {"other", "stamp"}
+    assert any(
+        part["text"] == record.fields["serial_number"] for part in printed
+    )
+    body = [part for part in parts if part["role"] == "body"]
+    assert body and all(part["hand"] == "handwritten" for part in body)
+
+
+def test_a_skewed_page_outlines_its_regions_as_tilted_shapes(
+    config: SyntheticConfig,
+) -> None:
+    """A page laid crookedly on the scanner has tilted regions. The polygon
+    keeps that tilt; only the box is square."""
+    generator = create_generator("ariza", config)
+    record = sample_record("ariza", random.Random(4), "latin")
+    document = generator.generate(record.fields, seed=record.seed)
+    _, turned = rotate_page(document.image, document.annotation, 4.0)
+    parts = build_transcription_record(
+        record, turned, generator, "doc_1", "images/x.png", "b"
+    ).to_dict()["target"]["parts"]
+
+    tilted = 0
+    for part in parts:
+        xs = {x for x, _ in part["polygon"]}
+        ys = {y for _, y in part["polygon"]}
+        if len(xs) > 2 or len(ys) > 2:
+            tilted += 1
+    assert tilted, "every outline stayed an upright rectangle"
 
 
 # -- facts ----------------------------------------------------------------

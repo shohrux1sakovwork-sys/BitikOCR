@@ -16,9 +16,9 @@ Layout on disk::
 
     <output>/
       facts/<id>.json        the structured values the page carries
-      images/<id>.png        the rendered page
+      images/<id>.jpg        the rendered page
       annotations/<id>.json  the transcription record: text, parts, capture
-      previews/<id>.png      box overlays, only with draw_boxes
+      previews/<id>.jpg      box overlays, only with draw_boxes
       index.jsonl            one line per page, tying the three together
 
 Both JSON records follow the corpus schema in
@@ -63,15 +63,19 @@ from bitikocr.data.synthetic.records import DocumentRecord
 
 __all__ = [
     "DEFAULT_ID_PREFIX",
+    "IMAGE_SUFFIX",
     "INDEX_NAME",
+    "JPEG_QUALITY",
     "DatasetLayout",
     "DatasetSummary",
     "SampleFiles",
     "draw_annotations",
+    "index_entry",
     "iter_index",
     "read_records",
     "render_records",
     "write_records",
+    "write_sample",
 ]
 
 logger = logging.getLogger(__name__)
@@ -80,6 +84,13 @@ _BLOCK_OUTLINE = (30, 160, 30)
 _LINE_OUTLINE = (220, 30, 30)
 
 INDEX_NAME = "index.jsonl"
+
+#: File extension and JPEG quality pages are saved with. A lossless page
+#: runs to several megabytes, which a corpus of tens of thousands cannot
+#: afford, and real archive scans arrive as JPEG anyway. At this quality
+#: the compression is invisible on handwriting.
+IMAGE_SUFFIX = ".jpg"
+JPEG_QUALITY = 90
 
 #: What documents are called when the caller does not say. Namespace it per
 #: document type if several sets will be merged into one corpus.
@@ -295,7 +306,7 @@ def render_records(
 
         image, annotation, quality = _finish(document, record, augmentation)
         identifier = layout.document_id(position, prefix)
-        files = _write_sample(
+        files = write_sample(
             layout=layout,
             identifier=identifier,
             record=record,
@@ -309,7 +320,7 @@ def render_records(
         written.append(files)
         index_lines.append(
             json.dumps(
-                _index_entry(record, files, annotation, layout),
+                index_entry(record, files, annotation, layout),
                 ensure_ascii=False,
             )
         )
@@ -350,7 +361,7 @@ def _finish(
     return image, annotation, quality
 
 
-def _write_sample(
+def write_sample(
     layout: DatasetLayout,
     identifier: str,
     record: DocumentRecord,
@@ -361,12 +372,31 @@ def _write_sample(
     collection: str,
     draw_boxes: bool,
 ) -> SampleFiles:
-    """Write one page and the two schema records describing it."""
+    """Write one page and the two schema records describing it.
+
+    The transcription is written last, and whole: a page whose annotation
+    exists is complete, which is how an interrupted build knows where to
+    pick up.
+
+    Args:
+        layout: The dataset to write into.
+        identifier: The id every file for this page shares.
+        record: What the page was told to say.
+        generator: The generator that drew it.
+        image: The finished page.
+        annotation: Its ground truth.
+        quality: What the augmentation did.
+        collection: The batch name recorded on the page.
+        draw_boxes: Also write a box overlay.
+
+    Returns:
+        Where everything was written.
+    """
     facts_path = layout.facts / f"{identifier}.json"
-    image_path = layout.images / f"{identifier}.png"
+    image_path = layout.images / f"{identifier}{IMAGE_SUFFIX}"
     annotation_path = layout.annotations / f"{identifier}.json"
 
-    image.save(image_path)
+    image.convert("RGB").save(image_path, "JPEG", quality=JPEG_QUALITY)
     relative_image = image_path.relative_to(layout.root).as_posix()
 
     transcription = build_transcription_record(
@@ -377,22 +407,28 @@ def _write_sample(
         image_path=relative_image,
         collection=collection,
         quality=quality,
+        image_size=image.size,
+        original_file=image_path.name,
     )
-    annotation_path.write_text(
-        json.dumps(transcription.to_dict(), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
     facts = build_facts_record(record, identifier, relative_image, annotation)
     facts_path.write_text(
         json.dumps(facts.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
+    partial = annotation_path.with_suffix(".json.part")
+    partial.write_text(
+        json.dumps(transcription.to_dict(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    partial.replace(annotation_path)
+
     preview_path: Path | None = None
     if draw_boxes:
-        preview_path = layout.previews / f"{identifier}.png"
-        draw_annotations(image, annotation).save(preview_path)
+        preview_path = layout.previews / f"{identifier}{IMAGE_SUFFIX}"
+        draw_annotations(image, annotation).convert("RGB").save(
+            preview_path, "JPEG", quality=JPEG_QUALITY
+        )
 
     return SampleFiles(
         id=identifier,
@@ -403,13 +439,23 @@ def _write_sample(
     )
 
 
-def _index_entry(
+def index_entry(
     record: DocumentRecord,
     files: SampleFiles,
     annotation: DocumentAnnotation,
     layout: DatasetLayout,
 ) -> dict[str, Any]:
-    """Build one line of the data loader's index."""
+    """Build one line of the data loader's index.
+
+    Args:
+        record: What the page was told to say.
+        files: Where the page was written.
+        annotation: What was drawn.
+        layout: The dataset the page belongs to.
+
+    Returns:
+        The entry, ready to be written as one JSON line.
+    """
     return {
         "id": files.id,
         "image": files.image.relative_to(layout.root).as_posix(),
@@ -442,11 +488,12 @@ def draw_annotations(
     """
     preview = image.copy()
     draw = ImageDraw.Draw(preview)
+    # A block is drawn as the outline the annotation exports, so a skewed
+    # page shows its tilted regions rather than their enclosing boxes.
     for block in annotation.blocks:
-        if block.bbox:
-            draw.rectangle(
-                block.bbox.to_list(), outline=_BLOCK_OUTLINE, width=2
-            )
+        outline = block.outline
+        if outline:
+            draw.polygon(list(outline), outline=_BLOCK_OUTLINE, width=2)
     for line in annotation.lines:
         if line.bbox:
             draw.rectangle(line.bbox.to_list(), outline=_LINE_OUTLINE, width=3)
