@@ -1,0 +1,8 @@
+run:
+  name: p3-lr-attention-mlp-r64-a128-lr1e-4-s42
+  rank: 64
+  alpha: 128
+  learning_rate: 0.0001
+  seed: 42
+  output_dir: outputs/ablation/20260922-phase3-lr/p3-lr-attention-mlp-r64-a128-lr1e-4-s42
+  wandb_tags: [phase-3, lr-1e-4]

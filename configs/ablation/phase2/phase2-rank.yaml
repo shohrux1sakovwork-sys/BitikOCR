@@ -1,0 +1,70 @@
+schema_version: 1
+study:
+  id: 20260921-phase2-rank
+  phase: p2-rank
+  source_stage: 20260918-2k-v2
+  output_root: outputs/ablation
+  gpu: '1'
+  comparison_output: outputs/ablation/20260921-phase2-rank/rank_comparison.json
+
+wandb:
+  entity: isakovsh
+  project: BitikOCR
+  group: ablation-study-20260921-phase2-rank
+  tags: [ocr, qwen2.5-vl, ablation, phase-2, rank-sweep]
+  comparison_run_name: p2-rank-comparison
+
+model:
+  id: Qwen/Qwen2.5-VL-7B-Instruct
+  revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+
+data:
+  train_path: data/ablation_train.jsonl
+  eval_path: data/ablation_eval.jsonl
+  manifest_path: data/ablation_manifest.json
+  image_folder: data
+  eval_image_folder: data
+  expected_eval_samples: 400
+
+fixed:
+  seed: 42
+  data_seed: 42
+  epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8
+  bf16: true
+  gradient_checkpointing: true
+  learning_rate: 0.00002
+  optimizer: adamw_torch
+  scheduler: linear
+  warmup_steps: 0.0
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  image_min_pixels: 3136
+  image_max_pixels: 1003520
+  max_new_tokens: 1024
+
+lora:
+  target_name: attention-mlp
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  dropout: 0.0
+  alpha_per_rank: 2
+  freeze_vision_encoder: true
+
+reference:
+  name: p1-targets-attention-mlp-r16-a32-lr2e-05-s42
+  rank: 16
+  alpha: 32
+  source_metrics: outputs/ablation/20260918-2k-v2/p1-targets-attention-mlp-r16-a32-lr2e-05-s42-eval-attempt2/eval_results.json
+  source_resources: outputs/ablation/20260918-2k-v2/p1-targets-attention-mlp-r16-a32-lr2e-05-s42-eval-attempt2/resources.json
+
+runs:
+  - config: configs/ablation/phase2/rank-8.yaml
+  - config: configs/ablation/phase2/rank-32.yaml
+  - config: configs/ablation/phase2/rank-64.yaml
+
+selection:
+  metric: eval_cer
+  direction: minimize
+  tie_breakers: [eval_wer, trainable_parameters, rank]

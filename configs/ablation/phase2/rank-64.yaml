@@ -1,0 +1,8 @@
+run:
+  name: p2-rank-attention-mlp-r64-a128-lr2e-05-s42
+  rank: 64
+  alpha: 128
+  learning_rate: 0.00002
+  seed: 42
+  output_dir: outputs/ablation/20260921-phase2-rank/p2-rank-attention-mlp-r64-a128-lr2e-05-s42
+  wandb_tags: [phase-2, rank-64]

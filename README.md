@@ -40,7 +40,7 @@ data_args = DataArguments(
 )
 data_module = make_supervised_data_module(model_id, processor, data_args)
 loader = DataLoader(
-    dataset=data_module["dataset"],
+    dataset=data_module["train_dataset"],
     collate_fn=data_module["data_collator"],
     batch_size=2,
     shuffle=True,
@@ -71,11 +71,11 @@ produce different patch counts. See the
 [Transformers data collator documentation](https://huggingface.co/docs/transformers/main_classes/data_collator)
 for the general batching concept.
 
-`make_supervised_data_module` returns `dataset` and `data_collator`. When using
-Transformers `Trainer`, pass these explicitly as `train_dataset` and
-`data_collator`. No evaluation split or training loop is provided yet. Sequence
-length is not truncated; choose image limits and batch sizes for the model's
-context window and available memory. Sample data and notebooks stay local.
+`make_supervised_data_module` returns `train_dataset` and `data_collator`, plus
+`eval_dataset` and `eval_data_collator` when `eval_path` is configured. The
+training entry point is `python -m bitikocr.train.train`. Sequence length is
+not truncated; choose image limits and batch sizes for the model's context
+window and available memory. Sample data and notebooks stay local.
 
 ## Development checks
 
@@ -86,3 +86,29 @@ make test
 
 `make checks` runs Black, isort, Ruff, and mypy. `make test` runs the offline
 regression suite; it requires the training extra but no pretrained weights.
+
+## Ablation study
+
+Study settings and W&B run names are defined in [ablation.yaml](ablation.yaml).
+All runs log to `isakovsh/BitikOCR`. Supply `WANDB_API_KEY` through the process
+environment; do not store credentials in YAML or commit them.
+
+```bash
+uv run --locked --extra train python -m scripts.prepare_ablation_data
+uv run --locked --extra train python -m scripts.run_ablation --study-id my-study
+```
+
+The runner prepares 1,600 training and 400 development records from the existing
+training split, pilots GPU memory and checkpoint reload, evaluates an untuned
+baseline, and runs target, rank, learning-rate, and multi-seed confirmation stages.
+Each new candidate starts from the pretrained model. The reserved evaluation
+split is not scored during this study, and full-data training is a separate step.
+
+Use `--pilot-only` to stop after resource checks or `--prepare-only` for data
+preparation without GPU/model downloads. Restart with the same study ID to reuse
+completed runs when code, data, model, and configuration provenance match; changed
+settings require a new study ID. Results, logs, checkpoints, and resolved YAML
+files live in `outputs/ablation/<study-id>/`.
+
+The locked training environment uses the official PyTorch CUDA 12.8 builds for
+compatibility with this machine's NVIDIA driver. GPU 1 is selected in YAML.

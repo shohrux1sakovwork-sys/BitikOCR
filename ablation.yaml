@@ -1,0 +1,149 @@
+# Study configuration for scripts/run_ablation.py.
+schema_version: 1
+project:
+  name: BitikOCR
+  wandb:
+    project: BitikOCR
+    entity: isakovsh
+    mode: online
+    group_template: 'ablation-study-{study_id}'
+    run_name_template: '{phase}-{target}-r{rank}-a{alpha}-lr{lr_label}-s{seed}-attempt{attempt}'
+    baseline_name_template: 'baseline-untuned-attempt{attempt}'
+    full_training_name_template: 'full-{target}-r{rank}-a{alpha}-lr{lr_label}-s{seed}-attempt{attempt}'
+    tags: [ocr, qwen2.5-vl, ablation]
+
+study:
+  id: null  # Runner creates and persists a unique ID; reuse it on restart.
+  output_root: outputs/ablation
+  resolved_config_filename: resolved_config.yaml
+  gpu: '1'
+  fresh_pretrained_weights_per_run: true
+  reuse_matching_completed_runs: true
+  selection_metric: eval_cer
+  selection_direction: minimize
+  tie_breakers: [eval_wer, trainable_parameters, configuration_name]
+
+model:
+  model_id: Qwen/Qwen2.5-VL-7B-Instruct
+  revision: null  # Resolve and persist the exact revision before execution.
+
+data:
+  source_train: data/train.jsonl
+  reserved_eval: data/eval.jsonl
+  train_path: data/ablation_train.jsonl
+  development_path: data/ablation_eval.jsonl
+  manifest_path: data/ablation_manifest.json
+  train_samples: 1600
+  development_samples: 400
+  sampling_seed: 42
+  stratify_by: document_type
+  check_coverage: [script]
+  duplicate_group_keys: [id, image, fingerprint]
+  image_folder: data
+  eval_image_folder: data
+
+training:
+  seed: 42
+  data_seed: 42
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  optim: adamw_torch
+  learning_rate: 0.00002
+  lr_scheduler_type: linear
+  warmup_ratio: 0.0
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  eval_strategy: 'no'
+  save_strategy: 'no'
+  final_evaluation: true
+  save_final_checkpoint: true
+  report_to: [wandb]
+
+processing:
+  # Freeze these settings after the pilot, before baseline/screening.
+  image_min_pixels: 3136
+  image_max_pixels: 1003520
+  image_resized_width: null
+  image_resized_height: null
+  max_new_tokens: 1024
+  do_sample: false
+  num_beams: 1
+
+lora:
+  r: 16
+  alpha: 32
+  alpha_per_rank: 2
+  dropout: 0.0
+  use_rslora: false
+  target_scope: language_decoder
+  targets:
+    A:
+      name: qv
+      modules: [q_proj, v_proj]
+      freeze_vision_encoder: true
+    B:
+      name: qkvo
+      modules: [q_proj, k_proj, v_proj, o_proj]
+      freeze_vision_encoder: true
+    C:
+      name: attention-mlp
+      modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+      freeze_vision_encoder: true
+    D:
+      name: qkvo-vision
+      modules: [q_proj, k_proj, v_proj, o_proj]
+      freeze_vision_encoder: false
+      requires_successful_vision_pilot: true
+
+phases:
+  pilot:
+    name: p0-pilot
+    candidates:
+      - {target: C, rank: 64, alpha: 128}
+      - {target: D, rank: 64, alpha: 128}
+    verify_checkpoint_reload: true
+    include_generation_evaluation: true
+  baseline:
+    name: p0-baseline
+    train: false
+    attach_adapters: false
+    evaluate_all_development_samples: true
+  targets:
+    name: p1-targets
+    candidates: [A, B, C, D]
+    rank: 16
+    learning_rate: 0.00002
+  rank:
+    name: p2-rank
+    target_from: targets.winner
+    candidates: [8, 16, 32, 64]
+    learning_rate: 0.00002
+  learning_rate:
+    name: p3-lr
+    target_from: targets.winner
+    rank_from: rank.winner
+    candidates: [0.00001, 0.00002, 0.00005, 0.0001]
+  confirmation:
+    name: p4-confirm
+    top_distinct_screening_configs: 2
+    include_current_baseline_config: true
+    include_runner_up_target_with_selected_rank_and_lr: true
+    deduplicate_candidates: true
+    num_train_epochs: 3
+    seeds: [42, 43, 44]
+    data_seed_matches_training_seed: true
+    keep_data_split_fixed: true
+
+full_training:
+  # Shares project.wandb.project; resolve after confirmation, before final eval.
+  train_path: data/train.jsonl
+  eval_path: data/eval.jsonl
+  configuration_from: confirmation.selection
+  num_train_epochs: null
+  require_duration_policy_before_final_eval: true

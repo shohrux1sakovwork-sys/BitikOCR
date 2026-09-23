@@ -1,0 +1,68 @@
+schema_version: 1
+study:
+  id: 20260922-phase4-confirm
+  output_root: outputs/ablation/20260922-phase4-confirm
+  gpu: '1'
+  expected_eval_samples: 400
+  epochs: 3
+  seeds: [42, 43, 44]
+
+wandb:
+  entity: isakovsh
+  project: BitikOCR
+  group: ablation-study-20260922-phase4-confirm
+  tags: [ocr, qwen2.5-vl, ablation, phase-4, confirmation]
+
+model:
+  id: Qwen/Qwen2.5-VL-7B-Instruct
+  revision: cc594898137f460bfe9f0759e9844b3ce807cfb5
+
+data:
+  train_path: data/ablation_train.jsonl
+  eval_path: data/ablation_eval.jsonl
+  manifest_path: data/ablation_manifest.json
+  image_folder: data
+  eval_image_folder: data
+
+fixed:
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8
+  bf16: true
+  gradient_checkpointing: true
+  optimizer: adamw_torch
+  scheduler: linear
+  warmup_steps: 0.0
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  image_min_pixels: 3136
+  image_max_pixels: 1003520
+  max_new_tokens: 1024
+  lora_dropout: 0.0
+  freeze_vision_encoder: true
+
+candidates:
+  - id: attention-mlp-r64-lr1e-4
+    source: best_stage_3
+    rank: 64
+    alpha: 128
+    learning_rate: 0.0001
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  - id: attention-mlp-r64-lr5e-5
+    source: second_best_stage_3
+    rank: 64
+    alpha: 128
+    learning_rate: 0.00005
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  - id: qv-r16-lr2e-5
+    source: original_configuration
+    rank: 16
+    alpha: 32
+    learning_rate: 0.00002
+    target_modules: [q_proj, v_proj]
+  - id: qkvo-r64-lr1e-4
+    source: runner_up_stage_1_target
+    rank: 64
+    alpha: 128
+    learning_rate: 0.0001
+    target_modules: [q_proj, k_proj, v_proj, o_proj]
