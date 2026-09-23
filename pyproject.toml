@@ -33,13 +33,15 @@ bitikocr = "bitikocr.cli:main"
 train = [
     "accelerate>=1.14.0",
     "qwen-vl-utils>=0.0.14",
-    "torch>=2.14.0",
-    "torchvision>=0.29.0",
+    "torch==2.11.0",
+    "torchvision==0.26.0",
     "transformers>=5.16.1",
     "ujson>=5.10.0",
     "peft>=0.11.1",
     "jiwer>=4.0.0",
     "wandb>=0.19.0",
+    "datasets>=5.0.1",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.black]
@@ -52,3 +54,12 @@ line_length = 80
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }

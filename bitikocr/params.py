@@ -36,3 +36,47 @@ class GenerationArguments:
         default=1024,
         metadata={"help": "Maximum generated tokens per evaluation image."},
     )
+
+
+@dataclass
+class LoraArguments:
+    """Configure decoder adapters and optional visual model training."""
+
+    lora_r: int = 16
+    lora_alpha: int = 32
+    lora_target_modules: str = "q_proj,v_proj"
+    lora_dropout: float = 0.0
+    freeze_vision_encoder: bool = True
+
+    def __post_init__(self) -> None:
+        """Reject invalid adapter configurations before loading weights."""
+        allowed = {
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        }
+        targets = [item.strip() for item in self.lora_target_modules.split(",")]
+        if self.lora_r <= 0 or self.lora_alpha <= 0:
+            raise ValueError("LoRA rank and alpha must be positive.")
+        if not 0 <= self.lora_dropout < 1:
+            raise ValueError("LoRA dropout must be in [0, 1).")
+        if not targets or not set(targets) <= allowed:
+            raise ValueError(
+                "Specify nonempty supported decoder projection names."
+            )
+
+
+@dataclass
+class ExperimentArguments:
+    """Control final evaluation, baseline execution, and study artifacts."""
+
+    model_revision: str | None = None
+    evaluation_only: bool = False
+    final_evaluation: bool = False
+    resolved_config_path: str | None = None
+    adapter_path: str | None = None
+    verify_vision_update: bool = False

@@ -1,12 +1,16 @@
 """Train Qwen2.5-VL LoRA adapters and evaluate generated OCR text."""
 
+import json
 import os
 import sys
+import time
 from collections.abc import Callable, Sized
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any, cast
 
 import torch
-from peft import LoraConfig, get_peft_model
+from peft import PeftModel
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
     AutoProcessor,
@@ -16,11 +20,23 @@ from transformers import (
     Qwen2_5_VLForConditionalGeneration,
     Trainer,
     TrainingArguments,
+    set_seed,
 )
 from transformers.hf_argparser import DataClassType
 
 from bitikocr.data.sft_dataset import make_supervised_data_module
-from bitikocr.params import DataArguments, GenerationArguments, ModelArguments
+from bitikocr.params import (
+    DataArguments,
+    ExperimentArguments,
+    GenerationArguments,
+    LoraArguments,
+    ModelArguments,
+)
+from bitikocr.train.adapters import (
+    VisionUpdateCheck,
+    configure_adapters,
+    visual_digest,
+)
 from bitikocr.train.metrics import compute_ocr_metrics
 
 
@@ -49,6 +65,8 @@ class QwenOCRTrainer(Trainer):
         _validate_execution(self.args)
         self.eval_data_collator = eval_data_collator
         self.max_new_tokens = max_new_tokens
+        self.prediction_rows: list[dict[str, Any]] = []
+        self.generation_limit_hits: list[bool] = []
 
     def get_eval_dataloader(
         self, eval_dataset: str | Dataset | None = None
@@ -115,6 +133,12 @@ class QwenOCRTrainer(Trainer):
             use_cache=True,
         )
         output_ids = generated_ids[:, inputs["input_ids"].shape[1] :]
+        for row in output_ids:
+            eos = tokenizer.eos_token_id
+            self.generation_limit_hits.append(
+                len(row) >= self.max_new_tokens
+                and (eos is None or not bool((row == eos).any()))
+            )
         return tokenizer.batch_decode(
             output_ids,
             skip_special_tokens=True,
@@ -135,6 +159,7 @@ class QwenOCRTrainer(Trainer):
         dataloader = self.get_eval_dataloader(eval_dataset)
         tokenizer = self._get_tokenizer()
         predictions: list[str] = []
+        self.generation_limit_hits = []
         references: list[str] = []
         model = self.model
         if model is None:
@@ -151,6 +176,16 @@ class QwenOCRTrainer(Trainer):
         finally:
             model.train(was_training)
 
+        self.prediction_rows = [
+            {
+                "prediction": prediction,
+                "reference": reference,
+                "generation_limit_hit": hit,
+            }
+            for prediction, reference, hit in zip(
+                predictions, references, self.generation_limit_hits
+            )
+        ]
         metrics = {
             f"{metric_key_prefix}_{key}": value
             for key, value in compute_ocr_metrics(
@@ -171,6 +206,8 @@ def train() -> None:
             DataClassType(ModelArguments),
             DataClassType(DataArguments),
             DataClassType(GenerationArguments),
+            DataClassType(LoraArguments),
+            DataClassType(ExperimentArguments),
             DataClassType(TrainingArguments),
         ]
     )
@@ -178,19 +215,61 @@ def train() -> None:
         parsed = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
         parsed = parser.parse_args_into_dataclasses()
-    model_args, data_args, generation_args, training_args = parsed
+    (
+        model_args,
+        data_args,
+        generation_args,
+        lora_args,
+        experiment_args,
+        training_args,
+    ) = parsed
+    set_seed(training_args.seed)
+    started = time.monotonic()
     _validate_execution(training_args)
     if generation_args.max_new_tokens <= 0:
         raise ValueError("max_new_tokens must be positive.")
-    if training_args.eval_strategy != "no" and not data_args.eval_path:
+    if (
+        training_args.eval_strategy != "no"
+        or experiment_args.final_evaluation
+        or experiment_args.evaluation_only
+    ) and not data_args.eval_path:
         raise ValueError("Set eval_path when enabling evaluation.")
 
-    processor = AutoProcessor.from_pretrained(model_args.model_id)
+    processor = AutoProcessor.from_pretrained(
+        model_args.model_id, revision=experiment_args.model_revision
+    )
+    wandb_run = None
+    if (
+        experiment_args.resolved_config_path
+        and "wandb" in training_args.report_to
+    ):
+        import yaml
+
+        import wandb
+
+        resolved = yaml.safe_load(
+            Path(experiment_args.resolved_config_path).read_text()
+        )
+        wandb_run = wandb.init(
+            project=os.environ["WANDB_PROJECT"],
+            entity=os.environ.get("WANDB_ENTITY"),
+            group=os.environ.get("WANDB_RUN_GROUP"),
+            name=training_args.run_name,
+            config=resolved,
+            dir=training_args.output_dir,
+            settings=wandb.Settings(init_timeout=120),
+        )
+        if wandb_run is not None:
+            Path(training_args.output_dir, "wandb_url.txt").write_text(
+                wandb_run.url or ""
+            )
     data_module = make_supervised_data_module(
         model_args.model_id, processor, data_args
     )
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-        model_args.model_id, dtype=torch.bfloat16
+        model_args.model_id,
+        revision=experiment_args.model_revision,
+        dtype=torch.bfloat16,
     )
     model.config.use_cache = False
     if training_args.gradient_checkpointing:
@@ -198,17 +277,20 @@ def train() -> None:
             **(training_args.gradient_checkpointing_kwargs or {}),
             "use_reentrant": False,
         }
-    peft_model = get_peft_model(
-        model,
-        LoraConfig(
-            r=16,
-            lora_alpha=32,
-            target_modules=["q_proj", "v_proj"],
-            bias="none",
-            task_type="CAUSAL_LM",
-        ),
+    peft_model: Any
+    if experiment_args.adapter_path:
+        peft_model = PeftModel.from_pretrained(
+            model, experiment_args.adapter_path
+        )
+    elif experiment_args.evaluation_only:
+        peft_model = model
+    else:
+        peft_model = configure_adapters(model, lora_args)
+    output = Path(training_args.output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    update_check = (
+        VisionUpdateCheck() if experiment_args.verify_vision_update else None
     )
-    peft_model.print_trainable_parameters()
     trainer = QwenOCRTrainer(
         model=peft_model,
         processing_class=processor,
@@ -218,10 +300,90 @@ def train() -> None:
         data_collator=data_module["data_collator"],
         eval_data_collator=data_module.get("eval_data_collator"),
         max_new_tokens=generation_args.max_new_tokens,
+        callbacks=[update_check] if update_check is not None else [],
     )
-    trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
-    trainer.save_state()
-    trainer.save_model(training_args.output_dir)
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    train_metrics = {}
+    if not experiment_args.evaluation_only:
+        result = trainer.train(
+            resume_from_checkpoint=training_args.resume_from_checkpoint
+        )
+        train_metrics = result.metrics
+        trainer.save_metrics("train", train_metrics)
+        trainer.save_state()
+        trainer.save_model(training_args.output_dir)
+        processor.save_pretrained(training_args.output_dir)
+    metrics = {}
+    if experiment_args.final_evaluation or experiment_args.evaluation_only:
+        metrics = trainer.evaluate()
+        rows = trainer.prediction_rows
+        dataset = data_module["eval_dataset"]
+        for row, record in zip(rows, dataset.list_data_dict):
+            row.update(
+                {
+                    key: record.get(key)
+                    for key in ("id", "document_type", "script")
+                }
+            )
+        metrics["eval_samples"] = len(rows)
+        metrics["eval_generation_limit_hits"] = sum(
+            row["generation_limit_hit"] for row in rows
+        )
+        for category in ("document_type", "script"):
+            for value in sorted({str(row[category]) for row in rows}):
+                subset = [row for row in rows if str(row[category]) == value]
+                for key, score in compute_ocr_metrics(
+                    [row["prediction"] for row in subset],
+                    [row["reference"] for row in subset],
+                ).items():
+                    metrics[f"eval_{category}_{value}_{key}"] = score
+        trainer.save_metrics("eval", metrics)
+        (output / "predictions.jsonl").write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+        )
+        if wandb_run is not None:
+            wandb_run.log(metrics)
+    resources = {
+        "wall_seconds": time.monotonic() - started,
+        "trainable_parameters": sum(
+            p.numel() for p in peft_model.parameters() if p.requires_grad
+        ),
+        "total_parameters": sum(p.numel() for p in peft_model.parameters()),
+        "peak_allocated_bytes": (
+            torch.cuda.max_memory_allocated()
+            if torch.cuda.is_available()
+            else 0
+        ),
+        "peak_reserved_bytes": (
+            torch.cuda.max_memory_reserved() if torch.cuda.is_available() else 0
+        ),
+        "target_modules": getattr(peft_model, "ocr_target_modules", []),
+        "lora": asdict(lora_args),
+        "vision_digest": (
+            visual_digest(peft_model)
+            if not lora_args.freeze_vision_encoder
+            else ""
+        ),
+        "vision_gradient_verified": (
+            update_check.observed_gradient if update_check else None
+        ),
+        "vision_update_verified": (
+            update_check.observed_update if update_check else None
+        ),
+    }
+    (output / "resources.json").write_text(json.dumps(resources, indent=2))
+    if update_check and not (
+        update_check.observed_gradient and update_check.observed_update
+    ):
+        raise ValueError(
+            "Vision pilot did not verify a nonzero gradient and weight update."
+        )
+    if wandb_run is not None:
+        wandb_run.summary.update(
+            {k: v for k, v in resources.items() if k != "target_modules"}
+        )
+        wandb_run.finish()
 
 
 if __name__ == "__main__":
