@@ -16,9 +16,16 @@ from typing import Any, Literal, cast
 from bitikocr.data.synthetic.fonts import FontInfo, FontLibrary
 
 __all__ = [
+    "BALLPOINT_SHARE",
+    "FONT_SIZE_RANGE",
+    "GLYPH_WARP_RANGE",
+    "HEADER_X_RANGE",
     "INK_PALETTE",
+    "LETTER_SPACING_RANGE",
+    "LINE_SPACING_RANGE",
     "PAPER_PALETTE",
     "PENCIL_COLOR",
+    "WORD_SPACING_RANGE",
     "Color",
     "HandwritingStyle",
     "PenKind",
@@ -54,6 +61,36 @@ _STROKE_RANGE: dict[PenKind, tuple[float, float]] = {
     "gel": (2.8, 4.0),
     "soft": (3.2, 4.8),
 }
+
+#: How far a written letter's shape strays from the font's, times the
+#: nominal size. The top of the range is still read at a glance; past it
+#: loops start closing and an "о" turns into an "а".
+GLYPH_WARP_RANGE = (0.02, 0.06)
+
+#: Nominal handwriting size, in pixels at 200 dpi. The archive's writers
+#: write large — an x-height near 6 mm — so the range reaches well above a
+#: font's comfortable size; a letter too long for its page is still shrunk
+#: to fit.
+FONT_SIZE_RANGE = (66, 104)
+
+#: Share of writers whose strokes are redrawn as a ballpoint line.
+BALLPOINT_SHARE = 0.8
+
+#: Gap between letters, times the nominal size, and between words, times
+#: the font's own space. Fonts join their letters; many of the archive's
+#: writers lift the pen between them and leave two or three letters' room
+#: between words, so the ranges reach well past what a font sets.
+LETTER_SPACING_RANGE = (-0.09, 0.14)
+WORD_SPACING_RANGE = (0.9, 2.4)
+
+#: Baseline step, times the nominal size. The archive's writers keep their
+#: lines close and their letters large, rather than small letters widely
+#: spaced; a close step leaves the letter room to stay large on its page.
+LINE_SPACING_RANGE = (1.15, 1.6)
+
+#: Where the addressee block starts, as a share of the page width. Real
+#: blocks start anywhere from just left of the middle.
+HEADER_X_RANGE = (0.42, 0.60)
 
 
 @dataclass(frozen=True)
@@ -95,6 +132,16 @@ class HandwritingStyle:
         title_scale: Title size, times ``font_size``.
         header_scale: Header size, times ``font_size``.
         signature_scribble: Whether the writer signs with a scribble.
+        glyph_warp: How far each written letter's shape strays from the
+            font's, times ``font_size``. No hand draws the same letter
+            twice: without this every copy of a letter on a page is the
+            same bitmap, which a recogniser learns to match instead of to
+            read.
+        slant_jitter: Random variation of the slant from letter to letter.
+        ballpoint: Whether the font's strokes are redrawn as a ballpoint
+            line: one width, uneven pressure, the odd skip. The archive is
+            written almost entirely in ballpoint; the rest of the pages keep
+            the font's own stroke, as a felt or fountain pen would.
     """
 
     font: str
@@ -126,6 +173,9 @@ class HandwritingStyle:
     title_scale: float
     header_scale: float
     signature_scribble: bool
+    glyph_warp: float = 0.0
+    slant_jitter: float = 0.0
+    ballpoint: bool = False
 
     def replace(self, **changes: Any) -> HandwritingStyle:
         """Return a copy of this style with some fields changed.
@@ -190,15 +240,15 @@ def sample_style(rng: random.Random, library: FontLibrary) -> HandwritingStyle:
     return HandwritingStyle(
         font=main_font.name,
         second_font=_pick_second_font(library, main_font, rng).name,
-        font_size=rng.randint(62, 90),
+        font_size=rng.randint(*FONT_SIZE_RANGE),
         pen=pen,
         stroke_px=rng.uniform(*_STROKE_RANGE[pen]),
         ink=_jitter_color(rng.choice(INK_PALETTE), rng),
         paper=rng.choice(PAPER_PALETTE),
         slant=rng.uniform(-0.05, 0.45),
-        letter_spacing=rng.uniform(-0.09, 0.10),
-        word_spacing=rng.uniform(0.9, 1.6),
-        line_spacing=rng.uniform(1.35, 1.85),
+        letter_spacing=rng.uniform(*LETTER_SPACING_RANGE),
+        word_spacing=rng.uniform(*WORD_SPACING_RANGE),
+        line_spacing=rng.uniform(*LINE_SPACING_RANGE),
         line_spacing_jitter=rng.uniform(0.0, 0.12),
         line_slope=rng.uniform(-1.4, 1.4),
         line_slope_jitter=rng.uniform(0.0, 0.8),
@@ -211,10 +261,13 @@ def sample_style(rng: random.Random, library: FontLibrary) -> HandwritingStyle:
         indent=rng.uniform(0.8, 3.0),
         left_margin=rng.uniform(0.08, 0.15),
         right_margin=rng.uniform(0.86, 0.96),
-        header_x=rng.uniform(0.50, 0.62),
+        header_x=rng.uniform(*HEADER_X_RANGE),
         top_margin=rng.uniform(0.025, 0.08),
         title_x=rng.uniform(0.40, 0.56),
         title_scale=rng.uniform(1.1, 1.4),
         header_scale=rng.uniform(0.9, 1.05),
         signature_scribble=rng.random() < 0.9,
+        glyph_warp=rng.uniform(*GLYPH_WARP_RANGE),
+        slant_jitter=rng.uniform(0.0, 0.08),
+        ballpoint=rng.random() < BALLPOINT_SHARE,
     )

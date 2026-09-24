@@ -22,6 +22,7 @@ from bitikocr.data.synthetic.fonts import (
     open_font,
     pixel_size_for,
 )
+from bitikocr.data.synthetic.pen import redraw_ballpoint
 from bitikocr.data.synthetic.style import Color, HandwritingStyle
 
 __all__ = ["Hand"]
@@ -35,6 +36,20 @@ _PIXELS_PER_MORPHOLOGY_PASS = 2.0
 _MAX_EROSION_SHARE = 0.55
 
 _MISSING_GLYPH = "?"
+
+# Columns and rows of the grid a letter is reshaped on. A letter spans about
+# three cells each way, so its strokes bend rather than just shift.
+_WARP_GRID = (6, 6)
+
+# Widest a pen line may be, as a share of the hand's nominal size: about a
+# fifth of the x-height, which the fonts are scaled to share. A pen keeps
+# its width however small the writing, so without this a letter shrunk to
+# fit its page clogs into blots.
+_MAX_STROKE_SHARE = 0.06
+
+# The same for a ballpoint: its line is finer than any font's stroke, about
+# a sixteenth of the writing's x-height on the archive's scans.
+_MAX_BALLPOINT_SHARE = 0.035
 
 # Ceiling on the opacity gain that stands in for sub-pixel stroke width.
 # Beyond this a thin hand stops looking like ink and starts looking printed.
@@ -78,6 +93,16 @@ class Hand:
         self.stroke_width = max(2, round(self.pixel_size * 0.045))
         self.space_advance = self.font.getlength(" ") * style.word_spacing
         self.letter_gap = style.letter_spacing * size
+
+    @property
+    def ballpoint_width(self) -> float:
+        """The line a ballpoint draws for this hand, in pixels.
+
+        The pen's own width, held to the size of the writing. The font's
+        stroke does not enter into it: the redrawn line follows the pen, and
+        the ink strength that thickens a thin font has nothing to thicken.
+        """
+        return min(self.style.stroke_px, self.size * _MAX_BALLPOINT_SHARE)
 
     def resized(self, size: int) -> Hand:
         """Return the same hand writing at a different nominal size.
@@ -267,6 +292,7 @@ class Hand:
                 glyph = glyph.rotate(
                     rotation, resample=Image.Resampling.BILINEAR, expand=False
                 )
+            glyph = self._reshape(glyph)
             if alpha < 0.995:
                 glyph = glyph.point(lambda v, a=alpha: int(v * a))
 
@@ -287,8 +313,11 @@ class Hand:
 
             x += advance * scale + self.letter_gap
 
-        ink = self._apply_pen(ink)
-        ink = self._apply_ink_texture(ink)
+        if style.ballpoint:
+            ink = redraw_ballpoint(ink, self.ballpoint_width, self.size, rng)
+        else:
+            ink = self._apply_pen(ink)
+            ink = self._apply_ink_texture(ink)
         ink, slant_margin = self._apply_slant(ink)
 
         rendered = Image.new("RGBA", ink.size, color + (0,))
@@ -301,6 +330,76 @@ class Hand:
         # it; the caller subtracts this offset to put the first stroke back
         # where it asked for.
         return rendered, self.padding + slant_margin
+
+    def _reshape(self, glyph: Image.Image) -> Image.Image:
+        """Give one written copy of a letter a shape of its own.
+
+        The glyph is laid on a coarse grid whose inner points are pushed a
+        little each way, and sheared about the baseline by a slant of its
+        own, so a stroke bends smoothly rather than breaking. The outer
+        frame stays put, so no ink leaves the canvas.
+
+        Args:
+            glyph: The letter's mask on the shared glyph canvas.
+
+        Returns:
+            The reshaped mask, the same size.
+        """
+        reach = self.style.glyph_warp * self.size
+        shear = self.rng.gauss(0, self.style.slant_jitter)
+        if reach < 0.5 and abs(shear) < 0.005:
+            return glyph
+
+        width, height = glyph.size
+        baseline = height * self.baseline / self.canvas_height
+        columns, rows = _WARP_GRID
+        points = [
+            [
+                self._warped_point(
+                    width * column / columns,
+                    height * row / rows,
+                    reach if 0 < column < columns and 0 < row < rows else 0.0,
+                    shear,
+                    baseline,
+                )
+                for row in range(rows + 1)
+            ]
+            for column in range(columns + 1)
+        ]
+        mesh = []
+        for column in range(columns):
+            for row in range(rows):
+                cell = (
+                    int(width * column / columns),
+                    int(height * row / rows),
+                    int(width * (column + 1) / columns),
+                    int(height * (row + 1) / rows),
+                )
+                # Source corners in PIL's order: upper left, lower left,
+                # lower right, upper right.
+                quad = (
+                    *points[column][row],
+                    *points[column][row + 1],
+                    *points[column + 1][row + 1],
+                    *points[column + 1][row],
+                )
+                mesh.append((cell, quad))
+        return glyph.transform(
+            glyph.size,
+            Image.Transform.MESH,
+            mesh,
+            resample=Image.Resampling.BILINEAR,
+        )
+
+    def _warped_point(
+        self, x: float, y: float, reach: float, shear: float, baseline: float
+    ) -> tuple[float, float]:
+        """Return where one grid point samples the unwarped glyph from."""
+        x += shear * (y - baseline)
+        if reach:
+            x += self.rng.gauss(0, reach)
+            y += self.rng.gauss(0, reach)
+        return x, y
 
     # -- post effects ------------------------------------------------------
 
@@ -321,7 +420,10 @@ class Hand:
             The mask with the pen's stroke weight and edge quality applied.
         """
         natural = self.info.stroke_ratio * self.pixel_size
-        wanted = self.style.stroke_px * self.style.ink_strength
+        wanted = min(
+            self.style.stroke_px * self.style.ink_strength,
+            self.size * _MAX_STROKE_SHARE,
+        )
         difference = wanted - natural
         passes = round(abs(difference) / _PIXELS_PER_MORPHOLOGY_PASS)
 

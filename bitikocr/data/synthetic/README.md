@@ -103,11 +103,13 @@ it.
 | `fonts.py` | Font discovery, coverage checks, size equalisation | Documents, pages |
 | `style.py` | The sampled "writer": pen, ink, slant, spacing | Rendering, layout |
 | `hand.py` | Turning a string into handwritten ink | Documents, pages |
-| `effects.py` | Signature scribbles and round office seals | Documents, text |
+| `pen.py` | Tracing a written line to its centre and inking it again as a ballpoint | Fonts, documents |
+| `effects.py` | Signature scribbles, round seals and rectangular incoming stamps | Documents, text |
 | `system_fonts.py` | Printed fonts for stamps and serial numbers | Handwriting |
 | `templates.py` | The measured geometry of one blank form | Rendering, handwriting |
 | `ink.py` | Measuring the ink a rendered layer carries | Documents, pages |
 | `annotation.py` | What was drawn, in this module's own terms | The corpus schema |
+| `transcript.py` | Spelling a finished page out by rows, with `<stamp>` and `<signature>` markup | Which document it is |
 | `layout.py` | Placing ink and recording what was placed | Which document is being made |
 | `generators/` | Where things go on one kind of document | What it says, how it ages |
 | `phrases.py` | Checked wording from outside the samplers | Where it came from |
@@ -212,10 +214,11 @@ slant, line slope and scan skew.
 | `--augment` | render | How hard to spoil each page; `0` disables it |
 | `--boxes` | render | Also write a box overlay per page |
 
-`--latin-share` is set from the font library rather than from the archive:
-six fonts can write Latin against seventeen for Cyrillic, and 0.3 gives
-each font of either alphabet roughly the same number of pages. An even split
-would lean the Latin half on too few hands. Move it as fonts are added.
+`--latin-share` follows the archive, whose handwriting is overwhelmingly
+Cyrillic: the Latin a real page carries is mostly printed, on its stamps and
+forms. 28 hands can write Latin and 23 Cyrillic, so neither half leans on a
+few hands. Where the fonts came from, and their licences, is in
+`assets/fonts/licenses/`.
 
 `--ink` exists because the shipped hands vary a lot in stroke weight and the
 thinnest wrote too faintly to read once a page had been aged. Raise it if a
@@ -344,6 +347,26 @@ certificate has "I-HR №" on the paper and takes the bare digits, while the
 single-page one has nothing there and is given `"prefix": "№"`, so the page
 reads `II-HR № 0024695`. Printed type shrinks to stay inside its measured
 area, since the series and the serial sit side by side.
+
+What the blank form prints for itself — its title, the label in front of
+each rule, the captions under them — is listed under `printed_text`, one
+entry per printed line. It is never drawn, since the scan already carries
+it, but it is transcribed: a real annotator writes a form's labels down
+along with what fills them, so a synthetic target does too. A form printed
+as two facing sheets gives their extents under `columns`, and its text is
+read one sheet after the other:
+
+```json
+"columns": [[0, 710], [710, 1419]],
+"printed_text": [
+  {"text": "O'LIM HAQIDA GUVOHNOMA", "bbox_xyxy": [178, 234, 535, 258]}
+]
+```
+
+A value is read on the row of the label printed on its rule, so the page
+reads `Tug‘ilgan vaqti: 1999 yil fevral 20`, as the archive's own
+transcriptions do. The seal is read as `<stamp>` … `</stamp>` where it
+sits, and the registrar's scribble as `<signature>`.
 
 Both spellings of a box are accepted — `bbox_xyxy: [x1, y1, x2, y2]` and
 `bbox: {x1, y1, x2, y2}` — and both spellings of a rule, `underline_y` (the

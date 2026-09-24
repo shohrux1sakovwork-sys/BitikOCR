@@ -46,8 +46,10 @@
 │           ├── fonts.py         # Font discovery, coverage, metrics
 │           ├── style.py         # HandwritingStyle and its sampler
 │           ├── hand.py          # The handwriting renderer
-│           ├── effects.py       # Signature scribbles, round office seals
+│           ├── pen.py           # Redrawing strokes as a ballpoint line
+│           ├── effects.py       # Signature scribbles, office stamps
 │           ├── annotation.py    # The generator's own ground truth
+│           ├── transcript.py    # A page spelled out as an annotator reads it
 │           ├── layout.py        # Page canvas + ground-truth collection
 │           ├── templates.py     # Measured geometry of pre-printed forms
 │           ├── system_fonts.py  # Printed fonts for stamps and serials
@@ -146,8 +148,10 @@ ground truth. It is layered so each piece has exactly one job:
 | `fonts`          | Font files, coverage, proportions            | Documents, pages, styles   |
 | `style`          | What varies between writers and sheets       | Rendering, layout          |
 | `hand`           | Turning a string into handwritten ink        | Documents, pages           |
+| `pen`            | How a ballpoint lays down a traced line      | Fonts, documents           |
 | `effects`        | Signatures and office seals                  | Documents, text            |
 | `annotation`     | What was drawn, in the generator's own terms | The corpus schema          |
+| `transcript`     | Reading a page by rows, in the archive's markup | Documents, rendering       |
 | `layout`         | Placing ink and recording what was placed    | Which document is being made |
 | `templates`      | Measured geometry of one blank form          | Rendering, handwriting     |
 | `scripts`        | The two alphabets and how to convert         | Documents, rendering       |

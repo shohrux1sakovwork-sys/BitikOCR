@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import random
 
+import numpy as np
+
 from bitikocr.data.synthetic.fonts import FontLibrary
 from bitikocr.data.synthetic.hand import Hand
 from bitikocr.data.synthetic.layout import (
@@ -99,7 +101,7 @@ def test_a_block_box_encloses_its_line_boxes(
         assert block.right >= line.bbox.right
 
 
-def test_the_annotation_follows_the_reading_order(
+def test_the_annotation_reads_top_to_bottom(
     library: FontLibrary, style: HandwritingStyle
 ) -> None:
     hand = make_hand(library, style)
@@ -189,3 +191,39 @@ def test_a_line_wider_than_the_page_is_reported_as_clipped(
     page.put_lines("body", [TEXT], hand, 10, 200)
     annotation = page.annotation(("body",))
     assert annotation.metadata[CLIPPED_KEY] == ["body"]
+
+
+def test_no_two_copies_of_a_letter_are_drawn_alike(
+    library: FontLibrary, style: HandwritingStyle
+) -> None:
+    """Copies of one letter differ once the hand reshapes them, and only
+    then; everything else that varies a letter is held still here."""
+    still = style.replace(
+        char_scale_jitter=0.0,
+        char_rot_jitter=0.0,
+        char_y_jitter=0.0,
+        baseline_wobble=0.0,
+        ink_variation=0.0,
+        slant_jitter=0.0,
+    )
+
+    def copies(glyph_warp: float) -> list[bytes]:
+        hand = make_hand(library, still.replace(glyph_warp=glyph_warp))
+        glyph, _ = hand.glyph("а")
+        return [hand._reshape(glyph).tobytes() for _ in range(3)]
+
+    assert len(set(copies(0.0))) == 1
+    assert len(set(copies(0.05))) == 3
+
+
+def test_a_ballpoint_hand_writes_a_finer_line_than_its_font(
+    library: FontLibrary, style: HandwritingStyle
+) -> None:
+    """The redrawn line follows the pen, not the font's broad strokes."""
+
+    def ink(ballpoint: bool) -> int:
+        hand = make_hand(library, style.replace(ballpoint=ballpoint))
+        rendered, _ = hand.render_line(TEXT, (0, 0, 0))
+        return int((np.asarray(rendered.getchannel("A")) > 128).sum())
+
+    assert ink(True) < ink(False)
