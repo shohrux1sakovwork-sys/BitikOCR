@@ -18,7 +18,7 @@ from typing import Any
 
 from bitikocr.data.synthetic import corpus
 from bitikocr.data.synthetic.phrases import PhraseBank
-from bitikocr.data.synthetic.scripts import Script, in_script
+from bitikocr.data.synthetic.scripts import Script, in_script, to_cyrillic
 
 __all__ = [
     "BANK_SHARE",
@@ -40,13 +40,12 @@ _MAX_SEED = 2**31
 #: is the axis the corpus balances on.
 MODERN_FROM = 2000
 
-#: Share of records written in Latin when no script is forced. The archive
-#: holds both alphabets, but the font library is not evenly split, so this
-#: is set to spread the work across the hands rather than to mirror the
-#: archive: six fonts can write Latin against seventeen for Cyrillic, and
-#: 0.3 gives each font of either alphabet roughly the same number of pages.
-#: Move it as fonts are added, or override it per batch with
-#: ``--latin-share``.
+#: Share of records written in Latin when no script is forced. It follows
+#: the archive, whose handwriting is overwhelmingly Cyrillic; the Latin a
+#: real page carries is mostly printed, on its stamps and forms, which every
+#: page now has whatever it is written in. With 28 hands able to write Latin
+#: against 23 for Cyrillic, a Latin page is spread over more hands than a
+#: Cyrillic one, not fewer. Override it per batch with ``--latin-share``.
 DEFAULT_LATIN_SHARE = 0.3
 
 #: Chance a sampler takes a slot's wording from the phrase bank rather than
@@ -73,6 +72,29 @@ _ARIZA_OPENINGS: tuple[str, ...] = (
 )
 
 _TITLES: tuple[str, ...] = ("Ariza",)
+
+#: Share of applications that reach the page with the receiving office's
+#: stamp on them; the rest carry the filing number written by hand alone.
+_REGISTRATION_STAMP_SHARE = 0.75
+
+#: Share of registration stamps made in Cyrillic rather than Latin.
+_CYRILLIC_STAMP_SHARE = 0.2
+
+#: What a registration stamp names under the governor, if anything: the
+#: office that keeps the post.
+_REGISTRATION_OFFICES: tuple[tuple[str, ...], ...] = (
+    ("apparati",),
+    ("mahkamasi",),
+    ("devonxonasi",),
+    (),
+)
+
+#: The row the filing number is written after.
+_REGISTRATION_ENTRIES: tuple[str, ...] = (
+    "kelgan №",
+    "kelgan arizalar №",
+    "kiruvchi №",
+)
 
 #: What a citizen consents to. Between them these cover the three
 #: subjects the scanned letters carry — a shared boundary, a
@@ -555,9 +577,9 @@ def _sample_ariza(
     """Sample the content of one application letter."""
     official = corpus.sample_person(rng, script, is_female=False)
     applicant = corpus.sample_person(rng, script)
-    place = corpus.sample_place(rng, script)
+    region, town, is_city = corpus.sample_town(rng)
 
-    district = place["district"]
+    district = in_script(f"{town} {'shahri' if is_city else 'tumani'}", script)
     street = corpus.sample_person(rng, script).surname
     house = rng.randint(1, 120)
 
@@ -608,9 +630,47 @@ def _sample_ariza(
         fields["phone"] = f"9989{rng.randrange(10**8):08d}"
     if rng.random() < 0.3:
         fields.pop("page_number")
+    if rng.random() < _REGISTRATION_STAMP_SHARE:
+        fields["reg_stamp"] = _registration_stamp(rng, region, town, is_city)
     return SampledContent(
         fields=fields, year=year, dates={"filed": _iso(year, month, day)}
     )
+
+
+def _registration_stamp(
+    rng: random.Random, region: str, town: str, is_city: bool
+) -> list[str]:
+    """Word the stamp an office presses on the letters it receives.
+
+    The office is the one the letter is addressed to. The stamp is made
+    once for the office, so it is usually in Latin capitals whatever the
+    letter is written in — the commonest way a Cyrillic letter comes to
+    carry Latin — and it spells the office the way the stamp maker did.
+
+    Args:
+        rng: Random source.
+        region: The office's region, in Latin.
+        town: The office's town, in Latin.
+        is_city: Whether the town is governed as a city.
+
+    Returns:
+        The stamp's rows, top to bottom. The row ending in ``№`` leaves
+        room for the filing number and an empty row room for the date;
+        the clerk writes both in.
+    """
+    rows = []
+    if rng.random() < 0.6:
+        rows.append(f"{region} viloyati")
+    governor = rng.choice(("hokimi", "xokimi"))
+    rows.append(f"{town} {'shahar' if is_city else 'tuman'} {governor}")
+    rows.extend(rng.choice(_REGISTRATION_OFFICES))
+    rows.append(rng.choice(_REGISTRATION_ENTRIES))
+    rows = [row.upper() for row in rows]
+    if rng.random() < _CYRILLIC_STAMP_SHARE:
+        rows = [to_cyrillic(row) for row in rows]
+    if rng.random() < 0.85:
+        rows.append("")
+    return rows
 
 
 # -- consent letter --------------------------------------------------------

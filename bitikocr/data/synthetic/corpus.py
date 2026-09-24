@@ -31,6 +31,7 @@ __all__ = [
     "sample_organisation",
     "sample_person",
     "sample_place",
+    "sample_town",
 ]
 
 #: Month names. Cyrillic is spelled out because the Latin forms iotate
@@ -564,6 +565,22 @@ def surname_stem(rng: random.Random) -> str:
     return rng.choice(_SURNAME_STEMS)
 
 
+def sample_town(rng: random.Random) -> tuple[str, str, bool]:
+    """Sample a town and the region it is in, by their bare Latin names.
+
+    Args:
+        rng: Random source.
+
+    Returns:
+        ``(region, district, is_city)``: whether the district is governed
+        as a city or as a rural district decides whether it is a
+        ``shahar`` or a ``tuman``.
+    """
+    region = rng.choice(list(DISTRICTS))
+    district = rng.choice(DISTRICTS[region])
+    return region, district, rng.random() < 0.5
+
+
 def sample_place(rng: random.Random, script: Script) -> dict[str, str]:
     """Sample a place of birth or death.
 
@@ -575,9 +592,7 @@ def sample_place(rng: random.Random, script: Script) -> dict[str, str]:
         ``country``, ``region``, ``district`` and ``settlement``, each
         already written in ``script`` with its Uzbek suffix.
     """
-    region = rng.choice(list(DISTRICTS))
-    district = rng.choice(DISTRICTS[region])
-    is_city = rng.random() < 0.5
+    region, district, is_city = sample_town(rng)
 
     return {
         "country": in_script("O'zbekiston", script),

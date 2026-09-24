@@ -465,3 +465,43 @@ def test_an_explanation_is_dated_as_the_record_says() -> None:
             continue
         year, month, day = record.dates["filed"].split("-")
         assert record.fields["date"] == f"{day}.{month}.{year}"
+
+
+def test_most_applications_carry_the_offices_incoming_stamp() -> None:
+    stamped = [
+        sample_record("ariza", random.Random(seed), "cyrillic").fields.get(
+            "reg_stamp"
+        )
+        for seed in range(200)
+    ]
+    share = sum(rows is not None for rows in stamped) / len(stamped)
+    assert 0.6 < share < 0.9
+
+
+def test_an_incoming_stamp_leaves_room_for_the_filing_number() -> None:
+    for seed in range(200):
+        rows = sample_record("ariza", random.Random(seed)).fields.get(
+            "reg_stamp"
+        )
+        if rows is None:
+            continue
+        printed = [row for row in rows if row]
+        assert printed[-1].endswith("№")
+        assert all(row == row.upper() for row in printed)
+        assert rows.count("") <= 1
+
+
+def test_incoming_stamps_are_mostly_latin_whatever_the_letter() -> None:
+    """The commonest way a Cyrillic letter comes to carry Latin."""
+    latin = cyrillic = 0
+    for seed in range(300):
+        rows = sample_record(
+            "ariza", random.Random(seed), "cyrillic"
+        ).fields.get("reg_stamp")
+        if rows is None:
+            continue
+        if any("A" <= char <= "Z" for char in rows[0]):
+            latin += 1
+        else:
+            cyrillic += 1
+    assert latin > cyrillic > 0

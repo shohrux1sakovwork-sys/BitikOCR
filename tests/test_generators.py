@@ -31,6 +31,7 @@ from bitikocr.data.synthetic.generators.death_certificate import (
     SINGLE_TEMPLATE,
 )
 from bitikocr.data.synthetic.generators.form import (
+    BLANK_TEXT_PREFIX,
     DEFAULT_SEAL_CENTRE,
     DEFAULT_SEAL_RING,
 )
@@ -231,7 +232,10 @@ def test_a_partly_filled_certificate_only_reports_what_was_written(
     assert written.pop("stamp_ring") == DEFAULT_SEAL_RING
     assert written.pop("stamp_center") == list(DEFAULT_SEAL_CENTRE)
     assert written == {"surname": "Раҳимова", "age_at_death": "71"}
-    assert annotation.text == "Раҳимова\n71"
+    # What was written reads on the row of the label printed on its rule.
+    lines = annotation.text.splitlines()
+    assert "Раҳимова" in lines
+    assert "71 yoshda vafot etdi." in lines
 
 
 def test_an_unstamped_certificate_reports_no_seal_lettering(
@@ -630,8 +634,13 @@ def test_the_single_form_leaves_out_what_it_has_no_cell_for(
     written = set(annotation.metadata["fields"])
     assert "issue_day_month" in written
     assert not {"citizenship", "issue_month", "issue_day"} & written
-    # The seal's two lettering fields are drawn as one stamp block.
-    blocks = {block.kind for block in annotation.blocks}
+    # The seal's two lettering fields are drawn as one stamp block, and the
+    # blank's own printing is recorded beside what was written.
+    blocks = {
+        block.kind
+        for block in annotation.blocks
+        if not block.kind.startswith(BLANK_TEXT_PREFIX)
+    }
     assert blocks == (written - {"stamp_ring", "stamp_center"}) | {
         "stamp",
         "signature",
@@ -1078,3 +1087,98 @@ def test_a_long_name_is_signed_inside_the_page(
     for block in annotation.blocks:
         if block.kind == "signature_name" and block.bbox is not None:
             assert block.bbox.right < width, block.bbox
+
+
+# -- how a finished page is spelled out -------------------------------------
+
+
+def test_a_form_reads_its_printed_title_first(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    text = certificate_generator.generate(certificate_fields, seed=5)
+    lines = text.annotation.text.splitlines()
+    assert lines[:2] == ["O'LIM HAQIDA GUVOHNOMA", "СВИДЕТЕЛЬСТВО О СМЕРТИ"]
+
+
+def test_a_form_reads_a_value_after_the_label_on_its_rule(
+    birth_generator: BirthCertificateGenerator,
+    birth_fields: dict[str, Any],
+) -> None:
+    text = birth_generator.generate(birth_fields, seed=5).annotation.text
+    assert f"Tug‘ilgan vaqti: {birth_fields['child_birth_date']}" in text
+
+
+def test_a_two_page_form_reads_its_sheets_apart(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    text = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation.text
+    left, right = text.split("\n\n")
+    assert "Vafot etgan joyi:" in left
+    assert "Qayd etish joyi" in right
+
+
+def test_a_form_marks_its_seal_and_signature(
+    certificate_generator: DeathCertificateGenerator,
+    certificate_fields: dict[str, Any],
+) -> None:
+    text = certificate_generator.generate(
+        certificate_fields, seed=5
+    ).annotation.text
+    assert "<signature>" in text
+    assert text.count("<stamp>") == text.count("</stamp>") == 1
+    seal = text.split("<stamp>\n")[1].split("\n</stamp>")[0]
+    assert seal.splitlines()[0] == certificate_fields.get(
+        "stamp_ring", DEFAULT_SEAL_RING
+    )
+
+
+def test_a_letter_marks_its_signature(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    text = ariza_generator.generate(ariza_fields, seed=5).annotation.text
+    assert "<signature>" in text
+
+
+def test_a_sealed_letter_carries_its_seal_in_stamp_markup(
+    consent_generator: ConsentLetterGenerator,
+    consent_organisation_fields: dict[str, Any],
+) -> None:
+    text = consent_generator.generate(
+        consent_organisation_fields, seed=5
+    ).annotation.text
+    assert "<stamp>" in text and "</stamp>" in text
+
+
+def test_an_incoming_stamp_is_read_with_what_the_clerk_wrote_into_it(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    fields = {
+        **ariza_fields,
+        "reg_stamp": ["URGANCH SHAHAR HOKIMI", "KELGAN №", ""],
+    }
+    text = ariza_generator.generate(fields, seed=5).annotation.text
+    stamp = text.split("<stamp>\n")[1].split("\n</stamp>")[0]
+    assert stamp.splitlines() == [
+        "URGANCH SHAHAR HOKIMI",
+        f"KELGAN № {fields['reg_number']}",
+        fields["reg_date"],
+    ]
+    # Written into the stamp, the filing is not read a second time outside.
+    outside = text.replace(stamp, "")
+    assert fields["reg_number"] not in outside
+
+
+def test_a_stamp_with_no_date_row_has_the_date_written_under_it(
+    ariza_generator: ArizaGenerator, ariza_fields: dict[str, Any]
+) -> None:
+    fields = {
+        **ariza_fields,
+        "reg_stamp": ["URGANCH SHAHAR HOKIMI", "KELGAN №"],
+    }
+    text = ariza_generator.generate(fields, seed=5).annotation.text
+    after = text.split("</stamp>")[1]
+    assert fields["reg_date"] in after.splitlines()
