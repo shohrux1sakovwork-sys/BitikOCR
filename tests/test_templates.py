@@ -551,3 +551,77 @@ def test_every_single_field_stays_inside_the_form(single: FormTemplate) -> None:
             assert 0 <= segment.x_start < segment.x_end <= width, field.name
             assert 0 < segment.baseline_y < height, field.name
             assert 0 < segment.baseline_y < height, field.name
+
+
+# -- what a blank form prints for itself -----------------------------------
+
+
+def test_a_layout_may_list_what_the_blank_prints() -> None:
+    template = FormTemplate.from_layout(
+        {
+            **MINIMAL_LAYOUT,
+            "printed_text": [
+                {"text": "Familiyasi:", "bbox_xyxy": [0, 30, 9, 50]},
+            ],
+        }
+    )
+    (line,) = template.printed_text
+    assert line.text == "Familiyasi:"
+    assert (line.bbox.left, line.bbox.bottom) == (0, 50)
+
+
+def test_a_printed_line_needs_its_text() -> None:
+    with pytest.raises(ValueError, match="text"):
+        FormTemplate.from_layout(
+            {
+                **MINIMAL_LAYOUT,
+                "printed_text": [{"text": " ", "bbox_xyxy": [0, 0, 5, 5]}],
+            }
+        )
+
+
+def test_a_layout_may_name_its_facing_sheets() -> None:
+    template = FormTemplate.from_layout(
+        {**MINIMAL_LAYOUT, "columns": [[0, 50], [50, 100]]}
+    )
+    assert template.columns == ((0, 50), (50, 100))
+
+
+@pytest.mark.parametrize("column", [[50, 10], [5], "wide"])
+def test_a_malformed_sheet_is_rejected(column: Any) -> None:
+    with pytest.raises(ValueError, match="column"):
+        FormTemplate.from_layout({**MINIMAL_LAYOUT, "columns": [column]})
+
+
+@pytest.mark.parametrize(
+    ("name", "title"),
+    [
+        ("birth_certificate_bilingual", "TUG‘ILGANLIK HAQIDA GUVOHNOMA"),
+        ("death_certificate_bilingual", "O'LIM HAQIDA GUVOHNOMA"),
+        ("death_certificate_cyrillic_single", "ЎЛИМ ҲАҚИДА ГУВОҲНОМА"),
+    ],
+)
+def test_every_shipped_form_transcribes_its_own_printing(
+    config: SyntheticConfig, name: str, title: str
+) -> None:
+    """A real annotator transcribes a form's title and labels, so the
+    layout must say what they are and where."""
+    template = FormTemplate.load(config.layout(name))
+    width, height = template.native_size
+    assert title in {line.text for line in template.printed_text}
+    for line in template.printed_text:
+        assert 0 <= line.bbox.left < line.bbox.right <= width, line.text
+        assert 0 <= line.bbox.top < line.bbox.bottom <= height, line.text
+
+
+@pytest.mark.parametrize(
+    "name", ["birth_certificate_bilingual", "death_certificate_bilingual"]
+)
+def test_a_two_page_form_is_read_one_sheet_at_a_time(
+    config: SyntheticConfig, name: str
+) -> None:
+    template = FormTemplate.load(config.layout(name))
+    width, _ = template.native_size
+    (left, gutter), (other_gutter, right) = template.columns
+    assert (left, right) == (0, width)
+    assert gutter == other_gutter

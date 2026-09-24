@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
 from PIL import Image
@@ -23,6 +24,13 @@ from bitikocr.data.synthetic.effects import draw_scribble
 from bitikocr.data.synthetic.hand import Hand
 from bitikocr.data.synthetic.ink import alpha_bounding_box
 from bitikocr.data.synthetic.style import Color, HandwritingStyle
+from bitikocr.data.synthetic.transcript import (
+    SIGNATURE_MARK,
+    Column,
+    MarkKind,
+    Piece,
+    compose,
+)
 
 __all__ = ["CLIPPED_KEY", "EDGE_MARGIN", "Page", "wrap_text"]
 
@@ -133,6 +141,7 @@ class Page:
         indent_first: int = 0,
         align_right_edge: int | None = None,
         record_block: bool = True,
+        rule_y: int | None = None,
     ) -> int:
         """Write lines top-down and record them as one block.
 
@@ -148,6 +157,10 @@ class Page:
                 left-aligning to ``x``.
             record_block: Whether to append a block annotation. Pass False
                 when the caller merges several calls into one block itself.
+            rule_y: The printed rule a single line is written on, in page
+                pixels. A clerk writes a little above the rule, but the
+                rule is what the value shares with the label printed on it,
+                so it is recorded as the line's baseline instead of ``y``.
 
         Returns:
             The baseline y for the line that would follow the last one.
@@ -169,7 +182,14 @@ class Page:
             self.image.alpha_composite(rendered, position)
 
             box = self._clip(alpha_bounding_box(rendered, position), block)
-            self.lines.append(LineAnnotation(block=block, text=line, bbox=box))
+            self.lines.append(
+                LineAnnotation(
+                    block=block,
+                    text=line,
+                    bbox=box,
+                    baseline=y if rule_y is None else rule_y,
+                )
+            )
             boxes.append(box)
             y += self.line_step(hand)
 
@@ -308,27 +328,51 @@ class Page:
 
     def annotation(
         self,
-        reading_order: tuple[str, ...],
+        readable: Collection[str],
         metadata: dict[str, Any] | None = None,
+        marks: Mapping[str, MarkKind] | None = None,
+        columns: Sequence[Column] = (),
+        printed: Collection[str] = (),
     ) -> DocumentAnnotation:
         """Collect the ground truth for everything drawn so far.
 
+        The transcription is read off where things landed, not the order
+        they were drawn in: see :func:`~bitikocr.data.synthetic.transcript.compose`.
+
         Args:
-            reading_order: Block names in the order a human would read them.
-                Blocks whose name is absent contribute no transcription.
+            readable: Names of the blocks whose lines are transcribed.
+                Lines of any other block contribute nothing.
             metadata: Generator-specific extras merged into the JSON output.
+            marks: Blocks transcribed as a mark rather than as their lines,
+                and which mark each is.
+            columns: The facing sheets the page is printed as, if more
+                than one.
+            printed: Names of the blocks that are type rather than
+                handwriting, whose lines sit squarely on their row.
 
         Returns:
             The page's full annotation.
         """
-        transcription = [
-            block.text
-            for kind in reading_order
-            for block in self.blocks
-            if block.kind == kind and block.text
+        wanted = set(readable)
+        pieces = [
+            Piece(
+                line.text,
+                line.bbox,
+                "print" if line.block in printed else "writing",
+                line.baseline,
+            )
+            for line in self.lines
+            if line.block in wanted and line.text and line.bbox is not None
         ]
+        for block in self.blocks:
+            kind = (marks or {}).get(block.kind)
+            if kind is None or block.bbox is None:
+                continue
+            text = block.text if kind == "stamp" else SIGNATURE_MARK
+            pieces.append(Piece(text, block.bbox, kind))
+
         return DocumentAnnotation(
-            text="\n".join(transcription),
+            text=compose(pieces, columns),
             blocks=list(self.blocks),
             lines=list(self.lines),
             size=(self.width, self.height),

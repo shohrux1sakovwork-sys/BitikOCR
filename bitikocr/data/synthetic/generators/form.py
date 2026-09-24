@@ -48,6 +48,7 @@ from bitikocr.data.synthetic.templates import (
 )
 
 __all__ = [
+    "BLANK_TEXT_PREFIX",
     "REGISTRAR_NAME_FIELD",
     "FormGenerator",
     "FormOptions",
@@ -59,6 +60,10 @@ logger = logging.getLogger(__name__)
 #: own, in which case it is an ordinary template field; on the rest it shares
 #: the signature area and is written there instead.
 REGISTRAR_NAME_FIELD = "registrar_name"
+
+#: What the blocks recording the blank form's own printed lines are called,
+#: before their number.
+BLANK_TEXT_PREFIX = "blank_text_"
 
 #: Fields carrying the seal's own lettering rather than document content.
 SEAL_RING_FIELD = "stamp_ring"
@@ -194,7 +199,9 @@ class FormGenerator(DocumentGenerator):
         serial, a series — is other printed matter, and the registrar's name
         belongs with the signature it sits beside.
         """
-        if block in self.template.printed_names:
+        if block in self.template.printed_names or block.startswith(
+            BLANK_TEXT_PREFIX
+        ):
             return ("other", "printed")
         if block == REGISTRAR_NAME_FIELD:
             return ("signature", "handwritten")
@@ -226,7 +233,12 @@ class FormGenerator(DocumentGenerator):
 
     @property
     def reading_order(self) -> tuple[str, ...]:
-        """Blocks in the order a human reads the finished form."""
+        """Blocks a human reads on the finished form.
+
+        Where each lands decides the order they are read in; this says only
+        which are read. The blank's own printing is among them, since an
+        annotator transcribes a form's labels along with what fills it.
+        """
         registrar = (
             (REGISTRAR_NAME_FIELD,)
             if self.registrar_writes_on_signature
@@ -236,6 +248,15 @@ class FormGenerator(DocumentGenerator):
             *self.template.field_names,
             *registrar,
             *self.template.printed_names,
+            *self.blank_text_names,
+        )
+
+    @property
+    def blank_text_names(self) -> tuple[str, ...]:
+        """Block names of the lines the blank form prints for itself."""
+        return tuple(
+            f"{BLANK_TEXT_PREFIX}{index:02d}"
+            for index in range(len(self.template.printed_text))
         )
 
     def generate(
@@ -331,6 +352,7 @@ class FormGenerator(DocumentGenerator):
             printed[area.name] = str(value)
 
         self._check_keep_out(page, template, scale_x, scale_y)
+        self._record_blank_text(page, scale_x, scale_y)
 
         # Everything that reached the page, so the facts beside it can be
         # limited to what a reader would actually find there.
@@ -342,6 +364,12 @@ class FormGenerator(DocumentGenerator):
 
         annotation = page.annotation(
             self.reading_order,
+            marks=self.marks_among(page.blocks),
+            printed=self.printed_among(page.blocks),
+            columns=tuple(
+                (int(left * scale_x), int(right * scale_x))
+                for left, right in template.columns
+            ),
             metadata={
                 "document_type": self.name,
                 "template": template.name,
@@ -354,6 +382,32 @@ class FormGenerator(DocumentGenerator):
             },
         )
         return SyntheticDocument(image=page.render(), annotation=annotation)
+
+    def _record_blank_text(
+        self, page: Page, scale_x: float, scale_y: float
+    ) -> None:
+        """Record what the blank form prints for itself, without drawing it.
+
+        The scan already carries the printing, so nothing is drawn; each
+        line is recorded where it was measured, which is what places it
+        among the handwriting when the page is read.
+
+        Args:
+            page: The page being filled.
+            scale_x: Native-to-page horizontal scale factor.
+            scale_y: Native-to-page vertical scale factor.
+        """
+        for name, line in zip(
+            self.blank_text_names, self.template.printed_text
+        ):
+            box = BoundingBox(
+                left=int(line.bbox.left * scale_x),
+                top=int(line.bbox.top * scale_y),
+                right=int(line.bbox.right * scale_x),
+                bottom=int(line.bbox.bottom * scale_y),
+            )
+            page.add_line(name, line.text, box)
+            page.add_block(name, line.text, box)
 
     # -- style -------------------------------------------------------------
 
@@ -702,6 +756,7 @@ class _FieldWriter:
             left + int(free * share),
             top,
             record_block=False,
+            rule_y=self.to_page_y(baseline_y),
         )
 
     def _fit_lines(

@@ -37,6 +37,20 @@ A machine-printed entry may carry a ``prefix``, the label the value is
 typeset behind. It belongs to the forms whose blank does not print that
 label itself — one certificate prints "I-HR №" and leaves the digits to the
 registry, another prints nothing and gets "№ 0024695" whole.
+
+What the blank form prints for itself — its title, the label in front of
+each rule, the captions under them — is listed under ``printed_text``, one
+entry per printed line::
+
+    "printed_text": [
+      {"text": "O'LIM HAQIDA GUVOHNOMA", "bbox_xyxy": [178, 234, 535, 258]},
+      ...
+    ]
+
+It is never drawn, since the scan already carries it, but it is read: a
+page's transcription includes it, as an annotator's does. A form printed as
+two facing sheets gives their horizontal extents under ``columns``, so the
+transcription reads one sheet before the other.
 """
 
 from __future__ import annotations
@@ -56,6 +70,7 @@ __all__ = [
     "FormTemplate",
     "LineSegment",
     "MarkArea",
+    "PrintedLine",
 ]
 
 #: Role a layout entry plays, matched against its ``text_type`` in this
@@ -151,6 +166,19 @@ class MarkArea:
 
 
 @dataclass(frozen=True)
+class PrintedLine:
+    """One line the blank form prints for itself.
+
+    Args:
+        text: What is printed, exactly as it reads.
+        bbox: Where it is printed, in template pixels.
+    """
+
+    text: str
+    bbox: BoundingBox
+
+
+@dataclass(frozen=True)
 class FormTemplate:
     """The measured geometry of one blank form.
 
@@ -169,6 +197,11 @@ class FormTemplate:
         printed_languages: Languages the blank form itself is printed in,
             as the corpus schema names them. A bilingual certificate
             carries Uzbek and Russian whatever the clerk writes in.
+        printed_text: What the blank prints for itself — its title,
+            labels and captions — one entry per printed line.
+        columns: The facing sheets the form is printed as, ``(left,
+            right)`` in template pixels, left to right. Empty for a form
+            printed on one sheet.
     """
 
     name: str
@@ -180,6 +213,8 @@ class FormTemplate:
     signature: MarkArea | None = None
     keep_out: tuple[MarkArea, ...] = ()
     printed_languages: tuple[str, ...] = ()
+    printed_text: tuple[PrintedLine, ...] = ()
+    columns: tuple[tuple[int, int], ...] = ()
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -284,7 +319,53 @@ class FormTemplate:
             signature=_only(marks.get("signature")),
             keep_out=tuple(marks.get("keep_out", ())),
             printed_languages=tuple(payload.get("printed_languages", ())),
+            printed_text=tuple(
+                _read_printed_line(entry)
+                for entry in payload.get("printed_text", ())
+            ),
+            columns=tuple(
+                _read_column(entry) for entry in payload.get("columns", ())
+            ),
         )
+
+
+def _read_printed_line(entry: dict[str, Any]) -> PrintedLine:
+    """Read one entry of a layout's ``printed_text``.
+
+    Args:
+        entry: The entry, with its ``text`` and box.
+
+    Returns:
+        The printed line.
+
+    Raises:
+        ValueError: If the entry has no text or no readable box.
+    """
+    text = str(entry.get("text") or "").strip()
+    if not text:
+        raise ValueError(f"Printed line needs its 'text': {entry}")
+    return PrintedLine(text=text, bbox=_read_bbox(entry))
+
+
+def _read_column(entry: Any) -> tuple[int, int]:
+    """Read one sheet's horizontal extent from a layout's ``columns``.
+
+    Args:
+        entry: ``[left, right]`` in template pixels.
+
+    Returns:
+        ``(left, right)``.
+
+    Raises:
+        ValueError: If the entry is not two ascending numbers.
+    """
+    try:
+        left, right = (int(value) for value in entry)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"A column is [left, right]: {entry!r}") from error
+    if right <= left:
+        raise ValueError(f"A column's right edge must follow its left: {entry}")
+    return left, right
 
 
 def _by_index(item: tuple[int, LineSegment]) -> int:

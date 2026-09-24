@@ -196,6 +196,8 @@ class LetterGenerator(DocumentGenerator):
 
         annotation = page.annotation(
             self.reading_order,
+            marks=self.marks_among(page.blocks),
+            printed=self.printed_among(page.blocks),
             metadata={
                 "document_type": self.name,
                 "seed": seed,

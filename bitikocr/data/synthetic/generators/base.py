@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import random
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
@@ -18,9 +18,13 @@ from PIL import Image
 
 from bitikocr.config import SyntheticConfig
 from bitikocr.data.models.schema import Hand, Role
-from bitikocr.data.synthetic.annotation import DocumentAnnotation
+from bitikocr.data.synthetic.annotation import (
+    BlockAnnotation,
+    DocumentAnnotation,
+)
 from bitikocr.data.synthetic.fonts import FontInfo, FontLibrary
 from bitikocr.data.synthetic.style import HandwritingStyle, sample_style
+from bitikocr.data.synthetic.transcript import MarkKind
 
 __all__ = [
     "DEFAULT_INK_STRENGTH",
@@ -194,6 +198,46 @@ class DocumentGenerator(ABC):
         if block in _MARK_PARTS:
             return _MARK_PARTS[block]
         return self.BLOCK_PARTS.get(block, ("body", "handwritten"))
+
+    def marks_among(
+        self, blocks: Iterable[BlockAnnotation]
+    ) -> dict[str, MarkKind]:
+        """Say which drawn blocks are transcribed as marks, and which marks.
+
+        A seal is transcribed as its lettering in stamp markup. A signature
+        scribble carries no text and is transcribed as the signature mark;
+        a name written beside it is signature too, but it is writing and is
+        read as such.
+
+        Args:
+            blocks: The blocks drawn on a page.
+
+        Returns:
+            Block name mapped to the mark it is transcribed as.
+        """
+        marks: dict[str, MarkKind] = {}
+        for block in blocks:
+            role, _ = self.part_of(block.kind)
+            if role == "stamp":
+                marks[block.kind] = "stamp"
+            elif role == "signature" and not block.text:
+                marks[block.kind] = "signature"
+        return marks
+
+    def printed_among(self, blocks: Iterable[BlockAnnotation]) -> set[str]:
+        """Return the names of the drawn blocks that are type, not writing.
+
+        Args:
+            blocks: The blocks drawn on a page.
+
+        Returns:
+            The names of those set in type.
+        """
+        return {
+            block.kind
+            for block in blocks
+            if self.part_of(block.kind)[1] == "printed"
+        }
 
     # -- shared helpers ----------------------------------------------------
 

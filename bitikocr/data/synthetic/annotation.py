@@ -34,11 +34,16 @@ class LineAnnotation:
         block: Name of the block this line belongs to.
         text: Transcription of the line.
         bbox: Tight box around the rendered ink, or None if nothing was drawn.
+        baseline: The y the line was written along, when it was written
+            rather than measured. It is what places a value on the same row
+            as the printed label that shares its rule, which its ink alone
+            cannot: a short word with a descender sits lower than a long one.
     """
 
     block: str
     text: str
     bbox: BoundingBox | None
+    baseline: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serialisable form of this line."""
