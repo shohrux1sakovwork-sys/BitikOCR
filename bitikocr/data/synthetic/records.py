@@ -18,7 +18,13 @@ from typing import Any
 
 from bitikocr.data.synthetic import corpus
 from bitikocr.data.synthetic.phrases import PhraseBank
-from bitikocr.data.synthetic.scripts import Script, in_script, to_cyrillic
+from bitikocr.data.synthetic.scripts import (
+    LATIN_APOSTROPHES,
+    Script,
+    in_script,
+    spell_as_writer,
+    to_cyrillic,
+)
 
 __all__ = [
     "BANK_SHARE",
@@ -72,6 +78,24 @@ _ARIZA_OPENINGS: tuple[str, ...] = (
 )
 
 _TITLES: tuple[str, ...] = ("Ariza",)
+
+#: How often a writer keeps the standard spelling, mixes in Russian
+#: spellings, or spells the Russian way throughout. The archive's older
+#: pages were written by clerks schooled in Russian, and its names are as
+#: often "Ибрагимов" and "Ахмедова" as "Иброҳимов" and "Аҳмадова".
+_SPELLING_HABITS = (0.45, 0.30, 0.25)
+
+#: Share of words a mixed writer spells the Russian way.
+_MIXED_RUSSIAN_SHARE = (0.2, 0.6)
+
+#: How often a Latin writer uses the keyboard apostrophe, the standard's
+#: turned comma, or a backtick for the tutuq.
+_APOSTROPHE_WEIGHTS = (0.6, 0.3, 0.1)
+
+#: Fields whose text is printed, not written, and so keeps its spelling.
+_PRINTED_FIELDS = frozenset(
+    {"stamp_ring", "stamp_center", "reg_stamp", "form_series", "serial_number"}
+)
 
 #: Share of applications that reach the page with the receiving office's
 #: stamp on them; the rest carry the filing number written by hand alone.
@@ -1340,18 +1364,68 @@ def sample_record(
     else:
         chosen = "latin" if rng.random() < latin_share else "cyrillic"
     content = sampler(rng, chosen, phrases)
+    habit = _sample_spelling(rng)
     return DocumentRecord(
         document_type=document_type,
         script=chosen,
         seed=rng.randrange(_MAX_SEED),
-        fields=content.fields,
+        fields=_as_written(content.fields, chosen, habit, rng),
         notes={
             "year_approx": content.year,
             "era": "modern" if content.year >= MODERN_FROM else "old",
             "dates": content.dates,
+            "spelling": habit,
             **content.notes,
         },
     )
+
+
+def _sample_spelling(rng: random.Random) -> dict[str, Any]:
+    """Sample how one writer spells, whatever the standard says.
+
+    Returns:
+        ``russian_share``, the share of Cyrillic words spelled the Russian
+        way, and ``apostrophe``, the writer's mark for the Latin tutuq.
+    """
+    habit = rng.choices(
+        ("standard", "mixed", "russian"), weights=_SPELLING_HABITS
+    )[0]
+    share = {
+        "standard": 0.0,
+        "mixed": round(rng.uniform(*_MIXED_RUSSIAN_SHARE), 2),
+        "russian": 1.0,
+    }[habit]
+    apostrophe = rng.choices(LATIN_APOSTROPHES, weights=_APOSTROPHE_WEIGHTS)[0]
+    return {"russian_share": share, "apostrophe": apostrophe}
+
+
+def _as_written(
+    fields: dict[str, Any],
+    script: Script,
+    habit: Mapping[str, Any],
+    rng: random.Random,
+) -> dict[str, Any]:
+    """Respell the handwritten fields the way this record's writer spells.
+
+    Printed matter — a stamp's lettering, a form's series — keeps the
+    spelling it was made with.
+    """
+    decided: dict[str, bool] = {}
+    return {
+        name: (
+            spell_as_writer(
+                value,
+                script,
+                habit["russian_share"],
+                habit["apostrophe"],
+                rng,
+                decided,
+            )
+            if isinstance(value, str) and name not in _PRINTED_FIELDS
+            else value
+        )
+        for name, value in fields.items()
+    }
 
 
 def sample_records(

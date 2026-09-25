@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import random
+
 import pytest
 
-from bitikocr.data.synthetic.scripts import in_script, to_cyrillic
+from bitikocr.data.synthetic.scripts import (
+    in_script,
+    russian_spelling,
+    spell_as_writer,
+    to_cyrillic,
+)
 
 # Latin spelling mapped to the Cyrillic a registry clerk would write.
 KNOWN_PAIRS = [
@@ -66,3 +73,29 @@ def test_a_bilingual_entry_uses_its_given_spelling() -> None:
     assert in_script(entry, "latin") == "sentabr"
     assert in_script(entry, "cyrillic") == "сентябр"
     assert to_cyrillic("sentabr") != "сентябр"
+
+
+def test_a_russian_schooled_writer_uses_russian_letters_and_forms() -> None:
+    assert russian_spelling("Иброҳимова") == "Ибрагимова"
+    assert russian_spelling("Аҳмадова") == "Ахмедова"
+    assert russian_spelling("Қосимов") == "Косимов"
+    assert russian_spelling("ҳокими") == "хокими"
+
+
+def test_a_standard_writer_changes_nothing() -> None:
+    text = "Гулистон шаҳар ҳокими"
+    assert spell_as_writer(text, "cyrillic", 0.0, "'", random.Random(0)) == text
+
+
+def test_a_latin_writer_types_the_tutuq_their_own_way() -> None:
+    written = spell_as_writer(
+        "O'zbekiston g'alla", "latin", 1.0, "‘", random.Random(0)
+    )
+    assert written == "O‘zbekiston g‘alla"
+
+
+def test_a_mixed_writer_keeps_line_breaks() -> None:
+    text = "Қосимов\nҲамроев Ўткир"
+    written = spell_as_writer(text, "cyrillic", 0.5, "'", random.Random(2))
+    assert written.count("\n") == 1
+    assert len(written.split()) == 3

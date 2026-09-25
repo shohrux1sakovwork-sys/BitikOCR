@@ -334,7 +334,10 @@ def test_a_citizens_letter_says_where_everyone_lives() -> None:
     ):
         if record.notes["author_kind"] != "individual":
             continue
-        applicant = record.fields["applicant"]
+        # Each writer types the tutuq their own way.
+        applicant = (
+            record.fields["applicant"].replace("‘", "'").replace("`", "'")
+        )
         assert "ko'chasi" in applicant
         assert "yashovchi" in applicant
         city = applicant.split(" shahar")[0]
@@ -505,3 +508,43 @@ def test_incoming_stamps_are_mostly_latin_whatever_the_letter() -> None:
         else:
             cyrillic += 1
     assert latin > cyrillic > 0
+
+
+def test_a_writer_spells_a_cyrillic_page_one_way_throughout() -> None:
+    """Some writers keep the standard spelling, others the Russian one.
+
+    Whichever it is, what is written and the facts read off it agree,
+    since both are built from the same respelled fields.
+    """
+    habits = set()
+    for seed in range(60):
+        record = sample_record("ariza", random.Random(seed), "cyrillic")
+        share = record.notes["spelling"]["russian_share"]
+        habits.add(
+            "standard" if share == 0 else "russian" if share == 1 else "mixed"
+        )
+        written = " ".join(
+            value for value in record.fields.values() if isinstance(value, str)
+        )
+        if share == 1:
+            assert not set("ҳқғўҲҚҒЎ") & set(written.replace("\n", " ")) - set(
+                " ".join(record.fields.get("reg_stamp") or [])
+            )
+    assert habits == {"standard", "mixed", "russian"}
+
+
+def test_printed_matter_keeps_its_spelling() -> None:
+    for seed in range(200):
+        record = sample_record("ariza", random.Random(seed), "cyrillic")
+        rows = record.fields.get("reg_stamp")
+        if rows and record.notes["spelling"]["russian_share"] == 1:
+            assert rows == [row.upper() for row in rows]
+            return
+    pytest.fail("no Russian-spelled, stamped application in 200 records")
+
+
+def test_a_surname_ending_in_y_takes_ev() -> None:
+    person = corpus.sample_person(
+        random.Random(0), "latin", is_female=False, surname_stem="Jumaboy"
+    )
+    assert person.surname == "Jumaboyev"

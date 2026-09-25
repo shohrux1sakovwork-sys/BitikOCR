@@ -14,6 +14,11 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
+from bitikocr.data.synthetic.names import (
+    FEMALE_NAMES,
+    MALE_NAMES,
+    SURNAME_STEMS,
+)
 from bitikocr.data.synthetic.scripts import Bilingual, Script, in_script
 
 __all__ = [
@@ -75,265 +80,9 @@ _TEENS_TENS: dict[int, str] = {
     90: "to'qson",
 }
 
-_MALE_NAMES: tuple[str, ...] = (
-    "Otabek",
-    "Shavkat",
-    "Bahodir",
-    "Javohir",
-    "Ulug'bek",
-    "Sardor",
-    "Jasur",
-    "Aziz",
-    "Rustam",
-    "Bekzod",
-    "Doniyor",
-    "Farrux",
-    "Ibrohim",
-    "Kamol",
-    "Mirzo",
-    "Nodir",
-    "Olim",
-    "Qodir",
-    "Sanjar",
-    "Temur",
-    "Umid",
-    "Xurshid",
-    "Zafar",
-    "Alisher",
-    "Botir",
-    "Dilshod",
-    "Elyor",
-    "Fazliddin",
-    "G'ayrat",
-    "Husan",
-    "Abdulla",
-    "Akmal",
-    "Anvar",
-    "Asqar",
-    "Baxtiyor",
-    "Bobur",
-    "Diyor",
-    "Eldor",
-    "Erkin",
-    "Farhod",
-    "Faxriddin",
-    "Hamid",
-    "Hasan",
-    "Ilhom",
-    "Islom",
-    "Jahongir",
-    "Jamshid",
-    "Komil",
-    "Laziz",
-    "Mansur",
-    "Mahmud",
-    "Muhammad",
-    "Murod",
-    "Nurbek",
-    "Nuriddin",
-    "Obid",
-    "Oybek",
-    "Rahmatillo",
-    "Ravshan",
-    "Sherzod",
-    "Shohruh",
-    "Sirojiddin",
-    "Sobir",
-    "Suhrob",
-    "Tohir",
-    "To'lqin",
-    "Ubaydullo",
-    "Valijon",
-    "Yorqin",
-    "Zokir",
-    "Abror",
-    "Azamat",
-    "Behruz",
-    "Hayot",
-    "Ixtiyor",
-    "Mirjalol",
-    "Nosir",
-    "Qahramon",
-    "Rasul",
-    "Sayfiddin",
-    "Shuhrat",
-    "Tolib",
-    "Xolmat",
-    "Yusuf",
-    "Asadbek",
-    "Mardon",
-    "Nurali",
-    "G'olib",
-    "Mo'min",
-    "Ne'mat",
-)
-
-_FEMALE_NAMES: tuple[str, ...] = (
-    "Mohira",
-    "Nodira",
-    "Gulnora",
-    "Dilorom",
-    "Zulfiya",
-    "Malika",
-    "Sevara",
-    "Shahzoda",
-    "Tamara",
-    "Umida",
-    "Feruza",
-    "Kamola",
-    "Lola",
-    "Marjona",
-    "Nafisa",
-    "Ozoda",
-    "Rayhona",
-    "Sabina",
-    "Shohista",
-    "Yulduz",
-    "Zebo",
-    "Aziza",
-    "Barno",
-    "Charos",
-    "Dildora",
-    "Gulchehra",
-    "Hulkar",
-    "Iroda",
-    "Munisa",
-    "Nigora",
-    "Adolat",
-    "Barchinoy",
-    "Dilnoza",
-    "Dilfuza",
-    "Durdona",
-    "Farangiz",
-    "Go'zal",
-    "Gulbahor",
-    "Gulshan",
-    "Gavhar",
-    "Hilola",
-    "Intizor",
-    "Jamila",
-    "Kumush",
-    "Lobar",
-    "Madina",
-    "Mavluda",
-    "Mastura",
-    "Mehriniso",
-    "Muhabbat",
-    "Mukarram",
-    "Muazzam",
-    "Nargiza",
-    "Nasiba",
-    "Oydin",
-    "Oysha",
-    "Parvina",
-    "Robiya",
-    "Ra'no",
-    "Saida",
-    "Sanobar",
-    "Sarvinoz",
-    "Shahnoza",
-    "Shoira",
-    "Surayyo",
-    "Tursunoy",
-    "Vazira",
-    "Xadicha",
-    "Xolida",
-    "Zarina",
-    "Ziyoda",
-    "Zuhra",
-    "Mohinur",
-    "Nilufar",
-    "Oygul",
-    "Salomat",
-    "Sitora",
-    "Maftuna",
-    "Muxlisa",
-    "Gulruh",
-    "Dilbar",
-    "Mo'tabar",
-)
-
-_SURNAME_STEMS: tuple[str, ...] = (
-    "Karim",
-    "Rahim",
-    "Sobir",
-    "Ergash",
-    "Yo'ldosh",
-    "Bekchan",
-    "Matyoqub",
-    "Qurbonboy",
-    "Usmon",
-    "Solay",
-    "Abduraxmon",
-    "Habib",
-    "Nazar",
-    "Ochil",
-    "Po'lat",
-    "Qodir",
-    "Sattor",
-    "Toshpo'lat",
-    "Xudoyber",
-    "Yusuf",
-    "Zokir",
-    "Alim",
-    "Bozor",
-    "Davron",
-    "Egam",
-    "Fayzi",
-    "G'ulom",
-    "Hakim",
-    "Islom",
-    "Jo'ra",
-    "Abdulla",
-    "Azim",
-    "Ahmad",
-    "Bahrom",
-    "Boymurod",
-    "Chori",
-    "Dadaboy",
-    "Eshmat",
-    "Fozil",
-    "G'afur",
-    "Haydar",
-    "Ibrohim",
-    "Jalol",
-    "Kamol",
-    "Latip",
-    "Mahmud",
-    "Mirzo",
-    "Nabi",
-    "Norboy",
-    "Qosim",
-    "Rashid",
-    "Rustam",
-    "Sa'di",
-    "Shukur",
-    "Tursun",
-    "To'xta",
-    "Umar",
-    "Vali",
-    "Xolmat",
-    "Yunus",
-    "Ashur",
-    "Berdi",
-    "Hamro",
-    "Ismoil",
-    "Mamat",
-    "Nurmat",
-    "Qayum",
-    "Sharipboy",
-    "Tojiboy",
-    "Normat",
-    "Rajab",
-    "Safar",
-    "Sultan",
-    "Turg'un",
-    "Xoliq",
-    "Yoqub",
-    "Ziyod",
-    "Mo'min",
-    "Ne'mat",
-)
+#: Every surname stem: the given names a family name is made from, and
+#: the stems that are not given names themselves.
+_ALL_SURNAME_STEMS: tuple[str, ...] = (*SURNAME_STEMS, *MALE_NAMES)
 
 _NATIONALITIES: tuple[str, ...] = (
     "o'zbek",
@@ -513,8 +262,16 @@ _UZBEK_PATRONYMIC_SHARE = 0.35
 
 
 def _masculinise(stem: str) -> str:
-    """Return the masculine form of a surname stem."""
-    return f"{stem}yev" if stem.endswith(tuple(_VOWELS)) else f"{stem}ov"
+    """Return the masculine form of a surname stem.
+
+    A stem ending in a vowel takes ``-yev`` (Mirzoyev), one already ending
+    in ``y`` takes ``-ev`` (Jumaboyev, not Jumaboyov), and the rest ``-ov``.
+    """
+    if stem.endswith(tuple(_VOWELS)):
+        return f"{stem}yev"
+    if stem.endswith("y"):
+        return f"{stem}ev"
+    return f"{stem}ov"
 
 
 def _feminise(stem: str) -> str:
@@ -542,11 +299,11 @@ def sample_person(
         The sampled name, already written in ``script``.
     """
     female = rng.random() < 0.5 if is_female is None else is_female
-    stem = surname_stem or rng.choice(_SURNAME_STEMS)
+    stem = surname_stem or rng.choice(_ALL_SURNAME_STEMS)
     surname = _feminise(stem) if female else _masculinise(stem)
-    given = rng.choice(_FEMALE_NAMES if female else _MALE_NAMES)
+    given = rng.choice(FEMALE_NAMES if female else MALE_NAMES)
 
-    father = father_name or rng.choice(_MALE_NAMES)
+    father = father_name or rng.choice(MALE_NAMES)
     if rng.random() < _UZBEK_PATRONYMIC_SHARE:
         patronymic = f"{father} qizi" if female else f"{father} o'g'li"
     else:
@@ -562,7 +319,7 @@ def sample_person(
 
 def surname_stem(rng: random.Random) -> str:
     """Sample a family name stem, so relatives can share one."""
-    return rng.choice(_SURNAME_STEMS)
+    return rng.choice(_ALL_SURNAME_STEMS)
 
 
 def sample_town(rng: random.Random) -> tuple[str, str, bool]:
