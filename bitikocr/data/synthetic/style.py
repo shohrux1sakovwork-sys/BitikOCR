@@ -86,7 +86,9 @@ WORD_SPACING_RANGE = (0.9, 2.4)
 #: Baseline step, times the nominal size. The archive's writers keep their
 #: lines close and their letters large, rather than small letters widely
 #: spaced; a close step leaves the letter room to stay large on its page.
-LINE_SPACING_RANGE = (1.15, 1.6)
+#: Real pages step 4.3-4.8% of the page width from line to line; this range
+#: gives 4.5%, where (1.15, 1.6) gave 5.7%.
+LINE_SPACING_RANGE = (0.85, 1.2)
 
 #: Where the addressee block starts, as a share of the page width. Real
 #: blocks start anywhere from just left of the middle.
