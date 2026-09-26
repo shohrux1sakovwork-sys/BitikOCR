@@ -22,7 +22,11 @@ The steps run in the order the page met them:
    transform as the pixels, and every box is re-derived from the result.
 3. **Capture** — uneven light, a hand's shadow, a lens vignette, a low
    resolution, defocus and sensor grain.
-4. **Compression** — the JPEG blocking a page arrives with.
+4. **Scanner** — the archive's scanner levels the sheet to white or a
+   light grey, dulls the ink's colour and shows the binder's punch holes
+   as black discs. It runs
+   after the ink has moved, so the holes can be kept off the text.
+5. **Compression** — the JPEG blocking a page arrives with.
 
 The page keeps its size throughout, so the ground truth stays in the same
 coordinate space.
@@ -38,7 +42,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter
 
 from bitikocr.data.models.geometry import BoundingBox, Polygon
 from bitikocr.data.synthetic.annotation import (
@@ -53,6 +57,7 @@ __all__ = [
     "AugmentationReport",
     "Backend",
     "Capture",
+    "Hole",
     "Stain",
     "apply_plan",
     "augment_page",
@@ -84,6 +89,42 @@ _TABLES: tuple[tuple[int, int, int], ...] = (
 
 #: Colour a coffee or tea stain leaves, multiplied into the paper.
 _STAIN_COLOUR = (0.66, 0.5, 0.3)
+
+#: Share of scans whose paper comes out light grey rather than white. The
+#: benchmark's older archive pages are 41% grey, the 2023 Adliya pages 6%;
+#: the corpus has to cover both.
+_GREY_SCAN_SHARE = 0.25
+
+#: How much colour a scan leaves in the ink. Rendered ballpoint blue is
+#: purer than the archive's: its ink measures about half as blue (B - R of
+#: 19-27 on real pages against 36-41 rendered).
+_SCAN_SATURATION = (0.45, 0.9)
+
+#: Brightness the archive's scans level the paper to: white, or a grey.
+_WHITE_LEVEL = (250.0, 255.0)
+_GREY_LEVEL = (224.0, 238.0)
+
+#: Largest warm cast a levelled scan keeps, red over blue. The benchmark's
+#: warmest pages differ by 8.
+_MAX_SCAN_WARMTH = 6.0
+
+#: Where a punch puts its holes, as offsets from the sheet's middle in
+#: fractions of its height: A4's two-hole and four-hole patterns, 80 mm
+#: apart.
+_HOLE_PATTERNS: tuple[tuple[float, ...], ...] = (
+    (-0.135, 0.135),
+    (-0.404, -0.135, 0.135, 0.404),
+)
+
+#: Chance an archived sheet was punched a second time, off the first
+#: pattern, as filed and re-filed pages are.
+_REPUNCH_SHARE = 0.35
+
+#: Downscale and window of the paper estimate a scan is levelled against.
+#: At an eighth of the page a stroke is under a pixel wide, so a 7-pixel
+#: maximum sees only paper.
+_LEVEL_SCALE = 8
+_LEVEL_WINDOW = 7
 
 
 @dataclass(frozen=True)
@@ -150,6 +191,9 @@ class AugmentationProfile:
         stain: Chance the page carries stains.
         photocopy: Chance the page is a photocopy rather than an original.
         low_resolution: Chance the page was captured at a low resolution.
+        levelling: Chance a scanned page's paper is levelled to white or a
+            light grey, as the archive's scanner does.
+        punch_holes: Chance the sheet shows a binder's punch holes.
     """
 
     strength: float = 1.0
@@ -166,6 +210,8 @@ class AugmentationProfile:
     stain: float = 0.0
     photocopy: float = 0.0
     low_resolution: float = 0.0
+    levelling: float = 0.0
+    punch_holes: float = 0.0
 
     @classmethod
     def none(cls) -> AugmentationProfile:
@@ -203,6 +249,32 @@ class AugmentationProfile:
             low_resolution=0.15,
         )
 
+    @classmethod
+    def archive(cls, strength: float = 1.0) -> AugmentationProfile:
+        """Return the profile that matches the archive's own scans.
+
+        The real pages are all flatbed scans levelled to white or a neutral
+        grey; none is photographed or stained. Older archive pages carry
+        punch holes down the left edge and fresh applications do not, so
+        about half the pages are punched. Folds, photocopies and low
+        resolutions stay, and dust is kept sparse.
+
+        Args:
+            strength: Scales every photometric effect.
+
+        Returns:
+            The profile.
+        """
+        return cls(
+            strength=strength,
+            speck_density=8.0,
+            crease=0.1,
+            photocopy=0.1,
+            low_resolution=0.15,
+            levelling=1.0,
+            punch_holes=0.5,
+        )
+
     @property
     def is_empty(self) -> bool:
         """Whether this profile can change a page at all."""
@@ -226,6 +298,23 @@ class Stain:
     rx: float
     ry: float
     alpha: float
+
+
+@dataclass(frozen=True)
+class Hole:
+    """One punch hole, in fractions of the page's width and height.
+
+    Args:
+        x: Centre, across.
+        y: Centre, down.
+        radius: Radius, as a fraction of the width.
+        shade: Grey the scanner's lid shows through it.
+    """
+
+    x: float
+    y: float
+    radius: float
+    shade: int
 
 
 @dataclass(frozen=True)
@@ -257,6 +346,11 @@ class AugmentationPlan:
         blur: Defocus radius in pixels; 0.0 for none.
         noise: Sensor grain as a pixel standard deviation.
         jpeg_quality: Re-compression quality, or None.
+        paper_level: Colour the scanner levels the paper to, or None to
+            leave it.
+        saturation: How much of the ink's colour the scan keeps; 1.0 for
+            all of it.
+        holes: The punch holes the scan shows.
         seed: Seeds the noise fields drawn when the plan is applied.
     """
 
@@ -279,6 +373,9 @@ class AugmentationPlan:
     blur: float = 0.0
     noise: float = 0.0
     jpeg_quality: int | None = None
+    paper_level: tuple[float, float, float] | None = None
+    saturation: float = 1.0
+    holes: tuple[Hole, ...] = ()
     seed: int = 0
     effects: tuple[str, ...] = field(default=())
 
@@ -309,10 +406,11 @@ class AugmentationPlan:
         data = dict(payload)
         if data.get("corners") is not None:
             data["corners"] = tuple(tuple(c) for c in data["corners"])
-        for key in ("table", "tint", "crease", "shadow"):
+        for key in ("table", "tint", "crease", "shadow", "paper_level"):
             if data.get(key) is not None:
                 data[key] = tuple(data[key])
         data["stains"] = tuple(Stain(**s) for s in data.get("stains", ()))
+        data["holes"] = tuple(Hole(**h) for h in data.get("holes", ()))
         data["effects"] = tuple(data.get("effects", ()))
         return cls(**data)
 
@@ -420,6 +518,24 @@ def plan_augmentation(
     if profile.jpeg_quality is not None:
         jpeg_quality = rng.randint(*profile.jpeg_quality)
 
+    # Drawn only when asked for, so the older profiles plan the same pages
+    # from the same seeds as before.
+    paper_level = None
+    saturation = 1.0
+    scanned = not camera
+    if scanned and profile.levelling > 0 and rng.random() < profile.levelling:
+        paper_level = _sample_paper_level(rng)
+        saturation = rng.uniform(*_SCAN_SATURATION)
+        effects.append("levelled")
+    holes: tuple[Hole, ...] = ()
+    if (
+        scanned
+        and profile.punch_holes > 0
+        and rng.random() < profile.punch_holes
+    ):
+        holes = _sample_holes(rng)
+        effects.append("punch_holes")
+
     return AugmentationPlan(
         strength=strength,
         capture=capture,
@@ -440,8 +556,40 @@ def plan_augmentation(
         blur=blur,
         noise=noise,
         jpeg_quality=jpeg_quality,
+        paper_level=paper_level,
+        saturation=saturation,
+        holes=holes,
         seed=rng.randrange(2**31),
         effects=tuple(effects),
+    )
+
+
+def _sample_paper_level(rng: random.Random) -> tuple[float, float, float]:
+    """Choose the white or neutral grey a scan levels its paper to."""
+    band = _GREY_LEVEL if rng.random() < _GREY_SCAN_SHARE else _WHITE_LEVEL
+    level = rng.uniform(*band)
+    warmth = rng.uniform(0.0, _MAX_SCAN_WARMTH)
+    red = min(255.0, level + warmth / 2)
+    return (red, level, red - warmth)
+
+
+def _sample_holes(rng: random.Random) -> tuple[Hole, ...]:
+    """Punch the sheet once, and now and then again off the first holes."""
+    x = rng.uniform(0.03, 0.065)
+    radius = rng.uniform(0.011, 0.016)
+    shade = rng.randint(10, 60)
+    punchings = [(rng.choice(_HOLE_PATTERNS), rng.uniform(-0.02, 0.02))]
+    if rng.random() < _REPUNCH_SHARE:
+        punchings.append((rng.choice(_HOLE_PATTERNS), rng.uniform(-0.09, 0.09)))
+    return tuple(
+        Hole(
+            x=x + rng.uniform(-0.004, 0.004),
+            y=0.5 + offset + shift,
+            radius=radius,
+            shade=shade,
+        )
+        for pattern, shift in punchings
+        for offset in pattern
     )
 
 
@@ -565,6 +713,14 @@ def apply_plan(
             lambda x, y: _project(matrix, x, y),
             plan.rotation,
         )
+    # The scanner step is the same numpy code on either backend: it is a
+    # handful of small filters, not worth a second implementation.
+    if plan.paper_level is not None:
+        image = _level_paper(image, plan.paper_level)
+    if plan.saturation < 1.0:
+        image = ImageEnhance.Color(image).enhance(plan.saturation)
+    if plan.holes:
+        image = _punch_holes(image, plan.holes, annotation)
     if plan.jpeg_quality is not None:
         image = _apply_jpeg(image, plan.jpeg_quality)
 
@@ -959,6 +1115,65 @@ def _speck_positions(
         (int(x), int(y), int(r), int(s))
         for x, y, r, s in zip(xs, ys, radii, shades)
     ]
+
+
+def _level_paper(
+    image: Image.Image, level: tuple[float, float, float]
+) -> Image.Image:
+    """Level the paper to one colour, the way a scanner's auto-levels do.
+
+    The paper under the ink is estimated at a small scale, where strokes
+    vanish under a maximum filter, and every pixel is divided by it. Tint,
+    uneven light and vignetting go with it; the ink keeps its contrast.
+    """
+    width, height = image.size
+    small = image.reduce(_LEVEL_SCALE)
+    paper = small.filter(ImageFilter.MaxFilter(_LEVEL_WINDOW)).filter(
+        ImageFilter.GaussianBlur(_LEVEL_WINDOW / 2)
+    )
+    paper = paper.resize((width, height), Image.Resampling.BILINEAR)
+    pixels = np.asarray(image).astype(np.float32)
+    background = np.maximum(np.asarray(paper).astype(np.float32), 1.0)
+    levelled = pixels / background * np.array(level, np.float32)
+    return Image.fromarray(np.clip(levelled, 0, 255).astype(np.uint8))
+
+
+def _punch_holes(
+    image: Image.Image,
+    holes: Sequence[Hole],
+    annotation: DocumentAnnotation,
+) -> Image.Image:
+    """Show the punch holes, leaving out any that would cover writing.
+
+    A hole through a line would erase letters the transcript still reads,
+    so a hole that touches a line's or a block's box is not punched.
+    """
+    width, height = image.size
+    boxes = [
+        box
+        for box in (
+            *(line.bbox for line in annotation.lines),
+            *(block.bbox for block in annotation.blocks),
+        )
+        if box is not None
+    ]
+    pixels = np.asarray(image).copy()
+    for hole in holes:
+        radius = hole.radius * width
+        x, y = hole.x * width, hole.y * height
+        clearance = radius * 1.5
+        if any(
+            box.left - clearance < x < box.right + clearance
+            and box.top - clearance < y < box.bottom + clearance
+            for box in boxes
+        ):
+            continue
+        top, bottom = max(0, int(y - radius)), min(height, int(y + radius) + 1)
+        left, right = max(0, int(x - radius)), min(width, int(x + radius) + 1)
+        ys, xs = np.mgrid[top:bottom, left:right]
+        inside = (xs - x) ** 2 + (ys - y) ** 2 <= radius**2
+        pixels[top:bottom, left:right][inside] = hole.shade
+    return Image.fromarray(pixels)
 
 
 def _apply_capture(image: Image.Image, plan: AugmentationPlan) -> Image.Image:

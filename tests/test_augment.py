@@ -18,6 +18,7 @@ from bitikocr.data.synthetic.annotation import (
 from bitikocr.data.synthetic.augment import (
     AugmentationPlan,
     AugmentationProfile,
+    Hole,
     apply_plan,
     augment_page,
     homography,
@@ -274,6 +275,76 @@ def test_the_varied_profile_uses_every_effect() -> None:
         "low_resolution",
         "blur",
     }
+
+
+def test_the_archive_profile_scans_and_levels_every_page() -> None:
+    rng = random.Random(0)
+    plans = [
+        plan_augmentation(rng, AugmentationProfile.archive())
+        for _ in range(200)
+    ]
+    assert all(plan.capture == "scanner" for plan in plans)
+    assert all(plan.paper_level is not None for plan in plans)
+    assert not any(plan.stains for plan in plans)
+    assert any(plan.holes for plan in plans)
+
+
+def test_the_varied_profile_neither_levels_nor_punches() -> None:
+    rng = random.Random(0)
+    for _ in range(100):
+        plan = plan_augmentation(rng, AugmentationProfile.varied())
+        assert plan.paper_level is None
+        assert plan.holes == ()
+
+
+def test_a_plan_with_holes_round_trips_through_its_dict() -> None:
+    plan = plan_augmentation(random.Random(4), AugmentationProfile.archive())
+    assert plan.holes
+    assert AugmentationPlan.from_dict(plan.to_dict()) == plan
+
+
+def test_levelling_turns_cream_paper_white_and_keeps_the_ink() -> None:
+    image, annotation = _marked_page()
+    cream = Image.new("RGB", image.size, (225, 208, 178))
+    cream.paste(image.crop((100, 120, 300, 160)), (100, 120))
+    plan = AugmentationPlan(strength=1.0, paper_level=(252.0, 252.0, 252.0))
+    levelled, _, _ = apply_plan(cream, annotation, plan)
+    pixels = np.asarray(levelled).astype(int)
+    paper = pixels[20:60, 20:60].reshape(-1, 3)
+    assert np.all(np.abs(paper - 252) <= 3)
+    assert pixels[120:160, 100:300].min() < 100
+
+
+def test_a_scan_dulls_the_inks_colour() -> None:
+    image, annotation = _marked_page()
+    blue = Image.new("RGB", image.size, (255, 255, 255))
+    blue.paste((30, 40, 200), (150, 140, 250, 160))
+    plan = AugmentationPlan(
+        strength=1.0, paper_level=(255.0, 255.0, 255.0), saturation=0.5
+    )
+    scanned, _, _ = apply_plan(blue, annotation, plan)
+    ink = np.asarray(scanned).astype(int)[145:155, 160:240].reshape(-1, 3)
+    assert 0 < np.median(ink[:, 2] - ink[:, 0]) < 170 * 0.6
+
+
+def test_a_punch_hole_never_covers_writing() -> None:
+    image = Image.new("RGB", (400, 300), (250, 250, 250))
+    box = BoundingBox(0, 120, 400, 160)
+    annotation = DocumentAnnotation(
+        text="hello",
+        blocks=[BlockAnnotation("body", "hello", box)],
+        lines=[LineAnnotation("body", "hello", box)],
+        size=(400, 300),
+    )
+    holes = (
+        Hole(x=0.05, y=0.2, radius=0.02, shade=20),
+        Hole(x=0.05, y=0.47, radius=0.02, shade=20),
+    )
+    plan = AugmentationPlan(strength=1.0, holes=holes)
+    punched, _, _ = apply_plan(image, annotation, plan)
+    pixels = np.asarray(punched).sum(axis=2)
+    assert pixels[60, 20] < 100
+    assert pixels[120:160].min() > 600
 
 
 def test_a_photographed_page_reports_a_camera() -> None:

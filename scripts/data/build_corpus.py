@@ -111,6 +111,13 @@ def _add_plan_arguments(parser: argparse.ArgumentParser) -> None:
         help="augmentation strength (default: %(default)s)",
     )
     parser.add_argument(
+        "--look",
+        choices=("varied", "archive"),
+        default="varied",
+        help="varied wear and photographs, or the archive's own flat, "
+        "levelled scans with punch holes (default: %(default)s)",
+    )
+    parser.add_argument(
         "--phrases", type=Path, default=None, help="phrase bank to draw from"
     )
 
@@ -180,7 +187,11 @@ def _plan(
         counts={name: args.per_type for name in args.types},
         seed=args.seed,
         latin_share=args.latin_share,
-        profile=AugmentationProfile.varied(args.augment),
+        profile=(
+            AugmentationProfile.archive(args.augment)
+            if args.look == "archive"
+            else AugmentationProfile.varied(args.augment)
+        ),
     )
     started = time.perf_counter()
     plan = plan_corpus(spec, config, phrases)
