@@ -86,7 +86,7 @@ class SupervisedDataset(Dataset):
         self.prompt += (
             f"{DEFAULT_IM_START_TOKEN}user\n"
             f"{VISION_START_TOKEN}{DEFAULT_IMAGE_TOKEN}{VISION_END_TOKEN}"
-            f"Read the text in this image.{DEFAULT_IM_END_TOKEN}\n"
+            f"Transcribe every visible character exactly. Do not correct names, numbers, spelling, or grammar.{DEFAULT_IM_END_TOKEN}\n"
             f"{DEFAULT_IM_START_TOKEN}assistant\n"
         )
         # Qwen3.5 expects a closed thinking block for a direct answer.
