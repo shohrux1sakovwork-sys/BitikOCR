@@ -90,18 +90,34 @@ def model_revision(options: argparse.Namespace) -> str | None:
     return None
 
 
-def prepare_real_eval(path: Path) -> int:
-    """Join benchmark rows with their structured fact annotations."""
+def benchmark_rows(bench: Path) -> list[dict[str, Any]]:
+    """Read the benchmark's pages from its annotation files.
+
+    The published benchmark carries one annotation per page but no index,
+    so a fresh download works without the ``bench.jsonl`` built locally.
+    """
     rows = []
-    for line in (REAL_BENCH / "bench.jsonl").read_text().splitlines():
-        if not line:
-            continue
-        row = json.loads(line)
-        facts = json.loads(
-            (REAL_BENCH / "facts" / f"{row['id']}.json").read_text()
+    for path in sorted((bench / "annotations").glob("*.json")):
+        annotation = json.loads(path.read_text())
+        metadata = annotation["metadata"]
+        rows.append(
+            {
+                "id": annotation["id"],
+                "image": annotation["image"],
+                "text": annotation["text"],
+                "document_type": metadata["document_type"],
+                "script": "+".join(sorted(metadata["scripts"])),
+            }
         )
+    return rows
+
+
+def prepare_real_eval(path: Path, bench: Path = REAL_BENCH) -> int:
+    """Join benchmark rows with their structured fact annotations."""
+    rows = benchmark_rows(bench)
+    for row in rows:
+        facts = json.loads((bench / "facts" / f"{row['id']}.json").read_text())
         row["facts"] = facts["facts"]
-        rows.append(row)
     path.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
     )
@@ -121,7 +137,10 @@ def main() -> None:
         "model_id": options.model,
         "model_revision": model_revision(options),
         "evaluation_only": options.evaluation_only,
-        "data_path": str(ROOT / options.data),
+        # Evaluation reads no training data; a fresh clone has none.
+        "data_path": str(
+            eval_path if options.evaluation_only else ROOT / options.data
+        ),
         "eval_path": str(eval_path),
         "image_folder": str(ROOT / options.image_folder),
         "eval_image_folder": str(REAL_BENCH),
@@ -195,7 +214,7 @@ def main() -> None:
         WANDB_ENTITY="isakovsh",
         WANDB_PROJECT="BitikOCR",
         WANDB_RUN_GROUP=options.group,
-        WANDB_MODE="online",
+        WANDB_MODE=os.environ.get("WANDB_MODE", "online"),
         WANDB_TAGS=f"ocr,{options.group},literal-prompt,real-fact-eval",
         TOKENIZERS_PARALLELISM="false",
         PYTHONUNBUFFERED="1",
