@@ -1,4 +1,4 @@
-"""Train Qwen2.5-VL LoRA adapters and evaluate generated OCR text."""
+"""Train Qwen-VL LoRA adapters and evaluate generated OCR text."""
 
 import json
 import os
@@ -13,11 +13,11 @@ import torch
 from peft import PeftModel
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
+    AutoModelForImageTextToText,
     AutoProcessor,
     HfArgumentParser,
     PreTrainedTokenizerBase,
     ProcessorMixin,
-    Qwen2_5_VLForConditionalGeneration,
     Trainer,
     TrainingArguments,
     set_seed,
@@ -266,7 +266,9 @@ def train() -> None:
     data_module = make_supervised_data_module(
         model_args.model_id, processor, data_args
     )
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+    # The model's own config picks its class, so Qwen2.5-VL and Qwen3-VL
+    # load through the same path.
+    model = AutoModelForImageTextToText.from_pretrained(
         model_args.model_id,
         revision=experiment_args.model_revision,
         dtype=torch.bfloat16,
