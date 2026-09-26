@@ -37,6 +37,7 @@ from bitikocr.train.adapters import (
     configure_adapters,
     visual_digest,
 )
+from bitikocr.train.annotated_facts import score_annotated_facts
 from bitikocr.train.metrics import compute_ocr_metrics
 
 
@@ -192,6 +193,25 @@ class QwenOCRTrainer(Trainer):
                 predictions, references
             ).items()
         }
+        source = eval_dataset if eval_dataset is not None else self.eval_dataset
+        records = getattr(source, "list_data_dict", [])
+        if len(records) == len(self.prediction_rows) and all(
+            isinstance(record.get("facts"), list) for record in records
+        ):
+            annotations = {
+                str(record["id"]): record["facts"] for record in records
+            }
+            for row, record in zip(self.prediction_rows, records):
+                row["id"] = record["id"]
+            factual, _ = score_annotated_facts(
+                self.prediction_rows, annotations
+            )
+            metrics.update(
+                {
+                    f"{metric_key_prefix}_fact_{key}": value
+                    for key, value in factual.items()
+                }
+            )
         self.log(metrics.copy())
         self.control = self.callback_handler.on_evaluate(
             self.args, self.state, self.control, metrics
