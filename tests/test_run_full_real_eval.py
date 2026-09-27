@@ -64,4 +64,4 @@ def test_evaluation_settings_default_to_the_trained_ones() -> None:
     options = parse_args([])
     assert options.adapter is None
     assert options.image_max_pixels == 1003520
-    assert options.repetition_penalty == 1.0
+    assert options.repetition_penalty is None

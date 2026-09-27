@@ -76,8 +76,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--repetition-penalty",
         type=float,
-        default=1.0,
-        help="penalty on repeated tokens while generating; 1.0 is off",
+        default=None,
+        help="penalty on repeated tokens while generating; unset keeps the "
+        "model's own (1.05 for Qwen2.5-VL), 1.0 turns it off",
     )
     parser.add_argument(
         "--max-steps",

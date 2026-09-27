@@ -57,13 +57,13 @@ class QwenOCRTrainer(Trainer):
         *args: Any,
         eval_data_collator: Callable | None = None,
         max_new_tokens: int = 1024,
-        repetition_penalty: float = 1.0,
+        repetition_penalty: float | None = None,
         **kwargs: Any,
     ) -> None:
         """Configure single-device evaluation and its generation token budget."""
         if max_new_tokens <= 0:
             raise ValueError("max_new_tokens must be positive.")
-        if repetition_penalty <= 0:
+        if repetition_penalty is not None and repetition_penalty <= 0:
             raise ValueError("repetition_penalty must be positive.")
         super().__init__(*args, **kwargs)
         _validate_execution(self.args)
@@ -129,10 +129,18 @@ class QwenOCRTrainer(Trainer):
         # Trainer also accepts ordinary torch modules; the OCR model must
         # additionally implement the Transformers generate interface.
         model = cast(Any, self.model)
+        # Only an explicit penalty is passed: the model's generation config
+        # carries its own (Qwen2.5-VL's is 1.05), and passing a default here
+        # would silently replace it.
+        penalty = (
+            {}
+            if self.repetition_penalty is None
+            else {"repetition_penalty": self.repetition_penalty}
+        )
         generated_ids = model.generate(
             **inputs,
+            **penalty,
             max_new_tokens=self.max_new_tokens,
-            repetition_penalty=self.repetition_penalty,
             do_sample=False,
             num_beams=1,
             pad_token_id=tokenizer.pad_token_id,

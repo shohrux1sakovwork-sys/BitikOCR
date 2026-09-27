@@ -36,10 +36,13 @@ class GenerationArguments:
         default=1024,
         metadata={"help": "Maximum generated tokens per evaluation image."},
     )
-    repetition_penalty: float = field(
-        default=1.0,
+    repetition_penalty: float | None = field(
+        default=None,
         metadata={
-            "help": "Penalty on tokens already generated; 1.0 turns it off."
+            "help": (
+                "Penalty on tokens already generated; unset keeps the "
+                "model's own (1.05 for Qwen2.5-VL), 1.0 turns it off."
+            )
         },
     )
 
