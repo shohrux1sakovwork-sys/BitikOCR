@@ -30,11 +30,17 @@ class DataArguments:
 
 @dataclass
 class GenerationArguments:
-    """Configure the maximum generated transcription length for evaluation."""
+    """Configure how evaluation transcriptions are generated."""
 
     max_new_tokens: int = field(
         default=1024,
         metadata={"help": "Maximum generated tokens per evaluation image."},
+    )
+    repetition_penalty: float = field(
+        default=1.0,
+        metadata={
+            "help": "Penalty on tokens already generated; 1.0 turns it off."
+        },
     )
 
 

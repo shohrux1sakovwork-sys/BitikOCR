@@ -57,15 +57,19 @@ class QwenOCRTrainer(Trainer):
         *args: Any,
         eval_data_collator: Callable | None = None,
         max_new_tokens: int = 1024,
+        repetition_penalty: float = 1.0,
         **kwargs: Any,
     ) -> None:
         """Configure single-device evaluation and its generation token budget."""
         if max_new_tokens <= 0:
             raise ValueError("max_new_tokens must be positive.")
+        if repetition_penalty <= 0:
+            raise ValueError("repetition_penalty must be positive.")
         super().__init__(*args, **kwargs)
         _validate_execution(self.args)
         self.eval_data_collator = eval_data_collator
         self.max_new_tokens = max_new_tokens
+        self.repetition_penalty = repetition_penalty
         self.prediction_rows: list[dict[str, Any]] = []
         self.generation_limit_hits: list[bool] = []
 
@@ -128,6 +132,7 @@ class QwenOCRTrainer(Trainer):
         generated_ids = model.generate(
             **inputs,
             max_new_tokens=self.max_new_tokens,
+            repetition_penalty=self.repetition_penalty,
             do_sample=False,
             num_beams=1,
             pad_token_id=tokenizer.pad_token_id,
@@ -322,6 +327,7 @@ def train() -> None:
         data_collator=data_module["data_collator"],
         eval_data_collator=data_module.get("eval_data_collator"),
         max_new_tokens=generation_args.max_new_tokens,
+        repetition_penalty=generation_args.repetition_penalty,
         callbacks=[update_check] if update_check is not None else [],
     )
     if torch.cuda.is_available():
