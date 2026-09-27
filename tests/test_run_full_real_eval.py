@@ -58,3 +58,10 @@ def test_a_downloaded_benchmark_needs_no_index(tmp_path: Path) -> None:
     row = json.loads(output.read_text())
     assert row["script"] == "cyrillic+latin"
     assert row["facts"] == facts["facts"]
+
+
+def test_evaluation_settings_default_to_the_trained_ones() -> None:
+    options = parse_args([])
+    assert options.adapter is None
+    assert options.image_max_pixels == 1003520
+    assert options.repetition_penalty == 1.0

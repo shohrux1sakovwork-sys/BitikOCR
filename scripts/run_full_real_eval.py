@@ -63,6 +63,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="score the model on the real pages without training it",
     )
     parser.add_argument(
+        "--adapter",
+        default=None,
+        help="trained LoRA adapter to load onto the model before evaluating",
+    )
+    parser.add_argument(
+        "--image-max-pixels",
+        type=int,
+        default=1003520,
+        help="largest image area the model sees (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        default=1.0,
+        help="penalty on repeated tokens while generating; 1.0 is off",
+    )
+    parser.add_argument(
         "--max-steps",
         type=int,
         default=-1,
@@ -137,6 +154,9 @@ def main() -> None:
         "model_id": options.model,
         "model_revision": model_revision(options),
         "evaluation_only": options.evaluation_only,
+        "adapter_path": (
+            str(ROOT / options.adapter) if options.adapter else None
+        ),
         # Evaluation reads no training data; a fresh clone has none.
         "data_path": str(
             eval_path if options.evaluation_only else ROOT / options.data
@@ -175,8 +195,9 @@ def main() -> None:
         "logging_steps": 10,
         "logging_first_step": True,
         "image_min_pixels": 3136,
-        "image_max_pixels": 1003520,
+        "image_max_pixels": options.image_max_pixels,
         "max_new_tokens": 1024,
+        "repetition_penalty": options.repetition_penalty,
         "final_evaluation": True,
         "lora_r": 64,
         "lora_alpha": 128,
