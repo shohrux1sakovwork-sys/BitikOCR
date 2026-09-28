@@ -270,7 +270,8 @@ class FormGenerator(DocumentGenerator):
         See :meth:`DocumentGenerator.generate`.
         """
         seed, rng = self._seeded_rng(seed)
-        template, options = self.template, self.options
+        template, background, background_name = self._prepare_blank(fields, rng)
+        options = self.options
 
         values = {
             name: str(fields[name])
@@ -283,8 +284,6 @@ class FormGenerator(DocumentGenerator):
             else ""
         )
 
-        background_path = self.config.background(template.background)
-        background = Image.open(background_path)
         native_width, native_height = template.native_size
         scale_x = background.width / native_width * options.scale
         scale_y = background.height / native_height * options.scale
@@ -351,6 +350,8 @@ class FormGenerator(DocumentGenerator):
             self._print_text(page, area, str(value), scale_x, scale_y)
             printed[area.name] = str(value)
 
+        printed.update(self._decorate(page, fields, style, rng))
+
         self._check_keep_out(page, template, scale_x, scale_y)
         self._record_blank_text(page, scale_x, scale_y)
 
@@ -377,11 +378,55 @@ class FormGenerator(DocumentGenerator):
                 "font": main_info.path.name,
                 "style": style.to_dict(),
                 "fields": recorded,
-                "background": background_path.name,
+                "background": background_name,
                 "scale": options.scale,
             },
         )
         return SyntheticDocument(image=page.render(), annotation=annotation)
+
+    def _prepare_blank(
+        self, fields: FieldValues, rng: random.Random
+    ) -> tuple[FormTemplate, Image.Image, str]:
+        """Return the blank form to fill: its layout, its image and a name.
+
+        A certificate fills a scanned blank, the same one every time. A form
+        drawn afresh for each page overrides this to draw its blank and
+        measure it; it must also set :attr:`template`, which the reading
+        order and the field names are read from.
+
+        Args:
+            fields: The values about to be written, for a form whose blank
+                prints some of them itself.
+            rng: Random source; the scanned blank draws nothing from it.
+
+        Returns:
+            ``(template, background, name)``.
+        """
+        path = self.config.background(self.template.background)
+        return self.template, Image.open(path), path.name
+
+    def _decorate(
+        self,
+        page: Page,
+        fields: FieldValues,
+        style: HandwritingStyle,
+        rng: random.Random,
+    ) -> dict[str, Any]:
+        """Add what a particular form carries beyond its fields and seal.
+
+        Nothing, for a certificate. Called once everything else is written,
+        so what it adds lands on top.
+
+        Args:
+            page: The page being filled.
+            fields: The record's values.
+            style: The writer's style.
+            rng: Random source.
+
+        Returns:
+            The values that reached the page, keyed by field.
+        """
+        return {}
 
     def _record_blank_text(
         self, page: Page, scale_x: float, scale_y: float
