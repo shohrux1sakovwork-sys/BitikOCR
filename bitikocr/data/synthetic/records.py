@@ -503,18 +503,30 @@ def _sample_birth_certificate(
     script: Script,
     phrases: PhraseBank | None = None,
 ) -> SampledContent:
-    """Sample the content of one birth certificate."""
-    stem = corpus.surname_stem(rng)
-    father = corpus.sample_person(
-        rng, script, is_female=False, surname_stem=stem
+    """Sample the content of one birth certificate.
+
+    The family is named in Latin, where the child's surname can come from
+    its grandfather's given name, and written in ``script`` afterwards.
+    """
+    grandfather = corpus.sample_person(rng, "latin", False).given_name
+    father_stem = corpus.surname_stem(rng)
+    latin_father = corpus.sample_person(
+        rng, "latin", False, father_stem, grandfather
     )
-    mother = corpus.sample_person(
-        rng, script, is_female=True, surname_stem=stem
+    latin_mother = corpus.sample_person(
+        rng, "latin", True, corpus.wife_surname_stem(rng, father_stem)
+    )
+    child_stem = corpus.child_surname_stem(
+        rng, father_stem, latin_father.given_name, grandfather
     )
 
     is_daughter = rng.random() < 0.5
-    child = corpus.sample_person(
-        rng, script, is_female=is_daughter, surname_stem=stem
+    latin_child = corpus.sample_person(
+        rng, "latin", is_daughter, child_stem, latin_father.given_name
+    )
+    father, mother, child = (
+        corpus.person_in_script(person, script)
+        for person in (latin_father, latin_mother, latin_child)
     )
     suffix = in_script("qizi" if is_daughter else "o'g'li", script)
 
@@ -1340,12 +1352,9 @@ def _sample_malumotnoma(
     settlement = "shahar" if is_city else "tuman"
 
     holder_is_female = rng.random() < 0.3
-    stem = corpus.surname_stem(rng)
-    holder = corpus.sample_person(
-        rng, script, is_female=holder_is_female, surname_stem=stem
-    )
     born = rng.randint(1935, 2002)
-    family = _household(rng, script, holder, stem, born)
+    latin_holder, family = _household(rng, script, holder_is_female, born)
+    holder = corpus.person_in_script(latin_holder, script)
 
     year = rng.randint(2005, 2024)
     month = rng.randint(1, 12)
@@ -1411,86 +1420,139 @@ def _sample_malumotnoma(
 def _household(
     rng: random.Random,
     script: Script,
-    holder: corpus.Person,
-    stem: str,
+    holder_is_female: bool,
     born: int,
-) -> list[str]:
-    """List the holder's household the way the committee's clerk writes it.
+) -> tuple[corpus.Person, list[str]]:
+    """Name the holder and list their household as the clerk writes it.
 
-    Each entry is a relative's name, often a birth year and what they are
-    to the holder. One clerk keeps to one way of writing the entries.
+    Everyone is named in Latin first, where a given name can become a
+    relative's surname: children usually take their paternal grandfather's
+    name, and a wife takes her husband's surname or keeps her own (see
+    :func:`corpus.child_surname_stem`). Patronymics follow each person's
+    father. One clerk keeps to one way of writing the entries.
+
+    Returns:
+        The holder, in Latin, and the household's entries in ``script``.
     """
-    size = rng.choices(_FAMILY_SIZES, weights=_FAMILY_WEIGHTS)[0]
+    grandfather = corpus.sample_person(rng, "latin", False).given_name
+    father_stem = corpus.surname_stem(rng)
+    father = corpus.sample_person(rng, "latin", False, father_stem, grandfather)
+    birth_stem = corpus.child_surname_stem(
+        rng, father_stem, father.given_name, grandfather
+    )
+
+    married = born < 1998 and rng.random() < 0.85
+    husband: corpus.Person | None = None
+    husband_stem = corpus.surname_stem(rng)
+    husband_father = corpus.sample_person(rng, "latin", False).given_name
+    holder_stem = birth_stem
+    if holder_is_female and married:
+        husband = corpus.sample_person(
+            rng, "latin", False, husband_stem, husband_father
+        )
+        holder_stem = corpus.wife_surname_stem(rng, husband_stem, birth_stem)
+    holder = corpus.sample_person(
+        rng, "latin", holder_is_female, holder_stem, father.given_name
+    )
+
+    # The children's father: the holder, or a woman holder's husband.
+    if holder_is_female:
+        dad = husband or corpus.sample_person(
+            rng, "latin", False, husband_stem, husband_father
+        )
+        dad_stem, dad_father = husband_stem, husband_father
+    else:
+        dad, dad_stem, dad_father = holder, holder_stem, father.given_name
+    kids_stem = corpus.child_surname_stem(
+        rng, dad_stem, dad.given_name, dad_father
+    )
+
     members: list[tuple[corpus.Person, int, str]] = []
     if born > 1975 and rng.random() < 0.5:
+        mother_stem = corpus.wife_surname_stem(rng, father_stem)
+        members.append((father, born - rng.randint(20, 35), "father"))
         members.append(
             (
-                corpus.sample_person(rng, script, False, stem),
-                born - rng.randint(20, 35),
-                "father",
-            )
-        )
-        members.append(
-            (
-                corpus.sample_person(rng, script, True, stem),
+                corpus.sample_person(rng, "latin", True, mother_stem),
                 born - rng.randint(18, 32),
                 "mother",
             )
         )
-    if born < 1998 and rng.random() < 0.85:
-        members.append(
-            (
-                corpus.sample_person(rng, script, not holder.is_female, stem),
-                born + rng.randint(-3, 9),
-                "spouse_of_woman" if holder.is_female else "spouse_of_man",
-            )
-        )
+    if married:
+        if holder_is_female:
+            assert husband is not None
+            spouse, kind = husband, "spouse_of_woman"
+        else:
+            wife_stem = corpus.wife_surname_stem(rng, holder_stem)
+            spouse = corpus.sample_person(rng, "latin", True, wife_stem)
+            kind = "spouse_of_man"
+        members.append((spouse, born + rng.randint(-3, 9), kind))
+
+    size = rng.choices(_FAMILY_SIZES, weights=_FAMILY_WEIGHTS)[0]
     # Only an older holder has a son old enough to be married, and children
     # of that son; a younger one lists children and siblings.
     kinds = ("son", "daughter", "daughter_in_law", "grandchild", "sibling")
     weights = (4, 4, 2, 3, 1) if born < 1975 else (4, 4, 0, 0, 2)
+    sons: list[corpus.Person] = []
+    grandchild_stems: dict[str, str] = {}
     while len(members) < size:
         kind = rng.choices(kinds, weights=weights)[0]
-        if kind == "sibling":
-            female = rng.random() < 0.5
-            members.append(
-                (
-                    corpus.sample_person(rng, script, female, stem),
-                    born + rng.randint(-8, 12),
-                    "sister" if female else "brother",
-                )
-            )
-            continue
-        female = kind == "daughter" or kind == "daughter_in_law"
-        if kind == "grandchild":
-            female = rng.random() < 0.5
         offset = {
             "son": (20, 35),
             "daughter": (20, 35),
             "daughter_in_law": (21, 38),
             "grandchild": (42, 62),
+            "sibling": (-8, 12),
         }[kind]
-        # A daughter-in-law comes from another family.
-        relative_stem = None if kind == "daughter_in_law" else stem
         year = born + rng.randint(*offset)
         if year > 2023:
             # A household is listed as it is, not as it will be.
             continue
-        members.append(
-            (
-                corpus.sample_person(rng, script, female, relative_stem),
-                year,
-                kind,
+        if kind == "sibling":
+            # Brothers and sisters share the holder's father and his rule.
+            person = corpus.sample_person(
+                rng, "latin", None, birth_stem, father.given_name
             )
-        )
+            kind = "sister" if person.is_female else "brother"
+        elif kind in ("son", "daughter"):
+            person = corpus.sample_person(
+                rng, "latin", kind == "daughter", kids_stem, dad.given_name
+            )
+            if kind == "son":
+                sons.append(person)
+        elif kind == "daughter_in_law":
+            person = corpus.sample_person(
+                rng, "latin", True, corpus.wife_surname_stem(rng, kids_stem)
+            )
+        else:
+            # A grandchild is named after its grandfather, who is the
+            # children's father, by the rule its own father's family keeps.
+            son = (
+                sons[0]
+                if sons
+                else corpus.sample_person(
+                    rng, "latin", False, kids_stem, dad.given_name
+                )
+            )
+            stem = grandchild_stems.setdefault(
+                son.given_name,
+                corpus.child_surname_stem(
+                    rng, kids_stem, son.given_name, dad.given_name
+                ),
+            )
+            person = corpus.sample_person(
+                rng, "latin", None, stem, son.given_name
+            )
+        members.append((person, year, kind))
     members = members[:size]
 
     style = rng.randrange(4)
     year_word = in_script(rng.choice(("yil", "y.", "yilda tug'ilgan")), script)
     entries = []
     for person, year, kind in members:
+        written = corpus.person_in_script(person, script)
         relation = in_script(rng.choice(_RELATIONS[kind]), script)
-        name = f"{person.surname} {person.given_name}"
+        name = f"{written.surname} {written.given_name}"
         if style == 0:
             entries.append(f"{name} - {year} {year_word}, {relation}")
         elif style == 1:
@@ -1499,7 +1561,7 @@ def _household(
             entries.append(f"{name} — {relation}")
         else:
             entries.append(f"{relation} {name} {year}")
-    return entries
+    return holder, entries
 
 
 def _mahalla_box_stamp(

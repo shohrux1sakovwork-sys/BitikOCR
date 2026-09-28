@@ -103,3 +103,20 @@ def test_the_same_seed_draws_the_same_page(config: SyntheticConfig) -> None:
 def test_a_template_is_refused(config: SyntheticConfig) -> None:
     with pytest.raises(ValueError, match="drawn, not chosen"):
         MalumotnomaGenerator.with_template(config, None, "anything")
+
+
+def test_sons_are_often_named_differently_from_their_father() -> None:
+    """A male holder's sons usually carry their grandfather's name."""
+    differs = total = 0
+    for record in sample_records("malumotnoma", 300, random.Random(8), "latin"):
+        holder = record.fields["holder"].split()[0]
+        if holder.endswith("a"):
+            continue
+        for name, value in record.fields.items():
+            if name.startswith("member_") and "o'g'li" in value:
+                total += 1
+                # One entry format puts the relation first, in lower case.
+                surname = next(w for w in value.split() if w[0].isupper())
+                differs += surname != holder
+    assert total > 50
+    assert 0.4 < differs / total < 0.9

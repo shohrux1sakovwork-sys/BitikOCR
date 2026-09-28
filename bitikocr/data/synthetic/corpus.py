@@ -30,6 +30,8 @@ __all__ = [
     "VILLAGES",
     "Address",
     "Person",
+    "child_surname_stem",
+    "person_in_script",
     "sample_address",
     "sample_mahalla",
     "sample_office",
@@ -37,6 +39,7 @@ __all__ = [
     "sample_person",
     "sample_place",
     "sample_town",
+    "wife_surname_stem",
 ]
 
 #: Month names. Cyrillic is spelled out because the Latin forms iotate
@@ -317,6 +320,82 @@ def sample_person(
         given_name=in_script(given, script),
         patronymic=in_script(patronymic, script),
         is_female=female,
+    )
+
+
+#: Where a child's surname comes from. Most Uzbek children are named after
+#: their paternal grandfather — Qodirov Ali's son is Muhammadjonov Farrux,
+#: Farrux's son is Aliyev Hamid, Hamid's son is Farruxov Jamshid — so father
+#: and child usually differ. Some families keep one surname, and some take
+#: the father's own name.
+_CHILD_SURNAME_SOURCES = ("grandfather", "family", "father")
+_CHILD_SURNAME_WEIGHTS = (0.55, 0.3, 0.15)
+
+#: Share of wives who take their husband's surname at the wedding; the rest
+#: keep their own.
+_WIFE_TAKES_SURNAME = 0.5
+
+
+def child_surname_stem(
+    rng: random.Random,
+    family_stem: str,
+    father_name: str,
+    grandfather_name: str,
+) -> str:
+    """Choose the stem a father's children take their surname from.
+
+    Brothers and sisters share it, so it is chosen once per father.
+
+    Args:
+        rng: Random source.
+        family_stem: The father's own surname stem.
+        father_name: The father's given name, in Latin.
+        grandfather_name: The father's father's given name, in Latin.
+
+    Returns:
+        A stem for :func:`sample_person`'s ``surname_stem``.
+    """
+    source = rng.choices(
+        _CHILD_SURNAME_SOURCES, weights=_CHILD_SURNAME_WEIGHTS
+    )[0]
+    return {
+        "grandfather": grandfather_name,
+        "family": family_stem,
+        "father": father_name,
+    }[source]
+
+
+def wife_surname_stem(
+    rng: random.Random, husband_stem: str, maiden_stem: str | None = None
+) -> str:
+    """Choose a wife's surname stem: her husband's, or the one she was born
+    with.
+
+    Args:
+        rng: Random source.
+        husband_stem: Her husband's surname stem.
+        maiden_stem: Her birth surname's stem, when it is known; a random
+            family's otherwise.
+
+    Returns:
+        A stem for :func:`sample_person`'s ``surname_stem``.
+    """
+    if rng.random() < _WIFE_TAKES_SURNAME:
+        return husband_stem
+    return maiden_stem or surname_stem(rng)
+
+
+def person_in_script(person: Person, script: Script) -> Person:
+    """Return a name sampled in Latin as ``script`` writes it.
+
+    A family is sampled in Latin, where a given name becomes a relative's
+    surname stem, and written in the page's alphabet afterwards.
+    """
+    return Person(
+        surname=in_script(person.surname, script),
+        given_name=in_script(person.given_name, script),
+        patronymic=in_script(person.patronymic, script),
+        is_female=person.is_female,
     )
 
 

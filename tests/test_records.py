@@ -168,14 +168,41 @@ def test_an_age_matches_the_year_of_death() -> None:
         assert 40 <= int(record.fields["age_at_death"]) <= 99
 
 
-def test_a_family_shares_a_surname_stem() -> None:
-    for record in sample_records("birth_certificate", 20, random.Random(13)):
-        fields = record.fields
-        child = fields["child_surname"]
-        father = fields["father_surname"]
-        mother = fields["mother_surname"]
-        stem = min(len(child), len(father), len(mother)) - 3
-        assert child[:stem] == father[:stem] == mother[:stem]
+def _masculine(surname: str) -> str:
+    """A Latin surname without its feminine ending."""
+    return surname.removesuffix("a")
+
+
+def test_a_child_is_usually_named_differently_from_its_father() -> None:
+    """Most children take their grandfather's given name as a surname; some
+    families keep one surname."""
+    records = sample_records(
+        "birth_certificate", 300, random.Random(13), "latin"
+    )
+    differs = sum(
+        _masculine(r.fields["child_surname"]) != r.fields["father_surname"]
+        for r in records
+    )
+    assert 0.5 < differs / len(records) < 0.85
+
+
+def test_a_childs_patronymic_names_its_father() -> None:
+    for record in sample_records(
+        "birth_certificate", 50, random.Random(14), "latin"
+    ):
+        father = record.fields["father_given_name"].split()[0]
+        assert father in record.fields["child_given_name"]
+
+
+def test_a_mother_sometimes_keeps_her_own_surname() -> None:
+    records = sample_records(
+        "birth_certificate", 300, random.Random(15), "latin"
+    )
+    kept = sum(
+        _masculine(r.fields["mother_surname"]) != r.fields["father_surname"]
+        for r in records
+    )
+    assert 0.3 < kept / len(records) < 0.7
 
 
 def test_a_serial_number_is_seven_digits() -> None:
