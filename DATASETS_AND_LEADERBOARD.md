@@ -45,11 +45,13 @@ to a real person.
 | v2 | `aktrmai/synthetic_v2` | 5,000 | Labels in the archive's conventions |
 | v3 | `aktrmai/synthetic_v3` | 5,000 | Names written the way clerks write them |
 | v4 | `aktrmai/synthetic_v4` | 5,000 | Pages that look like the archive's scans |
+| Malumotnoma | `aktrmai/synthetic_malumotnoma` | 2,000 | Mahalla certificates of residence, a new document type |
 | Real | `aktrmai/adliya-handwritten-ocr` | 96 | Human-transcribed 2023 applications |
 
-Each synthetic version has five document types, 1,000 pages each: `ariza`,
+v1–v4 each have five document types, 1,000 pages each: `ariza`,
 `consent_letter`, `explanatory_letter`, `birth_certificate` and
-`death_certificate`. Files are matched by id:
+`death_certificate`. The malumotnoma set adds a sixth. Files are matched
+by id:
 
 ```
 images/<id>.jpg         the page
@@ -112,6 +114,25 @@ pages:
   1.15–1.6.
 - **One broken font removed** (its letters rendered as dots); 41 remain.
 
+### Malumotnoma: `synthetic_malumotnoma`
+
+`malumotnoma` is 41 of the 175 benchmark pages, the second most common
+type, and our best model still reads it at about 46% CER against 23% for
+`ariza`. Each mahalla committee prints its own blank, so the generator draws
+one per page, then fills and labels it like the certificates:
+
+- The title МАЪЛУМОТНОМА, certifying sentences worded several ways with
+  blanks for holder, birth year, town, mahalla, street and house, and 3–14
+  numbered family rows (name, birth year, relation). Empty rows keep their
+  printed numbers, as in the real labels.
+- The committee's rectangular stamp with date and number written in (or a
+  printed letterhead), the round seal over the chairman's signature, and
+  typeset names for the chairman and secretary.
+- A plausible household: in-laws and grandchildren only for older holders,
+  parents for younger ones. 92% Cyrillic handwriting, like the real forms.
+- 27% of committees have Cyrillic stamps, so 75.8% of pages contain Latin
+  text, against 75.6% of the real certificates.
+
 ### Real: `adliya-handwritten-ocr`
 
 96 human-reviewed 2023 applications from Qashqadaryo, Buxoro and Jizzax, in
@@ -149,6 +170,7 @@ uv run --extra data python scripts/data/build_corpus.py all \
 | v2 | `04870f6` | 2026 | |
 | v3 | `f6ffbd9` | 2027 | |
 | v4 | `367b86b` | 2029 | `--look archive` |
+| Malumotnoma | `88976b7` | 2031 | `--look archive --types malumotnoma --per-type 2000` |
 
 5,000 pages take about 6 minutes on 36 CPU cores. The build checks every
 page and reports problems at the end.
@@ -197,7 +219,7 @@ was trained at.
 
 | # | Model | Base | Training data | Name | Date | Number | Phrase | Doc_Type | **Avg** | Facts (all) | CER |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | ⭐ **v3 + v4 + real, 2 MP** (step 300)¹ | **Qwen3-VL-8B** | v3 + v4 + 96 real ×26 | **46.3** | **62.5** | **53.2** | **47.9** | 94.3 | **60.8** | **56.4** | **34.2** |
+| 1 | ⭐ **v3 + v4 + real, 2 MP** (step 300) | **Qwen3-VL-8B** | v3 + v4 + 96 real ×26 | **46.3** | **62.5** | **53.2** | **47.9** | 94.3 | **60.8** | **56.4** | **34.2** |
 | 2 | ⭐ v3 + v4 + real, 2 MP (step 300) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 44.4 | 54.4 | 50.7 | 42.1 | 93.0 | 56.9 | 52.3 | 34.4 |
 | 3 | ⭐ v3 + v4 + real, 1 MP model read at 2 MP | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 43.2 | 50.0 | 49.3 | 42.4 | 95.6 | 56.1 | 51.1 | 37.8 |
 | 4 | ⭐ v3 + v4 + real, 1 MP (step 500) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 39.9 | 53.1 | 44.3 | 36.6 | 94.3 | 53.6 | 48.7 | 38.7 |
@@ -223,9 +245,6 @@ was trained at.
 | 24 | deepseek_ocr_latest | DeepSeek-OCR | none | 3.3 | 8.1 | 9.4 | 3.8 | 19.0 | 8.7 | — | — |
 | 25 | paddleocr_ru | PaddleOCR | none | 5.1 | 0.3 | 1.0 | 0.0 | 22.2 | 5.7 | — | — |
 | 26 | yasserrmd_nanonets_ocr_s_latest | Nanonets-OCR-s | none | 1.2 | 1.6 | 1.0 | 0.7 | 1.3 | 1.2 | — | — |
-
-¹ The run was in its final evaluation when this was written; this is its
-best checkpoint so far.
 
 - **Avg** is the plain average of the five fact columns. **Facts (all)**
   weights every fact equally, so it differs from Avg.
@@ -270,9 +289,10 @@ Gains on the leaderboard's Avg, largest first:
 
 ## 7. Next steps
 
-1. **Label more real pages,** especially `malumotnoma`: 41 of the 175
-   benchmark pages, still about 45% CER, and no training data of that type.
-2. **A `malumotnoma` generator** for the synthetic sets.
+1. **Train with the new `malumotnoma` set:** v3 + v4 + malumotnoma + real on
+   Qwen3-VL-8B, and compare its `malumotnoma` CER with the current 46%.
+2. **Label more real pages,** especially `malumotnoma`: real examples of the
+   type are still missing from training.
 3. **Try Qwen3.5-9B** as the base: on Qwen's model card it beats the larger
    Qwen3-VL-30B-A3B on every document-reading benchmark, and the code
    already supports it.
