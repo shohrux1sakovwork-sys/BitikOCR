@@ -285,7 +285,7 @@ class MalumotnomaGenerator(FormGenerator):
             if header == "stamp" and fields.get("reg_stamp"):
                 type_size = int(body_size * rng.uniform(0.75, 0.95))
                 blank_width = int(type_size * rng.uniform(4.0, 6.0))
-                width, height = box_stamp_size(
+                _, height = box_stamp_size(
                     list(fields["reg_stamp"]),
                     type_size,
                     blank_width,
