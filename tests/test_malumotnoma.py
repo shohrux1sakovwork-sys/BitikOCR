@@ -120,3 +120,20 @@ def test_sons_are_often_named_differently_from_their_father() -> None:
                 differs += surname != holder
     assert total > 50
     assert 0.4 < differs / total < 0.9
+
+
+def test_the_top_left_block_is_read_before_the_title(
+    config: SyntheticConfig,
+) -> None:
+    """The archive's transcripts read a stamp or letterhead first, and
+    never run it into the title's line."""
+    for seed in range(30):
+        _, document = _render(config, seed)
+        lines = document.annotation.text.splitlines()
+        title = next(
+            i for i, line in enumerate(lines) if "МАЪЛУМОТНОМА" in line
+        )
+        assert lines[title].replace(" ", "").startswith("МАЪЛУМОТНОМА")
+        before = "\n".join(lines[:title])
+        if "<stamp>" in document.annotation.text.split("МАЪЛУМОТНОМА")[0]:
+            assert before.startswith("<stamp>")

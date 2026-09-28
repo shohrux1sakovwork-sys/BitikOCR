@@ -117,6 +117,10 @@ _PAPER = (252, 252, 250)
 #: The clerk's hand inside the stamp, relative to the stamp's lettering.
 _ENTRY_SCALE = 1.1
 
+#: How much closer the rows are set on each redraw of a form too long for
+#: A4.
+_ROW_SQUEEZES = (1.0, 0.88, 0.78, 0.7)
+
 #: The clerk's nominal hand size as a share of the blank's row height.
 #: Real clerks write large, often up to the rule above.
 _HAND_TO_ROW = (0.62, 0.85)
@@ -249,74 +253,87 @@ class MalumotnomaGenerator(FormGenerator):
         blank = fields.get("blank") or {}
         regular, bold = _print_faces(self.library)
         body_size = int(_PAGE_WIDTH * rng.uniform(0.0150, 0.0185))
-        pitch = int(body_size * rng.uniform(2.5, 3.1))
-        self._row_height = pitch
+        row_pitch = int(body_size * rng.uniform(2.5, 3.1))
         left = int(_PAGE_WIDTH * rng.uniform(0.07, 0.11))
         right = int(_PAGE_WIDTH * rng.uniform(0.90, 0.95))
 
-        canvas = Image.new("RGB", (_PAGE_WIDTH, int(_A4_HEIGHT * 1.4)), _PAPER)
-        drawer = _BlankDrawer(
-            draw=ImageDraw.Draw(canvas),
-            font=ImageFont.truetype(str(regular), body_size),
-            left=left,
-            right=right,
-            pitch=pitch,
-        )
-
-        top = int(_PAGE_WIDTH * rng.uniform(0.03, 0.06))
-        header = rng.choices(
-            list(_HEADER_WEIGHTS), weights=list(_HEADER_WEIGHTS.values())
-        )[0]
-        title_left, title_right = left, right
-        self._stamp_plan = None
-        header_bottom = top
-        if header == "stamp" and fields.get("reg_stamp"):
-            type_size = int(body_size * rng.uniform(0.75, 0.95))
-            blank_width = int(type_size * rng.uniform(4.0, 6.0))
-            width, height = box_stamp_size(
-                list(fields["reg_stamp"]),
-                type_size,
-                blank_width,
-                find_print_font(self.library),
+        # A long household can push the form past A4; it is drawn again with
+        # the same choices and closer rows, as a print shop would set it.
+        state = rng.getstate()
+        for squeeze in _ROW_SQUEEZES:
+            rng.setstate(state)
+            pitch = int(row_pitch * squeeze)
+            self._row_height = pitch
+            canvas = Image.new(
+                "RGB", (_PAGE_WIDTH, int(_A4_HEIGHT * 1.4)), _PAPER
             )
-            stamp_left = max(8, left - int(_PAGE_WIDTH * 0.03))
-            self._stamp_plan = _StampPlan(
-                stamp_left, top, type_size, blank_width
+            drawer = _BlankDrawer(
+                draw=ImageDraw.Draw(canvas),
+                font=ImageFont.truetype(str(regular), body_size),
+                left=left,
+                right=right,
+                pitch=pitch,
             )
-            title_left = stamp_left + width + int(body_size * 2)
-            header_bottom = top + height
-        elif header == "letterhead":
-            header_bottom = drawer.letterhead(
-                _letterhead_lines(blank, rng),
-                ImageFont.truetype(str(regular), int(body_size * 0.85)),
-                top,
+
+            top = int(_PAGE_WIDTH * rng.uniform(0.03, 0.06))
+            header = rng.choices(
+                list(_HEADER_WEIGHTS), weights=list(_HEADER_WEIGHTS.values())
+            )[0]
+            title_left, title_right = left, right
+            self._stamp_plan = None
+            header_bottom = top
+            if header == "stamp" and fields.get("reg_stamp"):
+                type_size = int(body_size * rng.uniform(0.75, 0.95))
+                blank_width = int(type_size * rng.uniform(4.0, 6.0))
+                width, height = box_stamp_size(
+                    list(fields["reg_stamp"]),
+                    type_size,
+                    blank_width,
+                    find_print_font(self.library),
+                )
+                stamp_left = max(8, left - int(_PAGE_WIDTH * 0.03))
+                self._stamp_plan = _StampPlan(
+                    stamp_left, top, type_size, blank_width
+                )
+                header_bottom = top + height
+            elif header == "letterhead":
+                header_bottom = drawer.letterhead(
+                    _letterhead_lines(blank, rng),
+                    ImageFont.truetype(str(regular), int(body_size * 0.85)),
+                    top,
+                )
+
+            title_font = ImageFont.truetype(
+                str(bold), int(body_size * rng.uniform(1.35, 1.8))
             )
-            title_left = left + int((right - left) * 0.4)
+            # The title goes below a stamp or letterhead, never beside it. The
+            # page is read row by row, so a title beside the stamp would be read
+            # before it and one beside a letterhead would merge into its lines;
+            # the archive's transcripts read the top-left block first.
+            title_baseline = header_bottom + int(title_font.size * 1.6)
+            drawer.title(
+                title_font,
+                title_left,
+                title_right,
+                title_baseline,
+                spaced=rng.random() < 0.6,
+                number_blank=bool(fields.get("form_number")),
+            )
 
-        title_font = ImageFont.truetype(
-            str(bold), int(body_size * rng.uniform(1.35, 1.8))
-        )
-        title_baseline = top + int(title_font.size * 1.6)
-        drawer.title(
-            title_font,
-            title_left,
-            title_right,
-            title_baseline,
-            spaced=rng.random() < 0.6,
-            number_blank=bool(fields.get("form_number")),
-        )
+            y = max(header_bottom, title_baseline) + int(pitch * 1.3)
+            for line in _body_lines(fields, blank, rng):
+                y = drawer.line(line, y)
+            y = drawer.signature_block(
+                _chairman_label(blank, rng),
+                rng.choice(("Котиба:", "Котиби:", "Котиба")),
+                y + int(pitch * 0.4),
+                rng,
+            )
 
-        y = max(header_bottom, title_baseline) + int(pitch * 1.3)
-        for line in _body_lines(fields, blank, rng):
-            y = drawer.line(line, y)
-        y = drawer.signature_block(
-            _chairman_label(blank, rng),
-            rng.choice(("Котиба:", "Котиби:", "Котиба")),
-            y + int(pitch * 0.4),
-            rng,
-        )
+            used = y + int(pitch * rng.uniform(0.5, 1.5))
+            if used <= _A4_HEIGHT:
+                break
 
-        used = y + int(pitch * rng.uniform(0.5, 1.5))
         if rng.random() < _FULL_SHEET_SHARE and used <= _A4_HEIGHT:
             height = _A4_HEIGHT
         else:
