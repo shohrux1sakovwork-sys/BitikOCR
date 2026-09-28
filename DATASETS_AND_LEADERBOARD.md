@@ -45,13 +45,13 @@ to a real person.
 | v2 | `aktrmai/synthetic_v2` | 5,000 | Labels in the archive's conventions |
 | v3 | `aktrmai/synthetic_v3` | 5,000 | Names written the way clerks write them |
 | v4 | `aktrmai/synthetic_v4` | 5,000 | Pages that look like the archive's scans |
-| Malumotnoma | `aktrmai/synthetic_malumotnoma` | 2,000 | Mahalla certificates of residence, a new document type |
+| Malumotnoma | `aktrmai/synthetic_malumotnoma` | 1,000 | Mahalla certificates of residence, a new document type |
 | Real | `aktrmai/adliya-handwritten-ocr` | 96 | Human-transcribed 2023 applications |
 
 v1–v4 each have five document types, 1,000 pages each: `ariza`,
 `consent_letter`, `explanatory_letter`, `birth_certificate` and
-`death_certificate`. The malumotnoma set adds a sixth. Files are matched
-by id:
+`death_certificate`. The malumotnoma set adds a sixth, also 1,000 pages.
+Files are matched by id:
 
 ```
 images/<id>.jpg         the page
@@ -130,8 +130,14 @@ one per page, then fills and labels it like the certificates:
   typeset names for the chairman and secretary.
 - A plausible household: in-laws and grandchildren only for older holders,
   parents for younger ones. 92% Cyrillic handwriting, like the real forms.
-- 27% of committees have Cyrillic stamps, so 75.8% of pages contain Latin
+- 27% of committees have Cyrillic stamps, so 74.7% of pages contain Latin
   text, against 75.6% of the real certificates.
+- **Families are named the Uzbek way:** a child usually takes the paternal
+  grandfather's given name as a surname (Qodirov Ali → Muhammadjonov Farrux
+  → Aliyev Hamid → Farruxov Jamshid), some families keep one surname, and a
+  wife takes her husband's surname or keeps her own. Birth certificates
+  built from commit `863f86b` on follow the same rules; v2–v4 were built
+  before, with one surname per family.
 
 ### Real: `adliya-handwritten-ocr`
 
@@ -170,7 +176,7 @@ uv run --extra data python scripts/data/build_corpus.py all \
 | v2 | `04870f6` | 2026 | |
 | v3 | `f6ffbd9` | 2027 | |
 | v4 | `367b86b` | 2029 | `--look archive` |
-| Malumotnoma | `88976b7` | 2031 | `--look archive --types malumotnoma --per-type 2000` |
+| Malumotnoma | `863f86b` | 2031 | `--look archive --types malumotnoma` |
 
 5,000 pages take about 6 minutes on 36 CPU cores. The build checks every
 page and reports problems at the end.
