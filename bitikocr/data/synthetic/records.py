@@ -1314,6 +1314,10 @@ _MALUMOTNOMA_PURPOSES = (
     "kasalxona",
 )
 
+#: Share of committees whose stamps were made in Cyrillic. 11 of the 41
+#: benchmark certificates carry no Latin at all, stamps included.
+_CYRILLIC_MAHALLA_STAMP_SHARE = 0.27
+
 #: Most family lists are short; a few run to a dozen relatives.
 _FAMILY_SIZES = tuple(range(13))
 _FAMILY_WEIGHTS = (6, 5, 8, 10, 11, 10, 8, 6, 4, 3, 2, 2, 1)
@@ -1385,6 +1389,13 @@ def _sample_malumotnoma(
             "number": number,
         },
     }
+    if rng.random() < _CYRILLIC_MAHALLA_STAMP_SHARE:
+        # One stamp maker made both stamps, in one alphabet.
+        fields["stamp_ring"] = to_cyrillic(fields["stamp_ring"])
+        fields["stamp_center"] = [
+            to_cyrillic(line) for line in fields["stamp_center"]
+        ]
+        fields["reg_stamp"] = [to_cyrillic(row) for row in fields["reg_stamp"]]
     for index, member in enumerate(family, start=1):
         fields[f"member_{index}"] = member
     if rng.random() < 0.3:
@@ -1514,8 +1525,6 @@ def _mahalla_box_stamp(
         street = corpus.sample_person(rng, "latin").surname
         rows.append(f"{rng.randint(100, 240)}{rng.randint(0, 9)}00 {town}")
         rows.append(f"{street} k. {rng.randint(1, 120)}-uy.")
-    if rng.random() < 0.15:
-        rows = [to_cyrillic(row) for row in rows]
     return rows
 
 
