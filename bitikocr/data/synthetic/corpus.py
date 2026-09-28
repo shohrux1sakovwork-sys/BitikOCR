@@ -307,7 +307,10 @@ def sample_person(
     if rng.random() < _UZBEK_PATRONYMIC_SHARE:
         patronymic = f"{father} qizi" if female else f"{father} o'g'li"
     else:
-        patronymic = f"{father}ovna" if female else f"{father}ovich"
+        # The Russian suffix follows the surname's: Karimovich, but
+        # Ubaydulloyevich and Jumaboyevna.
+        base = _masculinise(father)
+        patronymic = f"{base}na" if female else f"{base}ich"
 
     return Person(
         surname=in_script(surname, script),
