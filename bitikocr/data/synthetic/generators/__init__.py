@@ -36,6 +36,9 @@ from bitikocr.data.synthetic.generators.explanatory_letter import (
 )
 from bitikocr.data.synthetic.generators.form import FormGenerator, FormOptions
 from bitikocr.data.synthetic.generators.letter import LetterGenerator
+from bitikocr.data.synthetic.generators.malumotnoma import (
+    MalumotnomaGenerator,
+)
 
 __all__ = [
     "DEFAULT_INK_STRENGTH",
@@ -50,6 +53,7 @@ __all__ = [
     "FormGenerator",
     "FormOptions",
     "LetterGenerator",
+    "MalumotnomaGenerator",
     "SyntheticDocument",
     "available_document_types",
     "create_generator",
@@ -58,6 +62,7 @@ __all__ = [
 GENERATOR_TYPES: dict[str, type[DocumentGenerator]] = {
     ArizaGenerator.name: ArizaGenerator,
     BirthCertificateGenerator.name: BirthCertificateGenerator,
+    MalumotnomaGenerator.name: MalumotnomaGenerator,
     ConsentLetterGenerator.name: ConsentLetterGenerator,
     DeathCertificateGenerator.name: DeathCertificateGenerator,
     ExplanatoryLetterGenerator.name: ExplanatoryLetterGenerator,

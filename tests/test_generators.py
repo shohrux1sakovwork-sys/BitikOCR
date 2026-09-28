@@ -88,6 +88,7 @@ def test_every_document_type_is_registered() -> None:
         "consent_letter",
         "death_certificate",
         "explanatory_letter",
+        "malumotnoma",
     )
 
 

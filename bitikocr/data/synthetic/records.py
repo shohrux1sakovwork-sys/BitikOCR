@@ -94,8 +94,21 @@ _APOSTROPHE_WEIGHTS = (0.6, 0.3, 0.1)
 
 #: Fields whose text is printed, not written, and so keeps its spelling.
 _PRINTED_FIELDS = frozenset(
-    {"stamp_ring", "stamp_center", "reg_stamp", "form_series", "serial_number"}
+    {
+        "stamp_ring",
+        "stamp_center",
+        "reg_stamp",
+        "form_series",
+        "serial_number",
+        "chairman_name",
+        "secretary_name",
+    }
 )
+
+#: Share of Latin handwriting per document type, where it differs from the
+#: corpus default. Every real neighbourhood certificate is a Cyrillic form,
+#: and the clerk fills it in the form's alphabet.
+_LATIN_SHARE_BY_TYPE: Mapping[str, float] = {"malumotnoma": 0.08}
 
 #: Share of applications that reach the page with the receiving office's
 #: stamp on them; the rest carry the filing number written by hand alone.
@@ -1269,6 +1282,243 @@ def _sample_explanatory_letter(
     )
 
 
+# -- neighbourhood certificate ----------------------------------------------
+
+#: What a relative is to the holder, by how the certificate lists them.
+_RELATIONS = {
+    "spouse_of_man": ("turmush o'rtog'i", "xotini"),
+    "spouse_of_woman": ("turmush o'rtog'i", "eri"),
+    "son": ("o'g'li",),
+    "daughter": ("qizi",),
+    "daughter_in_law": ("kelini",),
+    "grandchild": ("nabirasi", "nevarasi"),
+    "father": ("otasi",),
+    "mother": ("onasi",),
+    "brother": ("ukasi", "akasi"),
+    "sister": ("singlisi", "opasi"),
+}
+
+#: Where the certificate is going, as the clerk writes it in the blank
+#: before the printed "uchun berildi".
+_MALUMOTNOMA_PURPOSES = (
+    "talab qilingan joy",
+    "so'ralgan joy",
+    "ish joyi",
+    "bank",
+    "maktab",
+    "pensiya jamg'armasi",
+    "hokimlik",
+    "notarial idora",
+    "FHDYO bo'limi",
+    "sud",
+    "kasalxona",
+)
+
+#: Most family lists are short; a few run to a dozen relatives.
+_FAMILY_SIZES = tuple(range(13))
+_FAMILY_WEIGHTS = (6, 5, 8, 10, 11, 10, 8, 6, 4, 3, 2, 2, 1)
+
+
+def _sample_malumotnoma(
+    rng: random.Random,
+    script: Script,
+    phrases: PhraseBank | None = None,
+) -> SampledContent:
+    """Sample a neighbourhood committee's certificate of residence.
+
+    The committee certifies that the holder lives at an address and lists
+    the household. The blank is printed for one committee, so its name and
+    officials are printed matter; the clerk writes the rest.
+    """
+    region, town, is_city = corpus.sample_town(rng)
+    mahalla = corpus.sample_mahalla(rng, "latin")
+    number = rng.randint(1, 45)
+    settlement = "shahar" if is_city else "tuman"
+
+    holder_is_female = rng.random() < 0.3
+    stem = corpus.surname_stem(rng)
+    holder = corpus.sample_person(
+        rng, script, is_female=holder_is_female, surname_stem=stem
+    )
+    born = rng.randint(1935, 2002)
+    family = _household(rng, script, holder, stem, born)
+
+    year = rng.randint(2005, 2024)
+    month = rng.randint(1, 12)
+    day = rng.randint(1, 28)
+    chairman = corpus.sample_person(
+        rng, "cyrillic", is_female=rng.random() < 0.15
+    )
+    secretary = corpus.sample_person(
+        rng, "cyrillic", is_female=rng.random() < 0.85
+    )
+
+    fields: dict[str, Any] = {
+        "holder": f"{holder.surname} {holder.given_name}"
+        + (f" {holder.patronymic}" if rng.random() < 0.35 else ""),
+        "holder_birth_year": str(born),
+        "town": in_script(town, script),
+        "mahalla": in_script(mahalla, script),
+        "street": corpus.sample_person(rng, script).surname,
+        "house": str(rng.randint(1, 140)),
+        "purpose": in_script(rng.choice(_MALUMOTNOMA_PURPOSES), script),
+        "chairman_name": f"{chairman.given_name[0]}. {chairman.surname}",
+        "secretary_name": f"{secretary.given_name[0]}. {secretary.surname}",
+        "reg_number": str(rng.randint(100, 9999)),
+        "reg_date": f"{day:02d}.{month:02d}.{year}",
+        "reg_stamp": _mahalla_box_stamp(
+            rng, region, town, settlement, number, mahalla
+        ),
+        "stamp_ring": (
+            f"O'ZBEKISTON RESPUBLIKASI * {region} VILOYATI {town} "
+            f'{settlement} * {number}-SON "{mahalla}" MAHALLA '
+            "FUQAROLAR YIG'INI *"
+        ).upper(),
+        "stamp_center": [f"{number}-SON", f'"{mahalla.upper()}"'],
+        # What the committee had printed on its blank: its own name, the
+        # town it is in, and whether the town is a city or a district.
+        "blank": {
+            "region": to_cyrillic(region),
+            "town": to_cyrillic(town),
+            "settlement": to_cyrillic(settlement),
+            "mahalla": to_cyrillic(mahalla),
+            "number": number,
+        },
+    }
+    for index, member in enumerate(family, start=1):
+        fields[f"member_{index}"] = member
+    if rng.random() < 0.3:
+        fields["form_number"] = str(rng.randint(10, 3000))
+    return SampledContent(
+        fields=fields,
+        year=year,
+        dates={"issued": _iso(year, month, day)},
+        notes={"family_size": len(family)},
+    )
+
+
+def _household(
+    rng: random.Random,
+    script: Script,
+    holder: corpus.Person,
+    stem: str,
+    born: int,
+) -> list[str]:
+    """List the holder's household the way the committee's clerk writes it.
+
+    Each entry is a relative's name, often a birth year and what they are
+    to the holder. One clerk keeps to one way of writing the entries.
+    """
+    size = rng.choices(_FAMILY_SIZES, weights=_FAMILY_WEIGHTS)[0]
+    members: list[tuple[corpus.Person, int, str]] = []
+    if born > 1975 and rng.random() < 0.5:
+        members.append(
+            (
+                corpus.sample_person(rng, script, False, stem),
+                born - rng.randint(20, 35),
+                "father",
+            )
+        )
+        members.append(
+            (
+                corpus.sample_person(rng, script, True, stem),
+                born - rng.randint(18, 32),
+                "mother",
+            )
+        )
+    if born < 1998 and rng.random() < 0.85:
+        members.append(
+            (
+                corpus.sample_person(rng, script, not holder.is_female, stem),
+                born + rng.randint(-3, 9),
+                "spouse_of_woman" if holder.is_female else "spouse_of_man",
+            )
+        )
+    # Only an older holder has a son old enough to be married, and children
+    # of that son; a younger one lists children and siblings.
+    kinds = ("son", "daughter", "daughter_in_law", "grandchild", "sibling")
+    weights = (4, 4, 2, 3, 1) if born < 1975 else (4, 4, 0, 0, 2)
+    while len(members) < size:
+        kind = rng.choices(kinds, weights=weights)[0]
+        if kind == "sibling":
+            female = rng.random() < 0.5
+            members.append(
+                (
+                    corpus.sample_person(rng, script, female, stem),
+                    born + rng.randint(-8, 12),
+                    "sister" if female else "brother",
+                )
+            )
+            continue
+        female = kind == "daughter" or kind == "daughter_in_law"
+        if kind == "grandchild":
+            female = rng.random() < 0.5
+        offset = {
+            "son": (20, 35),
+            "daughter": (20, 35),
+            "daughter_in_law": (21, 38),
+            "grandchild": (42, 62),
+        }[kind]
+        # A daughter-in-law comes from another family.
+        relative_stem = None if kind == "daughter_in_law" else stem
+        year = born + rng.randint(*offset)
+        if year > 2023:
+            # A household is listed as it is, not as it will be.
+            continue
+        members.append(
+            (
+                corpus.sample_person(rng, script, female, relative_stem),
+                year,
+                kind,
+            )
+        )
+    members = members[:size]
+
+    style = rng.randrange(4)
+    year_word = in_script(rng.choice(("yil", "y.", "yilda tug'ilgan")), script)
+    entries = []
+    for person, year, kind in members:
+        relation = in_script(rng.choice(_RELATIONS[kind]), script)
+        name = f"{person.surname} {person.given_name}"
+        if style == 0:
+            entries.append(f"{name} - {year} {year_word}, {relation}")
+        elif style == 1:
+            entries.append(f"{name} {year} {year_word} {relation}")
+        elif style == 2:
+            entries.append(f"{name} — {relation}")
+        else:
+            entries.append(f"{relation} {name} {year}")
+    return entries
+
+
+def _mahalla_box_stamp(
+    rng: random.Random,
+    region: str,
+    town: str,
+    settlement: str,
+    number: int,
+    mahalla: str,
+) -> list[str]:
+    """Word the rectangular stamp a committee presses on what it issues.
+
+    The empty row is room for the date and the row ending in ``№`` room
+    for the outgoing number; the clerk writes both in.
+    """
+    rows = ["O'ZBEKISTON RESPUBLIKASI", f"{region} VILOYATI"]
+    if rng.random() < 0.7:
+        rows.append(f"{town} {settlement.upper()}")
+    rows.extend([f'{number}-SON "{mahalla}"', "MAHALLA FUQAROLAR", "YIG'INI"])
+    rows = [row.upper() for row in rows]
+    rows.extend(["", "№"])
+    if rng.random() < 0.6:
+        street = corpus.sample_person(rng, "latin").surname
+        rows.append(f"{rng.randint(100, 240)}{rng.randint(0, 9)}00 {town}")
+        rows.append(f"{street} k. {rng.randint(1, 120)}-uy.")
+    if rng.random() < 0.15:
+        rows = [to_cyrillic(row) for row in rows]
+    return rows
+
+
 def _wording(
     rng: random.Random,
     phrases: PhraseBank | None,
@@ -1317,6 +1567,7 @@ Sampler = Callable[[random.Random, Script, PhraseBank | None], SampledContent]
 #: Document type mapped to the sampler that fills it.
 RECORD_SAMPLERS: dict[str, Sampler] = {
     "ariza": _sample_ariza,
+    "malumotnoma": _sample_malumotnoma,
     "birth_certificate": _sample_birth_certificate,
     "consent_letter": _sample_consent_letter,
     "death_certificate": _sample_death_certificate,
@@ -1362,7 +1613,8 @@ def sample_record(
     if script is not None:
         chosen: Script = script
     else:
-        chosen = "latin" if rng.random() < latin_share else "cyrillic"
+        share = _LATIN_SHARE_BY_TYPE.get(document_type, latin_share)
+        chosen = "latin" if rng.random() < share else "cyrillic"
     content = sampler(rng, chosen, phrases)
     habit = _sample_spelling(rng)
     return DocumentRecord(

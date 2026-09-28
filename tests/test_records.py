@@ -48,6 +48,7 @@ def test_every_document_type_can_be_sampled() -> None:
         "consent_letter",
         "death_certificate",
         "explanatory_letter",
+        "malumotnoma",
     )
 
 
@@ -80,11 +81,18 @@ def test_a_record_stays_in_one_alphabet(
     """Handwritten values are all in one script.
 
     Machine-printed marks are excluded: a form series is typeset beside a
-    roman numeral, which belongs to neither alphabet.
+    roman numeral, which belongs to neither alphabet, a stamp is made in
+    whichever alphabet its maker chose, and a drawn blank prints its own
+    wording.
     """
     generator = create_generator(document_type, config)
     template = getattr(generator, "template", None)
-    handwritten = set(generator.field_names) - {"stamp_ring", "stamp_center"}
+    handwritten = set(generator.field_names) - {
+        "stamp_ring",
+        "stamp_center",
+        "reg_stamp",
+        "blank",
+    }
     if template is not None:
         handwritten -= set(template.printed_names)
 

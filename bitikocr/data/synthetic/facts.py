@@ -113,6 +113,35 @@ FIELD_FACTS: Mapping[str, Mapping[str, FieldFact]] = {
         "signature_name": _fact("signature_owner"),
         "page_number": _fact("number", "reference"),
     },
+    "malumotnoma": {
+        "holder": _fact("person_name"),
+        "holder_birth_year": _fact("date"),
+        "town": _fact("address"),
+        "mahalla": _fact("place"),
+        "street": _fact("address"),
+        "house": _fact("address"),
+        "member_1": _fact("person_name"),
+        "member_2": _fact("person_name"),
+        "member_3": _fact("person_name"),
+        "member_4": _fact("person_name"),
+        "member_5": _fact("person_name"),
+        "member_6": _fact("person_name"),
+        "member_7": _fact("person_name"),
+        "member_8": _fact("person_name"),
+        "member_9": _fact("person_name"),
+        "member_10": _fact("person_name"),
+        "member_11": _fact("person_name"),
+        "member_12": _fact("person_name"),
+        "member_13": _fact("person_name"),
+        "member_14": _fact("person_name"),
+        "purpose": _fact("subject"),
+        "form_number": _fact("number", "reference"),
+        "chairman_name": _fact("signature_owner"),
+        "secretary_name": _fact("signature_owner"),
+        "reg_number": _fact("number", "reference"),
+        "reg_date": _fact("date"),
+        "stamp_ring": _fact("stamp_text"),
+    },
     "death_certificate": {
         "surname": _fact("person_name"),
         "given_name_patronymic": _fact("person_name"),
@@ -165,6 +194,7 @@ YEAR_IN_WORDS: Mapping[str, Mapping[str, str]] = {
     "ariza": {},
     "consent_letter": {},
     "explanatory_letter": {},
+    "malumotnoma": {},
 }
 
 #: Fields that together spell one date, per document type: the note holding
@@ -186,6 +216,7 @@ DATE_GROUPS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "ariza": {"filed": ("date",)},
     "consent_letter": {"filed": ("date",)},
     "explanatory_letter": {"filed": ("date",)},
+    "malumotnoma": {"issued": ("reg_date",)},
 }
 
 
