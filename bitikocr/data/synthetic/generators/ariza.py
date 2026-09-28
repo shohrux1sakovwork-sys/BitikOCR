@@ -40,6 +40,8 @@ __all__ = [
     "DEFAULT_TITLE",
     "REGISTRATION_STAMP_FIELD",
     "ArizaGenerator",
+    "read_stamp",
+    "write_in_stamp",
 ]
 
 DEFAULT_TITLE = "Ариза"
@@ -270,10 +272,12 @@ class ArizaGenerator(LetterGenerator):
         )
         boxes: list[BoundingBox | None] = [box]
         for block, blank, value in zip(_ENTRY_BLOCKS, blanks, entries):
-            boxes.append(_write_in(page, block, blank, value, entry_hand, ink))
+            boxes.append(
+                write_in_stamp(page, block, blank, value, entry_hand, ink)
+            )
         page.add_block(
             "stamp",
-            _read_stamp(rows, entries[: len(blanks)]),
+            read_stamp(rows, entries[: len(blanks)]),
             BoundingBox.union(boxes),
         )
 
@@ -338,7 +342,7 @@ class ArizaGenerator(LetterGenerator):
         return left, lowest
 
 
-def _write_in(
+def write_in_stamp(
     page: Page,
     block: str,
     blank: StampBlank,
@@ -361,7 +365,7 @@ def _write_in(
     return page.lines[-1].bbox
 
 
-def _read_stamp(rows: Sequence[str], entries: Sequence[str]) -> str:
+def read_stamp(rows: Sequence[str], entries: Sequence[str]) -> str:
     """Spell a filled-in stamp out, its entries where they were written.
 
     Args:
