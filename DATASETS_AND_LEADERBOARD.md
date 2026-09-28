@@ -176,7 +176,7 @@ uv run --extra data python scripts/data/build_corpus.py all \
 | v2 | `04870f6` | 2026 | |
 | v3 | `f6ffbd9` | 2027 | |
 | v4 | `367b86b` | 2029 | `--look archive` |
-| Malumotnoma | `863f86b` | 2031 | `--look archive --types malumotnoma` |
+| Malumotnoma | `961e2bc` | 2031 | `--look archive --types malumotnoma` |
 
 5,000 pages take about 6 minutes on 36 CPU cores. The build checks every
 page and reports problems at the end.
@@ -226,6 +226,7 @@ was trained at.
 | # | Model | Base | Training data | Name | Date | Number | Phrase | Doc_Type | **Avg** | Facts (all) | CER |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | ⭐ **v3 + v4 + real, 2 MP** (step 300) | **Qwen3-VL-8B** | v3 + v4 + 96 real ×26 | **46.3** | **62.5** | **53.2** | **47.9** | 94.3 | **60.8** | **56.4** | **34.2** |
+| — | ⭐ v3 + v4 + malumotnoma (first build²) + real, 2 MP | Qwen3-VL-8B | v3 + v4 + malumotnoma + 96 real ×29 | 47.3 | 58.1 | 49.3 | 52.8 | 93.0 | 60.1 | 56.0 | 38.2 |
 | 2 | ⭐ v3 + v4 + real, 2 MP (step 300) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 44.4 | 54.4 | 50.7 | 42.1 | 93.0 | 56.9 | 52.3 | 34.4 |
 | 3 | ⭐ v3 + v4 + real, 1 MP model read at 2 MP | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 43.2 | 50.0 | 49.3 | 42.4 | 95.6 | 56.1 | 51.1 | 37.8 |
 | 4 | ⭐ v3 + v4 + real, 1 MP (step 500) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 39.9 | 53.1 | 44.3 | 36.6 | 94.3 | 53.6 | 48.7 | 38.7 |
@@ -252,6 +253,11 @@ was trained at.
 | 25 | paddleocr_ru | PaddleOCR | none | 5.1 | 0.3 | 1.0 | 0.0 | 22.2 | 5.7 | — | — |
 | 26 | yasserrmd_nanonets_ocr_s_latest | Nanonets-OCR-s | none | 1.2 | 1.6 | 1.0 | 0.7 | 1.3 | 1.2 | — | — |
 
+² The first malumotnoma build read the title before the stamp and merged it
+into letterhead lines; the model learned that order and read real
+certificates worse (malumotnoma CER 51.7% against 45.9%). The set on Hugging
+Face is the corrected build; a run on it is in progress.
+
 - **Avg** is the plain average of the five fact columns. **Facts (all)**
   weights every fact equally, so it differs from Avg.
 - Gemini 3.6 Flash is left out: it did not run on all pages.
@@ -266,6 +272,7 @@ was trained at.
 
 | Adapter | Leaderboard row |
 |---|---|
+| `aktrmai/bitikocr-qwen3vl-8b-lora-v3-v4-real-2mpx` | 1 (use at 2 MP) |
 | `aktrmai/bitikocr-qwen2.5vl-7b-lora-v3-v4-real-2mpx` | 2 (use at 2 MP) |
 | `aktrmai/bitikocr-qwen2.5vl-7b-lora-v3-v4-real` | 3, 4 |
 | `aktrmai/bitikocr-qwen2.5vl-7b-lora-v3-real` | 7 |
@@ -292,6 +299,10 @@ Gains on the leaderboard's Avg, largest first:
   pages; a run of 500 steps sees only 4,000 pages, and scores peak around
   step 300.
 - **Read at high enough resolution.** 1 MP was too low for handwriting.
+- **Labels must read in the benchmark's order.** A new document type whose
+  labels read the top of the page differently made the model worse on that
+  very type. Check a new generator's labels against real transcripts before
+  training on it.
 
 ## 7. Next steps
 
