@@ -3,8 +3,8 @@
 How each training dataset was built, what each version added, and how every
 model we have tried scores on the real Adliya benchmark.
 
-**Best model so far:** Qwen3-VL-8B fine-tuned on v3 + v4 + real pages at
-2 megapixels: **56.4% of facts correct, 34.2% CER**, against 33.7% and 60.7%
+**Best model so far:** Qwen3.5-9B fine-tuned on v3 + v4 + real pages at
+2 megapixels: **58.5% of facts correct, 32.9% CER**, against 39.5% and 58.5%
 for the same model untuned.
 
 ## 1. The benchmark
@@ -225,34 +225,36 @@ was trained at.
 
 | # | Model | Base | Training data | Name | Date | Number | Phrase | Doc_Type | **Avg** | Facts (all) | CER |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | ⭐ **v3 + v4 + real, 2 MP** (step 300) | **Qwen3-VL-8B** | v3 + v4 + 96 real ×26 | **46.3** | **62.5** | **53.2** | **47.9** | 94.3 | **60.8** | **56.4** | **34.2** |
+| 1 | ⭐ **v3 + v4 + real, 2 MP** (step 300) | **Qwen3.5-9B** | v3 + v4 + 96 real ×26 | **51.6** | 56.9 | **53.2** | **55.5** | **94.9** | **62.4** | **58.5** | **32.9** |
+| 2 | ⭐ v3 + v4 + real, 2 MP (step 300) | Qwen3-VL-8B | v3 + v4 + 96 real ×26 | 46.3 | **62.5** | **53.2** | 47.9 | 94.3 | 60.8 | 56.4 | 34.2 |
 | — | ⭐ v3 + v4 + malumotnoma (fixed build²) + real, 2 MP | Qwen3-VL-8B | v3 + v4 + malumotnoma + 96 real ×29 | 49.2 | 58.8 | 48.3 | 49.3 | 93.0 | 59.7 | 55.9 | 38.2 |
 | — | ⭐ v3 + v4 + malumotnoma (first build²) + real, 2 MP | Qwen3-VL-8B | v3 + v4 + malumotnoma + 96 real ×29 | 47.3 | 58.1 | 49.3 | 52.8 | 93.0 | 60.1 | 56.0 | 38.2 |
-| 2 | ⭐ v3 + v4 + real, 2 MP (step 300) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 44.4 | 54.4 | 50.7 | 42.1 | 93.0 | 56.9 | 52.3 | 34.4 |
-| 3 | ⭐ v3 + v4 + real, 1 MP model read at 2 MP | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 43.2 | 50.0 | 49.3 | 42.4 | 95.6 | 56.1 | 51.1 | 37.8 |
-| 4 | ⭐ v3 + v4 + real, 1 MP (step 500) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 39.9 | 53.1 | 44.3 | 36.6 | 94.3 | 53.6 | 48.7 | 38.7 |
-| 5 | ⭐ v4 + real (step 300) | Qwen2.5-VL-7B | v4 + 96 real ×13 | 39.1 | 51.9 | 39.3 | 38.6 | 93.0 | 52.4 | 47.7 | 45.0 |
-| 6 | ⭐ v3 + real, 500 steps | Qwen2.5-VL-7B | v3 + 96 real ×13 | 39.5 | 51.6 | 39.8 | 33.1 | **97.5** | 52.3 | 47.2 | 41.8 |
-| 7 | ⭐ v3 + real, 250 steps | Qwen2.5-VL-7B | v3 + 96 real ×13 | 38.9 | 51.9 | 43.3 | 33.8 | 93.0 | 52.2 | 47.2 | 40.9 |
-| 8 | ⭐ v3 only (step 200) | Qwen2.5-VL-7B | v3 | 40.1 | 31.2 | 31.8 | 27.9 | 91.8 | 44.6 | 40.2 | 49.2 |
-| 9 | qwen3_vl_32b | Qwen3-VL-32B | none | 25.0 | 31.6 | 48.1 | 28.9 | 72.1 | 41.1 | — | — |
-| 10 | ⭐ v2 only | Qwen2.5-VL-7B | v2 | 21.8 | 33.4 | 38.3 | 20.0 | 89.9 | 40.7 | 33.7 | 59.4 |
-| 11 | qwen3_8_27b | Qwen3-VL-8B | none | 33.1 | 31.6 | 41.1 | 29.9 | 54.4 | 38.0 | — | — |
-| 12 | ⭐ Untuned, our pipeline | Qwen3-VL-8B | none | 29.4 | 30.6 | 34.3 | 25.9 | 66.5 | 37.3 | 33.7 | 60.7 |
-| 13 | qwen2_5vl_32b | Qwen2.5-VL-32B | none | 28.6 | 25.6 | 36.1 | 21.3 | 66.5 | 35.6 | — | — |
-| 14 | qwen2_5vl_7b_v2 | Qwen2.5-VL-7B | — | 32.1 | 25.0 | 41.1 | 19.6 | 54.4 | 34.4 | — | — |
-| 15 | qwen2_5vl_7b | Qwen2.5-VL-7B | none | 30.9 | 23.1 | 36.6 | 21.6 | 55.1 | 33.5 | — | — |
-| 16 | ⭐ Untuned, our pipeline | Qwen2.5-VL-7B | none | 27.2 | 20.0 | 23.9 | 13.4 | 58.9 | 28.7 | 25.8 | 97.8 |
-| 17 | ⭐ First ablation adapter (r64) | Qwen2.5-VL-7B | v1, 1.6k × 3 epochs | 21.0 | 30.3 | 16.9 | 14.5 | 60.8 | 28.7 | 25.5 | 58.3 |
-| 18 | richardyoung_olmocr2_7b_q8 | olmOCR-2-7B | none | 27.8 | 29.4 | 22.8 | 17.9 | 44.3 | 28.4 | — | — |
-| 19 | qwen2_5vl_3b | Qwen2.5-VL-3B | none | 24.9 | 18.8 | 29.2 | 15.1 | 50.0 | 27.6 | — | — |
-| 20 | glm_ocr_latest | GLM-OCR | none | 13.7 | 19.4 | 37.1 | 16.8 | 49.4 | 27.3 | — | — |
-| 21 | ⭐ v1, 18k pages (step 1350) | Qwen2.5-VL-7B | v1 18k | 17.1 | 26.2 | 14.4 | 12.4 | 63.3 | 26.7 | 22.8 | 58.6 |
-| 22 | glm_ocr | GLM-OCR | none | 12.7 | 20.6 | 34.7 | 15.5 | 48.1 | 26.3 | — | — |
-| 23 | wevisdoc_4b | — | none | 11.5 | 10.3 | 24.3 | 12.7 | 31.6 | 18.1 | — | — |
-| 24 | deepseek_ocr_latest | DeepSeek-OCR | none | 3.3 | 8.1 | 9.4 | 3.8 | 19.0 | 8.7 | — | — |
-| 25 | paddleocr_ru | PaddleOCR | none | 5.1 | 0.3 | 1.0 | 0.0 | 22.2 | 5.7 | — | — |
-| 26 | yasserrmd_nanonets_ocr_s_latest | Nanonets-OCR-s | none | 1.2 | 1.6 | 1.0 | 0.7 | 1.3 | 1.2 | — | — |
+| 3 | ⭐ v3 + v4 + real, 2 MP (step 300) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 44.4 | 54.4 | 50.7 | 42.1 | 93.0 | 56.9 | 52.3 | 34.4 |
+| 4 | ⭐ v3 + v4 + real, 1 MP model read at 2 MP | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 43.2 | 50.0 | 49.3 | 42.4 | 95.6 | 56.1 | 51.1 | 37.8 |
+| 5 | ⭐ v3 + v4 + real, 1 MP (step 500) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 39.9 | 53.1 | 44.3 | 36.6 | 94.3 | 53.6 | 48.7 | 38.7 |
+| 6 | ⭐ v4 + real (step 300) | Qwen2.5-VL-7B | v4 + 96 real ×13 | 39.1 | 51.9 | 39.3 | 38.6 | 93.0 | 52.4 | 47.7 | 45.0 |
+| 7 | ⭐ v3 + real, 500 steps | Qwen2.5-VL-7B | v3 + 96 real ×13 | 39.5 | 51.6 | 39.8 | 33.1 | **97.5** | 52.3 | 47.2 | 41.8 |
+| 8 | ⭐ v3 + real, 250 steps | Qwen2.5-VL-7B | v3 + 96 real ×13 | 38.9 | 51.9 | 43.3 | 33.8 | 93.0 | 52.2 | 47.2 | 40.9 |
+| 9 | ⭐ v3 only (step 200) | Qwen2.5-VL-7B | v3 | 40.1 | 31.2 | 31.8 | 27.9 | 91.8 | 44.6 | 40.2 | 49.2 |
+| 10 | ⭐ Untuned, our pipeline (1 MP) | Qwen3.5-9B | none | 38.3 | 36.6 | 35.8 | 31.0 | 69.0 | 42.1 | 39.5 | 58.5 |
+| 11 | qwen3_vl_32b | Qwen3-VL-32B | none | 25.0 | 31.6 | 48.1 | 28.9 | 72.1 | 41.1 | — | — |
+| 12 | ⭐ v2 only | Qwen2.5-VL-7B | v2 | 21.8 | 33.4 | 38.3 | 20.0 | 89.9 | 40.7 | 33.7 | 59.4 |
+| 13 | qwen3_8_27b | Qwen3-VL-8B | none | 33.1 | 31.6 | 41.1 | 29.9 | 54.4 | 38.0 | — | — |
+| 14 | ⭐ Untuned, our pipeline | Qwen3-VL-8B | none | 29.4 | 30.6 | 34.3 | 25.9 | 66.5 | 37.3 | 33.7 | 60.7 |
+| 15 | qwen2_5vl_32b | Qwen2.5-VL-32B | none | 28.6 | 25.6 | 36.1 | 21.3 | 66.5 | 35.6 | — | — |
+| 16 | qwen2_5vl_7b_v2 | Qwen2.5-VL-7B | — | 32.1 | 25.0 | 41.1 | 19.6 | 54.4 | 34.4 | — | — |
+| 17 | qwen2_5vl_7b | Qwen2.5-VL-7B | none | 30.9 | 23.1 | 36.6 | 21.6 | 55.1 | 33.5 | — | — |
+| 18 | ⭐ Untuned, our pipeline | Qwen2.5-VL-7B | none | 27.2 | 20.0 | 23.9 | 13.4 | 58.9 | 28.7 | 25.8 | 97.8 |
+| 19 | ⭐ First ablation adapter (r64) | Qwen2.5-VL-7B | v1, 1.6k × 3 epochs | 21.0 | 30.3 | 16.9 | 14.5 | 60.8 | 28.7 | 25.5 | 58.3 |
+| 20 | richardyoung_olmocr2_7b_q8 | olmOCR-2-7B | none | 27.8 | 29.4 | 22.8 | 17.9 | 44.3 | 28.4 | — | — |
+| 21 | qwen2_5vl_3b | Qwen2.5-VL-3B | none | 24.9 | 18.8 | 29.2 | 15.1 | 50.0 | 27.6 | — | — |
+| 22 | glm_ocr_latest | GLM-OCR | none | 13.7 | 19.4 | 37.1 | 16.8 | 49.4 | 27.3 | — | — |
+| 23 | ⭐ v1, 18k pages (step 1350) | Qwen2.5-VL-7B | v1 18k | 17.1 | 26.2 | 14.4 | 12.4 | 63.3 | 26.7 | 22.8 | 58.6 |
+| 24 | glm_ocr | GLM-OCR | none | 12.7 | 20.6 | 34.7 | 15.5 | 48.1 | 26.3 | — | — |
+| 25 | wevisdoc_4b | — | none | 11.5 | 10.3 | 24.3 | 12.7 | 31.6 | 18.1 | — | — |
+| 26 | deepseek_ocr_latest | DeepSeek-OCR | none | 3.3 | 8.1 | 9.4 | 3.8 | 19.0 | 8.7 | — | — |
+| 27 | paddleocr_ru | PaddleOCR | none | 5.1 | 0.3 | 1.0 | 0.0 | 22.2 | 5.7 | — | — |
+| 28 | yasserrmd_nanonets_ocr_s_latest | Nanonets-OCR-s | none | 1.2 | 1.6 | 1.0 | 0.7 | 1.3 | 1.2 | — | — |
 
 ² The first malumotnoma build read the title before the stamp and merged it
 into letterhead lines; the model learned that order and read real
@@ -260,7 +262,8 @@ certificates worse (malumotnoma CER 51.7% against 45.9%). The fixed build
 (the set on Hugging Face) still scores 49.8%. Ignoring order, it reads the
 certificates slightly better (word overlap 66.3% against 64.7%, and names
 49.2% against 46.3%), but it places the top stamp's text later than the
-benchmark does, which CER punishes heavily. Row 1 remains the best model.
+benchmark does, which CER punishes heavily. The same recipe without
+malumotnoma (row 2) stays ahead.
 
 - **Avg** is the plain average of the five fact columns. **Facts (all)**
   weights every fact equally, so it differs from Avg.
@@ -276,7 +279,8 @@ benchmark does, which CER punishes heavily. Row 1 remains the best model.
 
 | Adapter | Leaderboard row |
 |---|---|
-| `aktrmai/bitikocr-qwen3vl-8b-lora-v3-v4-real-2mpx` | 1 (use at 2 MP) |
+| `aktrmai/bitikocr-qwen3.5-9b-lora-v3-v4-real-2mpx` | 1 (use at 2 MP; open the answer with an empty `<think>` block) |
+| `aktrmai/bitikocr-qwen3vl-8b-lora-v3-v4-real-2mpx` | 2 (use at 2 MP) |
 | `aktrmai/bitikocr-qwen2.5vl-7b-lora-v3-v4-real-2mpx` | 2 (use at 2 MP) |
 | `aktrmai/bitikocr-qwen2.5vl-7b-lora-v3-v4-real` | 3, 4 |
 | `aktrmai/bitikocr-qwen2.5vl-7b-lora-v3-real` | 7 |
@@ -291,6 +295,7 @@ Gains on the leaderboard's Avg, largest first:
 | v1 → v2: labels in the archive's conventions | +14.0 |
 | + 96 real pages (v3 → v3 + real) | +7.6 |
 | Qwen2.5-VL-7B → Qwen3-VL-8B as base | +3.9 |
+| Qwen3-VL-8B → Qwen3.5-9B as base | +1.6 |
 | v2 → v3: clerks' name spellings | +3.9 |
 | 1 MP → 2 MP images | +3.3 |
 | v3 + v4 together instead of one of them | +1.2 |
@@ -310,12 +315,14 @@ Gains on the leaderboard's Avg, largest first:
 
 ## 7. Next steps
 
-1. **Train with the new `malumotnoma` set:** v3 + v4 + malumotnoma + real on
-   Qwen3-VL-8B, and compare its `malumotnoma` CER with the current 46%.
-2. **Label more real pages,** especially `malumotnoma`: real examples of the
-   type are still missing from training.
-3. **Try Qwen3.5-9B** as the base: on Qwen's model card it beats the larger
-   Qwen3-VL-30B-A3B on every document-reading benchmark, and the code
-   already supports it.
-4. **A separate real test set** of about 100 pages, so checkpoints are not
+1. **Label real `malumotnoma` pages.** Synthetic certificates improved
+   reading slightly but taught the wrong place for the top stamp; 30–50 real
+   ones would teach both. Qwen3.5-9B already reads them at 41% CER.
+2. **Check Qwen3.5-9B's dates:** 56.9% against Qwen3-VL-8B's 62.5%, its only
+   clear weak spot.
+3. **Adapt Qwen3.5's linear-attention layers too.** Our LoRA targets reach
+   only its full-attention and MLP layers.
+4. **Measure run-to-run noise** by repeating the best recipe with another
+   seed, so 1–2 point differences can be trusted or dismissed.
+5. **A separate real test set** of about 100 pages, so checkpoints are not
    chosen and scored on the same benchmark.
