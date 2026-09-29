@@ -226,6 +226,7 @@ was trained at.
 | # | Model | Base | Training data | Name | Date | Number | Phrase | Doc_Type | **Avg** | Facts (all) | CER |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | ⭐ **v3 + v4 + real, 2 MP** (step 300) | **Qwen3-VL-8B** | v3 + v4 + 96 real ×26 | **46.3** | **62.5** | **53.2** | **47.9** | 94.3 | **60.8** | **56.4** | **34.2** |
+| — | ⭐ v3 + v4 + malumotnoma (fixed build²) + real, 2 MP | Qwen3-VL-8B | v3 + v4 + malumotnoma + 96 real ×29 | 49.2 | 58.8 | 48.3 | 49.3 | 93.0 | 59.7 | 55.9 | 38.2 |
 | — | ⭐ v3 + v4 + malumotnoma (first build²) + real, 2 MP | Qwen3-VL-8B | v3 + v4 + malumotnoma + 96 real ×29 | 47.3 | 58.1 | 49.3 | 52.8 | 93.0 | 60.1 | 56.0 | 38.2 |
 | 2 | ⭐ v3 + v4 + real, 2 MP (step 300) | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 44.4 | 54.4 | 50.7 | 42.1 | 93.0 | 56.9 | 52.3 | 34.4 |
 | 3 | ⭐ v3 + v4 + real, 1 MP model read at 2 MP | Qwen2.5-VL-7B | v3 + v4 + 96 real ×26 | 43.2 | 50.0 | 49.3 | 42.4 | 95.6 | 56.1 | 51.1 | 37.8 |
@@ -255,8 +256,11 @@ was trained at.
 
 ² The first malumotnoma build read the title before the stamp and merged it
 into letterhead lines; the model learned that order and read real
-certificates worse (malumotnoma CER 51.7% against 45.9%). The set on Hugging
-Face is the corrected build; a run on it is in progress.
+certificates worse (malumotnoma CER 51.7% against 45.9%). The fixed build
+(the set on Hugging Face) still scores 49.8%. Ignoring order, it reads the
+certificates slightly better (word overlap 66.3% against 64.7%, and names
+49.2% against 46.3%), but it places the top stamp's text later than the
+benchmark does, which CER punishes heavily. Row 1 remains the best model.
 
 - **Avg** is the plain average of the five fact columns. **Facts (all)**
   weights every fact equally, so it differs from Avg.
