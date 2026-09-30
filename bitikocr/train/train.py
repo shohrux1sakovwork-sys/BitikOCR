@@ -398,7 +398,7 @@ def train() -> None:
         "lora": asdict(lora_args),
         "vision_digest": (
             visual_digest(peft_model)
-            if not lora_args.freeze_vision_encoder
+            if not lora_args.freeze_vision_encoder or lora_args.vision_lora_rank
             else ""
         ),
         "vision_gradient_verified": (

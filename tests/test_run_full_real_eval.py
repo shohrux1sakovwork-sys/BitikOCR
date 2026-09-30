@@ -65,3 +65,8 @@ def test_evaluation_settings_default_to_the_trained_ones() -> None:
     assert options.adapter is None
     assert options.image_max_pixels == 1003520
     assert options.repetition_penalty is None
+
+
+def test_the_vision_encoder_stays_frozen_by_default() -> None:
+    assert parse_args([]).vision_lora_rank == 0
+    assert parse_args(["--vision-lora-rank", "16"]).vision_lora_rank == 16

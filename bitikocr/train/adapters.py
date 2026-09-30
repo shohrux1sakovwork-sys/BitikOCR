@@ -9,9 +9,27 @@ from transformers import TrainerCallback
 
 from bitikocr.params import LoraArguments
 
+#: Vision-encoder layers that take LoRA: each block's attention and MLP, and
+#: the merger's. The patch embedding is a convolution and stays frozen.
+VISION_LORA_SUFFIXES = frozenset({"qkv", "proj", "linear_fc1", "linear_fc2"})
+
+#: Dtypes too coarse to train full weights in: a learning-rate-sized step is
+#: rounded away (see issue #12).
+_LOW_PRECISION = (torch.bfloat16, torch.float16)
+
 
 def configure_adapters(model: Any, args: LoraArguments) -> Any:
-    """Resolve decoder-only targets and save fully trained visual weights."""
+    """Resolve decoder targets, and vision targets when the encoder trains.
+
+    With ``vision_lora_rank`` set, the vision encoder's attention, MLP and
+    merger layers get LoRA of that rank beside the decoder's. PEFT keeps
+    adapter weights in float32, so their updates survive a bfloat16 model.
+
+    Raises:
+        ValueError: If a target cannot be resolved, or the whole vision
+            encoder would be trained in bfloat16 or float16, where its
+            updates are rounded away.
+    """
     suffixes = {name.strip() for name in args.lora_target_modules.split(",")}
     targets = [
         name
@@ -34,13 +52,26 @@ def configure_adapters(model: Any, args: LoraArguments) -> Any:
         raise ValueError(
             "Expected exactly one visual backbone including merger."
         )
+    if not args.freeze_vision_encoder and _is_low_precision(model):
+        raise ValueError(
+            "Training the whole vision encoder in bfloat16 or float16 loses "
+            "its updates to rounding (issue #12); set vision_lora_rank "
+            "instead."
+        )
+    vision_targets = _vision_targets(model) if args.vision_lora_rank else []
+    if args.vision_lora_rank and not vision_targets:
+        raise ValueError("Cannot resolve the vision encoder's LoRA layers.")
+    vision_rank = {name: args.vision_lora_rank for name in vision_targets}
+    vision_alpha = {name: 2 * args.vision_lora_rank for name in vision_targets}
     result: Any = get_peft_model(
         model,
         LoraConfig(
             r=args.lora_r,
             lora_alpha=args.lora_alpha,
             lora_dropout=args.lora_dropout,
-            target_modules=targets,
+            target_modules=[*targets, *vision_targets],
+            rank_pattern=vision_rank,
+            alpha_pattern=vision_alpha,
             modules_to_save=None if args.freeze_vision_encoder else visual,
             bias="none",
             task_type="CAUSAL_LM",
@@ -51,12 +82,33 @@ def configure_adapters(model: Any, args: LoraArguments) -> Any:
         for name, p in result.named_parameters()
         if ".visual." in name and p.requires_grad
     ]
-    if bool(vision_trainable) == args.freeze_vision_encoder:
+    trains_vision = not args.freeze_vision_encoder or args.vision_lora_rank > 0
+    if bool(vision_trainable) != trains_vision:
         raise ValueError(
             "Visual trainability does not match the requested setting."
         )
-    result.ocr_target_modules = targets
+    result.ocr_target_modules = [*targets, *vision_targets]
     return result
+
+
+def _vision_targets(model: Any) -> list[str]:
+    """Return the vision encoder's linear layers that take LoRA."""
+    return [
+        name
+        for name, module in model.named_modules()
+        if isinstance(module, torch.nn.Linear)
+        and "visual" in name.split(".")
+        and name.rsplit(".", 1)[-1] in VISION_LORA_SUFFIXES
+    ]
+
+
+def _is_low_precision(model: Any) -> bool:
+    """Whether the vision encoder's weights are bfloat16 or float16."""
+    return any(
+        parameter.dtype in _LOW_PRECISION
+        for name, parameter in model.named_parameters()
+        if "visual" in name.split(".")
+    )
 
 
 def visual_digest(model: Any) -> str:
@@ -64,7 +116,9 @@ def visual_digest(model: Any) -> str:
     digest = hashlib.sha256()
     found = False
     for name, parameter in model.named_parameters():
-        if ".visual." in name and ".modules_to_save.default." in name:
+        if ".visual." in name and (
+            ".modules_to_save.default." in name or ".lora_" in name
+        ):
             digest.update(name.encode())
             digest.update(
                 parameter.detach()

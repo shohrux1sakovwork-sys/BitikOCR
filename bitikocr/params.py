@@ -56,6 +56,15 @@ class LoraArguments:
     lora_target_modules: str = "q_proj,v_proj"
     lora_dropout: float = 0.0
     freeze_vision_encoder: bool = True
+    vision_lora_rank: int = field(
+        default=0,
+        metadata={
+            "help": (
+                "Rank of LoRA on the vision encoder's attention, MLP and "
+                "merger layers; 0 leaves the encoder frozen."
+            )
+        },
+    )
 
     def __post_init__(self) -> None:
         """Reject invalid adapter configurations before loading weights."""
@@ -73,6 +82,12 @@ class LoraArguments:
             raise ValueError("LoRA rank and alpha must be positive.")
         if not 0 <= self.lora_dropout < 1:
             raise ValueError("LoRA dropout must be in [0, 1).")
+        if self.vision_lora_rank < 0:
+            raise ValueError("Vision LoRA rank must be zero or positive.")
+        if self.vision_lora_rank and not self.freeze_vision_encoder:
+            raise ValueError(
+                "Train the vision encoder either with LoRA or in full, not both."
+            )
         if not targets or not set(targets) <= allowed:
             raise ValueError(
                 "Specify nonempty supported decoder projection names."

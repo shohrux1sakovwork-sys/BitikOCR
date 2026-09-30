@@ -74,6 +74,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="largest image area the model sees (default: %(default)s)",
     )
     parser.add_argument(
+        "--vision-lora-rank",
+        type=int,
+        default=0,
+        help="LoRA rank on the vision encoder; 0 keeps it frozen "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
         "--repetition-penalty",
         type=float,
         default=None,
@@ -207,6 +214,7 @@ def main() -> None:
             "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
         ),
         "freeze_vision_encoder": True,
+        "vision_lora_rank": options.vision_lora_rank,
         "resolved_config_path": str(output / "resolved_config.yaml"),
     }
     write_json(output / "trainer_args.json", args)
